@@ -106,12 +106,14 @@ a {
 p {
   margin: 0em;
   padding: 0em;
+  font-family: 'Open Sans';
+  font-weight: 400;
+  font-size: 15px;
 }
 
 .navhidden {
   display: none;
 }
-
 
 h1 {
   font-family: 'Open Sans';
@@ -155,18 +157,11 @@ h5b {
   margin: 0em;
 }
 
-p {
-  font-family: 'Open Sans';
-  font-weight: 400;
-  font-size: 15px;
-}
-
 .section-header {
   text-align: center;
   margin-top: 2em;
   margin-bottom: 1em;
 }
-
 
 /* desktop top navbar */
 #top-navbar {
@@ -179,14 +174,6 @@ p {
   display: flex;
   justify-content: center;
   align-items: center;
-}
-
-#top-navbar-logo {
-  width: 200px;
-  margin: 0;
-  position: absolute;
-  left: 1em;
-  top: 0.7em;
 }
 
 #navbar-links-container {
@@ -427,7 +414,6 @@ p {
   color: #fff;
 }
 
-
 #footer-logo {
   width: 8em;
   position: absolute;
@@ -451,7 +437,6 @@ p {
   width: 1em;
 }
 
-
 .sand-grain {
   position: absolute;
   background: rgba(255, 255, 255, 0.3);
@@ -461,173 +446,6 @@ p {
   box-shadow: 0 0 1px rgba(255, 255, 255, 0.2);
   will-change: transform;
 }
-
-@media (max-width: 900px) {
-  /* mobile top navbar */
-
-  #navbar-links-container {
-    margin-right: .8em;
-  }
-
-  #navbar-links-container a {
-    font-size: 14px;
-    padding-right: 7.5px;
-    padding-left: 7.5px;
-  }
-
-  /* ipad bottom navbar*/
-  #follow-us {
-    margin-left: 5em;
-  }
-
-  #footer-logo {
-    right: 4em;
-    bottom: 0em;
-  }
-
-}
-
-
-
-
-
-
-@media (max-width: 750px) {
-
-  #top-navbar {
-    position: static;
-  }
-
-  /* mobile top navbar */
-  #mobile-top-navbar {
-    background-color: #F2F2F2;
-    height: auto;
-    min-height: 0;
-    max-height: 80vh;
-    overflow-y: auto;
-  }
-
-  main {
-    padding-bottom: 300px;
-    margin-top: 4em;
-  }
-
-  .section-header {
-    width: 90%;
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-
-  #hamburger-icon {
-    display: initial;
-    float: right;
-    height: 30px;
-    margin-right: 1em;
-    margin-top: .55em;
-  }
-
-  #hamburger-icon:hover {
-    cursor: pointer;
-  }
-
-  #navbar-links-container {
-    display: none;
-  }
-
-  .mobile-navbar-links-container {
-    display: flex;
-    flex-direction: column;
-    padding-top: .25em;
-  }
-
-  #mobile-navbar-links-container a {
-    text-decoration: none;
-    font-size: 14px;
-    margin-left: 1em;
-    padding-top: .82em;
-    padding-bottom: .82em;
-  }
-}
-
-@media (max-width: 620px) {
-
-  /* mobile bottom navbar */
-  #bottom-navbar {
-    height: 420px;
-  }
-
-  #bottom-navbar-container {
-    flex-direction: column;
-    align-items: center;
-  }
-
-  #follow-us {
-    text-align: center;
-    margin-left: 0em;
-    margin-bottom: 1em;
-  }
-
-  #contact-us {
-    width: 300px;
-    margin-left: 0em;
-    text-align: center;
-  }
-
-  #contact-us-heading {
-    margin-top: 0em;
-  }
-
-  #footer-logo {
-    width: 4em;
-  }
-
-}
-
-/* desktop screens */
-@media (min-width: 1200px) {
-
-  /* bottom navbar */
-  #bottom-navbar {
-    height: 250px;
-  }
-
-  #footer-logo {
-    bottom: .8em;
-  }
-}
-
-/* large desktop screens */
-@media (min-width: 1800px) {
-
-  /* bottom navbar */
-  #footer-logo {
-    bottom: 2em;
-  }
-
-  #follow-us {
-    margin-left: 20em;
-  }
-}
-
-.navbar-decoration {
-  position: absolute;
-  bottom: 50px;
-  z-index: 1001;
-  width: 100px;
-  height: 100px;
-  object-fit: contain;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
-  transition: transform 0.3s ease;
-  background: transparent;
-  mix-blend-mode: normal;
-}
-
-.navbar-decoration:hover {
-  transform: scale(1.1) rotate(5deg);
-  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.4));
-}
-
 
 .floating-pineapple {
   position: absolute;
@@ -641,8 +459,6 @@ p {
   pointer-events: none;
 }
 
-
-
 .floating-chest {
   position: absolute;
   bottom: 140px;
@@ -655,8 +471,6 @@ p {
   pointer-events: none;
 }
 
-
-
 .floating-enchanted-book {
   position: absolute;
   bottom: 140px;
@@ -668,10 +482,6 @@ p {
   transform: rotate(20deg) scale(1.2);
   pointer-events: none;
 }
-
-
-
-
 
 #hamburger-icon {
   display: none;
@@ -727,25 +537,106 @@ p {
   padding: 0.5em 0.5em;
 }
 
+/* Media Queries */
+@media (max-width: 900px) {
+  #navbar-links-container {
+    margin-right: .8em;
+  }
+
+  #navbar-links-container a {
+    font-size: 14px;
+    padding-right: 7.5px;
+    padding-left: 7.5px;
+  }
+
+  #follow-us {
+    margin-left: 5em;
+  }
+
+  #footer-logo {
+    right: 4em;
+    bottom: 0em;
+  }
+}
+
 @media (max-width: 750px) {
+  #top-navbar {
+    position: static;
+  }
+
+  #mobile-top-navbar {
+    background-color: #F2F2F2;
+    height: auto;
+    min-height: 0;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+
+  main {
+    padding-bottom: 300px;
+    margin-top: 4em;
+  }
+
+  .section-header {
+    width: 90%;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  #hamburger-icon {
+    display: initial;
+    float: right;
+    height: 30px;
+    margin-right: 1em;
+    margin-top: .55em;
+  }
+
+  #hamburger-icon:hover {
+    cursor: pointer;
+  }
+
+  #navbar-links-container {
+    display: none;
+  }
+
+  .mobile-navbar-links-container {
+    display: flex;
+    flex-direction: column;
+    padding-top: .25em;
+  }
+
+  #mobile-navbar-links-container a {
+    text-decoration: none;
+    font-size: 14px;
+    margin-left: 1em;
+    padding-top: .82em;
+    padding-bottom: .82em;
+  }
+
   html, body {
     font-size: 14px;
   }
+  
   h1 {
     font-size: 2em !important;
   }
+  
   h2 {
     font-size: 1.2em !important;
   }
+  
   h3 {
     font-size: 1.1em !important;
   }
+  
   h4 {
     font-size: 1em !important;
   }
+  
   h5, h5b {
     font-size: 0.95em !important;
   }
+  
   p, .section-description, .join-description, .subteam-description {
     font-size: 0.98em !important;
   }
@@ -756,6 +647,7 @@ p {
     font-size: 0.75em;
     padding: 1em 0.5em;
   }
+  
   #about-us-box, #description-box{
     max-width: 95vw;
     width: 140vw;
@@ -763,6 +655,58 @@ p {
     padding: 1em 0.5em;
   }
 }
+
+@media (max-width: 620px) {
+  #bottom-navbar {
+    height: 420px;
+  }
+
+  #bottom-navbar-container {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  #follow-us {
+    text-align: center;
+    margin-left: 0em;
+    margin-bottom: 1em;
+  }
+
+  #contact-us {
+    width: 300px;
+    margin-left: 0em;
+    text-align: center;
+  }
+
+  #contact-us-heading {
+    margin-top: 0em;
+  }
+
+  #footer-logo {
+    width: 4em;
+  }
+}
+
+@media (min-width: 1200px) {
+  #bottom-navbar {
+    height: 250px;
+  }
+
+  #footer-logo {
+    bottom: .8em;
+  }
+}
+
+@media (min-width: 1800px) {
+  #footer-logo {
+    bottom: 2em;
+  }
+
+  #follow-us {
+    margin-left: 20em;
+  }
+}
+
 
 
 
