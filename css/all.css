@@ -217,7 +217,8 @@ h5b {
   height: 50px;
   position: absolute;
   bottom: -40px;
-  width: 100%;
+  width: 150%;
+  left: -10%;
   z-index: 999999;
   display: flex;
   justify-content: center;
