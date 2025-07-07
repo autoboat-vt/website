@@ -3,7 +3,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const modal = document.getElementById('imageModal');
     const modalImg = document.getElementById('modalImage');
     const closeBtn = document.querySelector('.close-modal');
-    
+    const footer = document.querySelector('footer');
+
     // Get all subteam images
     const subteamImages = document.querySelectorAll('.subteam-image');
     
@@ -14,6 +15,7 @@ document.addEventListener('DOMContentLoaded', function() {
             modalImg.src = this.src;
             modalImg.alt = this.alt;
             document.body.style.overflow = 'hidden'; // Prevent scrolling
+            footer.style.display = "none";
         });
     });
     
@@ -21,6 +23,7 @@ document.addEventListener('DOMContentLoaded', function() {
     closeBtn.addEventListener('click', function() {
         modal.style.display = 'none';
         document.body.style.overflow = 'auto'; // Restore scrolling
+        footer.style.display = "block"; // Show footer again
     });
     
     // Close modal when clicking outside the image
@@ -28,6 +31,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.target === modal) {
             modal.style.display = 'none';
             document.body.style.overflow = 'auto'; // Restore scrolling
+            footer.style.display = "block"; // Show footer again
         }
     });
     
@@ -36,6 +40,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.key === 'Escape' && modal.style.display === 'block') {
             modal.style.display = 'none';
             document.body.style.overflow = 'auto'; // Restore scrolling
+            footer.style.display = "block"; // Show footer again
         }
     });
-}); 
+});

@@ -103,10 +103,21 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  max-width: 90%;
-  max-height: 90%;
+  background: none;
+    border: none;
+    padding: 0;
+    box-shadow: none;
+  }
+  
+  .image-modal img {
+    display: block;
+    max-width: 100%;
+    max-height: 90vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    margin: 0 auto;
   border-radius: 15px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 
 .close-modal {
