@@ -5,7 +5,7 @@ This website is written in raw HTML, JS, and CSS.
 ## File Layout
 
 -   `index.html`: Main **about** page
--   `app` folder: Contains the html source for all the auxiliary pages (e.g., meet the team)
+-   `html` folder: Contains the html source for all the auxiliary pages (e.g., meet the team)
 -   `css` folder: Styling for the overall website as well as specific styles for each subpage
 -   `js` folder: JavaScript source for each of the pages
 
