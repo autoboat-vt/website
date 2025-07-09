@@ -1,4 +1,4 @@
-# Website for Virginia Tech's Sailbot team
+# Website for Virginia Tech's AutoBoat team
 
 This website is written in raw HTML, JS, and CSS.
 
