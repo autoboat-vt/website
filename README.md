@@ -38,6 +38,7 @@ The website is hosted via Virginia Tech's site hosting platform, and because of 
 Finally, to deploy the website, run the following commands:
 
 ```git push origin main```
+
 ```git push aoe_sites main```
 
 
