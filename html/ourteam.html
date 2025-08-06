@@ -1,222 +1,380 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>AutoBoat | Our Team</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap"
+            rel="stylesheet"
+        />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="../css/all.css" />
+        <script defer src="../js/all.js"></script>
+        <link rel="stylesheet" href="../css/ourteam.css" />
+        <link rel="stylesheet" href="../css/animations.css" />
+        <script defer src="../js/ourteam.js"></script>
+        <!-- Favicon -->
+        <link rel="icon" type="image/x-icon" href="../images/favicon.ico" />
+    </head>
 
-  <head>
-    <meta charset="utf-8" />
-    <title>AutoBoat | Our Team</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap"
-      rel="stylesheet" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap"
-      rel="stylesheet" />
-    <link rel="stylesheet" href="../css/all.css" />
-    <script defer src="../js/all.js"></script>
-    <link rel="stylesheet" href="../css/ourteam.css" />
-    <link rel="stylesheet" href="../css/animations.css" />
-    <script defer src="../js/ourteam.js"></script>
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="../images/favicon.ico">
-  </head>
+    <body>
+        <header>
+            <nav id="top-navbar">
+                <div id="navbar-links-container">
+                    <a class="notOnThisPage" href="../index.html">About</a>
+                    <a class="onThisPage" href="ourteam.html">Meet the Team</a>
+                    <!-- <a class="notOnThisPage" href="fleet.html">Our Fleet</a> -->
+                    <a class="notOnThisPage" href="how_to_join.html"
+                        >How To Join</a
+                    >
+                    <!-- <a class="notOnThisPage" href="gallery.html">Gallery</a> -->
+                </div>
+                <img
+                    id="hamburger-icon"
+                    src="../images/hamburger.svg"
+                    alt="Menu"
+                    style="display: none"
+                />
+            </nav>
+            <nav class="navhidden" id="mobile-top-navbar">
+                <div id="mobile-navbar-links-container">
+                    <a class="notOnThisPage" href="../index.html">About</a>
+                    <a class="onThisPage" href="ourteam.html">Our Team</a>
+                    <!-- <a class="notOnThisPage" href="fleet.html">Fleet</a> -->
+                    <a class="notOnThisPage" href="how_to_join.html"
+                        >How To Join</a
+                    >
+                    <!-- <a class="notOnThisPage" href="gallery.html">Gallery</a> -->
+                </div>
+            </nav>
+        </header>
+        <main>
+            <div id="subteams-section">
+                <div class="subteam-box" id="software-box">
+                    <h3 class="subteam-title">Software</h3>
+                    <p class="subteam-description">
+                        The Software Subteam develops the autonomous navigation
+                        systems, computer vision algorithms, and control
+                        software that enable our boats to sail and navigate
+                        independently. We work with Python, C++, ROS (Robot
+                        Operating System), Gazebo, YOLO, and Docker to create an
+                        intelligent autopilot software package. We also develop
+                        custom groundstation software to control and monitor our
+                        boats from the shore, and we maintain and work on the
+                        codebase for our website. We are looking for competent
+                        full stack software engineers who are interested in
+                        working on autonomous systems! If you would like to
+                        check out some of our code, most of it is open source!
+                        and is available on our
+                        <a href="https://github.com/autoboat-vt">GitHub</a>.
+                    </p>
+                </div>
 
+                <div class="subteam-images-section" id="software-images">
+                    <div class="subteam-images">
+                        <div class="image-container">
+                            <img
+                                src="../images/our_team_images/software/computer_vision1.webp"
+                                alt="Computer Vision System"
+                                class="subteam-image"
+                                loading="lazy"
+                            />
+                        </div>
+                        <div class="image-container">
+                            <img
+                                src="../images/our_team_images/software/groundstation.webp"
+                                alt="Ground Station Software"
+                                class="subteam-image"
+                                loading="lazy"
+                            />
+                        </div>
+                        <div class="image-container">
+                            <img
+                                src="../images/our_team_images/software/computer_vision2.webp"
+                                alt="Computer Vision Analysis"
+                                class="subteam-image"
+                                loading="lazy"
+                            />
+                        </div>
+                        <div class="image-container">
+                            <img
+                                src="../images/our_team_images/software/simulation.webp"
+                                alt="Simulation Environment"
+                                class="subteam-image"
+                                loading="lazy"
+                            />
+                        </div>
+                    </div>
+                </div>
 
+                <div class="subteam-box" id="electronics-box">
+                    <h3 class="subteam-title">Electronics</h3>
+                    <p class="subteam-description">
+                        The Electronics Subteam develops the infrastructure to
+                        bridge the barrier between software algorithms and the
+                        real-world contraints of our boats. We design and
+                        manufacture custom PCBs, collect data from sensors and
+                        actuators, and develop low-level firmware to interface
+                        with motors, pumps, and other electromechanical systems.
+                        Our workflow includes PCB design in KiCAD, electronics
+                        simulations in LTSpice, embedded programming in C++, and
+                        prototype development using tools like oscilloscopes and
+                        logic analyzers. We are building the nervous system of
+                        the boat, its veins and tendons. If you're into
+                        electronics, embedded systems, or just like to solder,
+                        we will happily welcome you to our team!
+                    </p>
+                </div>
 
-  <body>
-    <header>
-      <nav id="top-navbar">
-        <div id="navbar-links-container">
-          <a class="notOnThisPage" href="../index.html">About</a>
-          <a class="onThisPage" href="ourteam.html">Meet the Team</a>
-          <!-- <a class="notOnThisPage" href="fleet.html">Our Fleet</a> -->
-          <a class="notOnThisPage" href="how_to_join.html">How To Join</a>
-          <!-- <a class="notOnThisPage" href="gallery.html">Gallery</a> -->
+                <div class="subteam-images-section" id="electronics-images">
+                    <div class="subteam-images">
+                        <div class="subteam-images">
+                            <div class="image-container">
+                                <img
+                                    src="../images/our_team_images/electronics/electronics1.webp"
+                                    alt="Electronics1"
+                                    class="subteam-image"
+                                    loading="lazy"
+                                />
+                            </div>
+                            <div class="image-container">
+                                <img
+                                    src="../images/our_team_images/electronics/electronics2.webp"
+                                    alt="Electronics2"
+                                    class="subteam-image"
+                                    loading="lazy"
+                                />
+                            </div>
+                            <div class="image-container">
+                                <img
+                                    src="../images/our_team_images/electronics/electronics3.webp"
+                                    alt="Electronics3"
+                                    class="subteam-image"
+                                    loading="lazy"
+                                />
+                            </div>
+                            <div class="image-container">
+                                <img
+                                    src="../images/our_team_images/electronics/electronics4.webp"
+                                    alt="Electronics4"
+                                    class="subteam-image"
+                                    loading="lazy"
+                                />
+                            </div>
+                            <div class="image-container">
+                                <img
+                                    src="../images/our_team_images/electronics/electronics5.webp"
+                                    alt="Electronics5"
+                                    class="subteam-image"
+                                    loading="lazy"
+                                />
+                            </div>
+                            <div class="image-container">
+                                <img
+                                    src="../images/our_team_images/electronics/electronics6.webp"
+                                    alt="Electronics6"
+                                    class="subteam-image"
+                                    loading="lazy"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="subteam-box" id="naval-architecture-box">
+                    <h3 class="subteam-title">Naval Architecture</h3>
+                    <p class="subteam-description">
+                        The Naval Architecture Subteam focuses on the
+                        performance, durability, and the manuverability of the
+                        sailboat hull. Using Orca3D and other CAD tools, we
+                        design and optimize hull shapes for speed, stability,
+                        and maneuverability. Throughout the year we work on hull
+                        designs, fiberglass layups, conduct structural repairs,
+                        balancing weight distribution, and implementing
+                        hydrodynamic modifications to enhance performance on the
+                        water.
+                    </p>
+                </div>
+
+                <div class="subteam-images-section" id="navarch-images">
+                    <div class="subteam-images">
+                        <div class="image-container">
+                            <img
+                                src="../images/our_team_images/navarch/michio_spray_paint.webp"
+                                alt="Hull Design and Construction"
+                                class="subteam-image"
+                                loading="lazy"
+                            />
+                        </div>
+                        <div class="image-container">
+                            <img
+                                src="../images/our_team_images/navarch/boat1.webp"
+                                alt="Boat1"
+                                class="subteam-image"
+                                loading="lazy"
+                            />
+                        </div>
+                        <div class="image-container">
+                            <img
+                                src="../images/our_team_images/navarch/boat2.webp"
+                                alt="Boat2"
+                                class="subteam-image"
+                                loading="lazy"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="subteam-box" id="mechanical-box">
+                    <h3 class="subteam-title">Mechanical</h3>
+                    <p class="subteam-description">
+                        The Mechanical Subteam transforms ideas into tangible
+                        systems that can survive the harsh realities of open
+                        water. We design, build, and refine the physical
+                        structure of the boat—ensuring it's lightweight,
+                        watertight, and battle-tested for competition. Our
+                        workflow includes CAD modeling in Fusion 360, analysis
+                        in MATLAB, and hands-on fabrication using 3D printing,
+                        CNC machining, and laser cutting. Mechanical acts as the
+                        backbone of the boat, bringing together contributions
+                        from every team into a cohesive final product.
+                        Interdisciplinary decision-making and collaborative
+                        planning are at the core of what we do. If you like
+                        building things, turning wrenches, or making hardware
+                        that just works, there's a place for you on the
+                        Mechanical subteam.
+                    </p>
+                </div>
+
+                <div class="subteam-images-section" id="mechanical-images">
+                    <div class="subteam-images">
+                        <div class="image-container">
+                            <img
+                                src="../images/our_team_images/mechanical/mech1.webp"
+                                alt="Mech1"
+                                class="subteam-image"
+                                loading="lazy"
+                            />
+                        </div>
+                        <div class="image-container">
+                            <img
+                                src="../images/our_team_images/mechanical/mech2.webp"
+                                alt="Mech2"
+                                class="subteam-image"
+                                loading="lazy"
+                            />
+                        </div>
+                        <div class="image-container">
+                            <img
+                                src="../images/our_team_images/mechanical/mech3.webp"
+                                alt="Mech3"
+                                class="subteam-image"
+                                loading="lazy"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="subteam-box" id="sail-box">
+                    <h3 class="subteam-title">Sail</h3>
+                    <p class="subteam-description">
+                        The Sail Subteam is responsible let for designing and
+                        fabricating the propulsion system of our sailboat. We
+                        utilize tools such as SailCad and principles of airfoil
+                        theory. We optimize sail shape and rigging for efficient
+                        propulsion and control. Additionally oversee the
+                        hands-on construction of sails, including material
+                        selection, patterning, and sewing, ensuring peak
+                        aerodynamic performance in competition conditions.
+                    </p>
+                </div>
+
+                <div class="subteam-images-section" id="sail-images">
+                    <div class="subteam-images">
+                        <div class="image-container">
+                            <img
+                                src="../images/our_team_images/sail/michio_sail.webp"
+                                alt="Sail Design and Testing"
+                                class="subteam-image"
+                                loading="lazy"
+                            />
+                        </div>
+                        <div class="image-container">
+                            <img
+                                src="../images/our_team_images/sail/sail1.webp"
+                                alt="Sail1"
+                                class="subteam-image"
+                                loading="lazy"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="subteam-box" id="business-box">
+                    <h3 class="subteam-title">Business</h3>
+                    <p class="subteam-description">
+                        The Business subteam handles team outreach, sponsorship
+                        acquisition, budget management, and public relations.
+                        This team maintains relationships with sponsors, creates
+                        promotional materials, and manage team finances.
+                    </p>
+                </div>
+
+                <div class="subteam-images-section" id="business-images">
+                    <div class="subteam-images">
+                        <!-- Business images will be added when available -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Image Modal -->
+        <div id="imageModal" class="image-modal">
+            <div class="modal-content">
+                <button class="close-modal">&times;</button>
+                <img
+                    id="modalImage"
+                    class="modal-image"
+                    src=""
+                    alt="Expanded Image"
+                />
+            </div>
         </div>
-        <img id="hamburger-icon" src="../images/hamburger.svg" alt="Menu" style="display:none;" />
-      </nav>
-      <nav class="navhidden" id="mobile-top-navbar">
-        <div id="mobile-navbar-links-container">
-          <a class="notOnThisPage" href="../index.html">About</a>
-          <a class="onThisPage" href="ourteam.html">Our Team</a>
-          <!-- <a class="notOnThisPage" href="fleet.html">Fleet</a> -->
-          <a class="notOnThisPage" href="how_to_join.html">How To Join</a>
-          <!-- <a class="notOnThisPage" href="gallery.html">Gallery</a> -->
-        </div>
-      </nav>
-    </header>
-      <main>
-        
-        <div id="subteams-section">
-          
-          <div class="subteam-box" id="software-box">
-            <h3 class="subteam-title">Software</h3>
-            <p class="subteam-description">
-              The Software Subteam develops the autonomous navigation systems, computer vision algorithms, 
-              and control software that enable our boats to sail and navigate independently. We work with Python, C++, 
-              ROS (Robot Operating System), Gazebo, YOLO, and Docker to create an intelligent 
-              autopilot software package. We also develop custom groundstation software
-              to control and monitor our boats from the shore, and we maintain and work on the codebase for our website. 
-              We are looking for competent full stack software engineers who are interested in working on autonomous systems! 
-              If you would like to check out some of our code, most of it is open source! and is available on our <a href="https://github.com/autoboat-vt/autoboat_vt">GitHub</a>.
-            </p>
-          </div>
-          
-          <div class="subteam-images-section" id="software-images">
-            <div class="subteam-images">
-              <div class="image-container">
-                <img src="../images/our_team_images/software/computer_vision1.webp" alt="Computer Vision System" class="subteam-image" loading="lazy">
-              </div>
-              <div class="image-container">
-                <img src="../images/our_team_images/software/groundstation.webp" alt="Ground Station Software" class="subteam-image" loading="lazy">
-              </div>
-              <div class="image-container">
-                <img src="../images/our_team_images/software/computer_vision2.webp" alt="Computer Vision Analysis" class="subteam-image" loading="lazy">
-              </div>
-              <div class="image-container">
-                <img src="../images/our_team_images/software/simulation.webp" alt="Simulation Environment" class="subteam-image" loading="lazy">
-              </div>
-            </div>
-          </div>
 
-          <div class="subteam-box" id="electronics-box">
-            <h3 class="subteam-title">Electronics</h3>
-            <p class="subteam-description">
-              The Electronics Subteam develops the infrastructure to bridge the barrier between software algorithms and the real-world contraints of our boats. We design and manufacture custom PCBs, collect data from sensors and actuators, and develop low-level firmware to interface with motors, pumps, and other electromechanical systems. Our workflow includes PCB design in KiCAD, electronics simulations in LTSpice, embedded programming in C++, and prototype development using tools like oscilloscopes and logic analyzers. We are building the nervous system of the boat, its veins and tendons. If you're into electronics, embedded systems, or just like to solder, we will happily welcome you to our team!
+        <footer>
+            <img
+                src="../images/background_images/pineapple.webp"
+                alt="Pineapple"
+                class="floating-pineapple"
+                id="pineapple"
+                loading="lazy"
+            />
+            <img
+                src="../images/background_images/enchanted_book.webp"
+                alt="Enchanted Book"
+                class="floating-enchanted-book"
+                id="enchanted-book"
+                loading="lazy"
+            />
+            <img
+                src="../images/background_images/chest.webp"
+                alt="Chest"
+                class="floating-chest"
+                id="chest"
+                loading="lazy"
+            />
 
-            </p>
-          </div>
-          
-          <div class="subteam-images-section" id="electronics-images">
-            <div class="subteam-images">
-              <div class="subteam-images">
-                <div class="image-container">
-                  <img src="../images/our_team_images/electronics/electronics1.webp" alt="Electronics1" class="subteam-image" loading="lazy">
+            <nav id="bottom-navbar">
+                <div id="bottom-navbar-container">
+                    <div id="follow-us"></div>
+                    <div id="contact-us"></div>
                 </div>
-                <div class="image-container">
-                  <img src="../images/our_team_images/electronics/electronics2.webp" alt="Electronics2" class="subteam-image" loading="lazy">
-                </div>
-                <div class="image-container">
-                  <img src="../images/our_team_images/electronics/electronics3.webp" alt="Electronics3" class="subteam-image" loading="lazy">
-                </div>
-                <div class="image-container">
-                  <img src="../images/our_team_images/electronics/electronics4.webp" alt="Electronics4" class="subteam-image" loading="lazy">
-                </div>
-                <div class="image-container">
-                  <img src="../images/our_team_images/electronics/electronics5.webp" alt="Electronics5" class="subteam-image" loading="lazy">
-                </div>
-                <div class="image-container">
-                  <img src="../images/our_team_images/electronics/electronics6.webp" alt="Electronics6" class="subteam-image" loading="lazy">
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="subteam-box" id="naval-architecture-box">
-            <h3 class="subteam-title">Naval Architecture</h3>
-            <p class="subteam-description">
-              The Naval Architecture Subteam focuses on the performance, durability, and the manuverability of the sailboat hull. Using Orca3D and other CAD tools, we design and optimize hull shapes for speed, stability, and maneuverability. Throughout the year we work on hull designs, fiberglass layups, conduct structural repairs, balancing weight distribution, and implementing hydrodynamic modifications to enhance performance on the water.
-
-            </p>
-          </div>
-          
-          <div class="subteam-images-section" id="navarch-images">
-            <div class="subteam-images">
-              <div class="image-container">
-                <img src="../images/our_team_images/navarch/michio_spray_paint.webp" alt="Hull Design and Construction" class="subteam-image" loading="lazy">
-              </div>  
-              <div class="image-container">
-                <img src="../images/our_team_images/navarch/boat1.webp" alt="Boat1" class="subteam-image" loading="lazy">
-              </div>
-              <div class="image-container">
-                <img src="../images/our_team_images/navarch/boat2.webp" alt="Boat2" class="subteam-image" loading="lazy">
-              </div>
-            </div>
-          </div>
-
-          <div class="subteam-box" id="mechanical-box">
-            <h3 class="subteam-title">Mechanical</h3>
-            <p class="subteam-description">
-              The Mechanical Subteam transforms ideas into tangible systems that can survive the harsh realities of open water. We design, build, and refine the physical structure of the boat—ensuring it's lightweight, watertight, and battle-tested for competition. Our workflow includes CAD modeling in Fusion 360, analysis in MATLAB, and hands-on fabrication using 3D printing, CNC machining, and laser cutting. Mechanical acts as the backbone of the boat, bringing together contributions from every team into a cohesive final product. Interdisciplinary decision-making and collaborative planning are at the core of what we do. If you like building things, turning wrenches, or making hardware that just works, there's a place for you on the Mechanical subteam.
-
-            </p>
-          </div>
-          
-          <div class="subteam-images-section" id="mechanical-images">
-            <div class="subteam-images">
-              <div class="image-container">
-                <img src="../images/our_team_images/mechanical/mech1.webp" alt="Mech1" class="subteam-image" loading="lazy">
-              </div>
-              <div class="image-container">
-                <img src="../images/our_team_images/mechanical/mech2.webp" alt="Mech2" class="subteam-image" loading="lazy">
-              </div>
-              <div class="image-container">
-                <img src="../images/our_team_images/mechanical/mech3.webp" alt="Mech3" class="subteam-image" loading="lazy">
-              </div>
-            </div>
-          </div>
-
-          <div class="subteam-box" id="sail-box">
-            <h3 class="subteam-title">Sail</h3>
-            <p class="subteam-description">
-              The Sail Subteam is responsible let for designing and fabricating the propulsion system of our sailboat. We utilize tools such as SailCad and principles of airfoil theory. We optimize sail shape and rigging for efficient propulsion and control. Additionally oversee the hands-on construction of sails, including material selection, patterning, and sewing, ensuring peak aerodynamic performance in competition conditions.
-
-            </p>
-          </div>
-          
-          <div class="subteam-images-section" id="sail-images">
-            <div class="subteam-images">
-              <div class="image-container">
-                <img src="../images/our_team_images/sail/michio_sail.webp" alt="Sail Design and Testing" class="subteam-image" loading="lazy">
-              </div>
-              <div class="image-container">  
-                <img src="../images/our_team_images/sail/sail1.webp" alt="Sail1" class="subteam-image" loading="lazy">
-              </div>
-            </div>
-          </div>
-
-          <div class="subteam-box" id="business-box">
-            <h3 class="subteam-title">Business</h3>
-            <p class="subteam-description">
-              The Business subteam handles team outreach, sponsorship acquisition, 
-              budget management, and public relations. This team maintains relationships with sponsors,
-              creates promotional materials, and manage team finances.
-            </p>
-          </div>
-          
-          <div class="subteam-images-section" id="business-images">
-            <div class="subteam-images">
-              <!-- Business images will be added when available -->
-            </div>
-          </div>
-        </div>
-
-      </main>
-      
-      <!-- Image Modal -->
-      <div id="imageModal" class="image-modal">
-        <div class="modal-content">
-          <button class="close-modal">&times;</button>
-          <img id="modalImage" class="modal-image" src="" alt="Expanded Image">
-        </div>
-      </div>
-      
-      <footer>
-
-      <img src="../images/background_images/pineapple.webp" alt="Pineapple" class="floating-pineapple" id="pineapple" loading="lazy">
-      <img src="../images/background_images/enchanted_book.webp" alt="Enchanted Book" class="floating-enchanted-book" id="enchanted-book" loading="lazy">
-      <img src="../images/background_images/chest.webp" alt="Chest" class="floating-chest" id="chest" loading="lazy">
-  
-
-      <nav id="bottom-navbar">
-        <div id="bottom-navbar-container">
-          <div id="follow-us">
-          </div>
-          <div id="contact-us">
-          </div>
-        </div>
-      </nav>
-    </footer>
+            </nav>
+        </footer>
     </body>
-
-  </html>
+</html>

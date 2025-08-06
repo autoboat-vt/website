@@ -1,120 +1,182 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <!-- <meta http-equiv="refresh" content="0; url=https://autoboat.aoe.vt.edu/"> -->
+        <title>AutoBoat | Home</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="preload" href="images/gallery/14.webp" as="image" />
+        <link rel="preload" href="images/gallery/13.webp" as="image" />
+        <link rel="stylesheet" href="css/all.css" />
+        <script defer src="js/all.js"></script>
+        <link rel="stylesheet" href="css/index.css" />
+        <link rel="stylesheet" href="css/animations.css" />
 
-  <head>
-    <meta charset="utf-8">
-    <!-- <meta http-equiv="refresh" content="0; url=https://autoboat.aoe.vt.edu/"> -->
-    <title>AutoBoat | Home</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="preconnect" href="https://fonts.gstatic.com">
-    <link
-      href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap"
-      rel="stylesheet">
-    <link rel="preload" href="images/gallery/14.webp" as="image">
-    <link rel="preload" href="images/gallery/13.webp" as="image">
-    <link rel="stylesheet" href="css/all.css">
-    <script defer src="js/all.js"></script>
-    <link rel="stylesheet" href="css/index.css">
-    <link rel="stylesheet" href="css/animations.css">
-    
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="images/favicon.ico">
-  </head>
+        <!-- Favicon -->
+        <link rel="icon" type="image/x-icon" href="images/favicon.ico" />
+    </head>
 
-  <body>
-    <header>
-      <nav id="top-navbar">
-        <div id="navbar-links-container">
-          <a class="onThisPage" href="index.html">About</a>
-          <a class="notOnThisPage" href="html/ourteam.html">Meet the Team</a>
-          <!-- <a class="notOnThisPage" href="fleet.html">Our Fleet</a> -->
-          <a class="notOnThisPage" href="html/how_to_join.html">How To Join</a>
-          <!-- <a class="notOnThisPage" href="gallery.html">Gallery</a> -->
-        </div>
-        <img id="hamburger-icon" src="images/hamburger.svg" alt="Menu" style="display:none;" />
-      </nav>
-      <nav class="navhidden" id="mobile-top-navbar">
-        <div id="mobile-navbar-links-container">
-          <a class="onThisPage" href="index.html">About</a>
-          <a class="notOnThisPage" href="html/ourteam.html">Meet the Team</a>
-          <!-- <a class="notOnThisPage" href="fleet.html">Our Fleet</a> -->
-          <a class="notOnThisPage" href="html/how_to_join.html">How To Join</a>
-          <!-- <a class="notOnThisPage" href="gallery.html">Gallery</a> -->
-        </div>
-      </nav>
-    </header>
-    <main>
-      <div id="hero-image" class="fade-wrapper">
-        <div id="title">
-          <h1>AutoBoat @ Virginia Tech</h1>
-          <h2>Autonomous Electric Motorboats and Sailboats</h2>
-        </div>
-        <div id="about-us-box">
-          <p>AutoBoat at VT is a student led engineering design team in the Ware Lab that designs and manufactures fully autonomous
-          robotic sailboats and high-power electric motor boats for the
-          International Robotic Sailing Regatta and Promoting Electric Propulsion (PEP) competitions,
-          respectively. We design and build our hulls, electronics, and software from scratch. </p>
-        </div>
-      </div>
+    <body>
+        <header>
+            <nav id="top-navbar">
+                <div id="navbar-links-container">
+                    <a class="onThisPage" href="index.html">About</a>
+                    <a class="notOnThisPage" href="html/ourteam.html"
+                        >Meet the Team</a
+                    >
+                    <!-- <a class="notOnThisPage" href="fleet.html">Our Fleet</a> -->
+                    <a class="notOnThisPage" href="html/how_to_join.html"
+                        >How To Join</a
+                    >
+                    <!-- <a class="notOnThisPage" href="gallery.html">Gallery</a> -->
+                </div>
+                <img
+                    id="hamburger-icon"
+                    src="images/hamburger.svg"
+                    alt="Menu"
+                    style="display: none"
+                />
+            </nav>
+            <nav class="navhidden" id="mobile-top-navbar">
+                <div id="mobile-navbar-links-container">
+                    <a class="onThisPage" href="index.html">About</a>
+                    <a class="notOnThisPage" href="html/ourteam.html"
+                        >Meet the Team</a
+                    >
+                    <!-- <a class="notOnThisPage" href="fleet.html">Our Fleet</a> -->
+                    <a class="notOnThisPage" href="html/how_to_join.html"
+                        >How To Join</a
+                    >
+                    <!-- <a class="notOnThisPage" href="gallery.html">Gallery</a> -->
+                </div>
+            </nav>
+        </header>
+        <main>
+            <div id="hero-image" class="fade-wrapper">
+                <div id="title">
+                    <h1>AutoBoat @ Virginia Tech</h1>
+                    <h2>Autonomous Electric Motorboats and Sailboats</h2>
+                </div>
+                <div id="about-us-box">
+                    <p>
+                        AutoBoat at VT is a student led engineering design team
+                        in the Ware Lab that designs and manufactures fully
+                        autonomous robotic sailboats and high-power electric
+                        motor boats for the International Robotic Sailing
+                        Regatta and Promoting Electric Propulsion (PEP)
+                        competitions, respectively. We design and build our
+                        hulls, electronics, and software from scratch.
+                    </p>
+                </div>
+            </div>
 
-      <div id="hero-image2" class="fade-wrapper2">
-        <div id="description-box">
-          <p>The team is divided into 6 sub-teams: <b>Software</b>, <b>Electronics</b>, <b>Naval Architecture</b>, 
-             <b>Mechanical</b>, <b>Sail</b>, and <b>Business</b>. We are always looking for new members to join the team throughout the year,
-             so don't hesitate to reach out to join! There is no experience required, and we will teach you everything you need to know!
-          </p>
-        </div>
-      </div>
+            <div id="hero-image2" class="fade-wrapper2">
+                <div id="description-box">
+                    <p>
+                        The team is divided into 6 sub-teams: <b>Software</b>,
+                        <b>Electronics</b>, <b>Naval Architecture</b>,
+                        <b>Mechanical</b>, <b>Sail</b>, and <b>Business</b>. We
+                        are always looking for new members to join the team
+                        throughout the year, so don't hesitate to reach out to
+                        join! There is no experience required, and we will teach
+                        you everything you need to know!
+                    </p>
+                </div>
+            </div>
 
-      <div class="fade-wrapper3">
-        
-        <div id="why-join-box">
-          <h3 id="why-join-header" class="section-header">Why Join AutoBoat?</h3>
-          
-          <p class="section-description">
-            On AutoBoat, you will gain hands-on experience in robotics, naval architecture, electronics, and software development while working on cutting-edge technology.
-            The skills you will learn on the team are invaluable to employers for internships/ jobs, and you will have enough freedom to work on whatever projects you want!
-          </p>
-        </div>
-        
-        <div id="looking-to-sponsor-us-box">
-          <h3 id="looking-to-sponsor-us-header" class="section-header">Join Our Discord Server!</h3>
-          
-          <p class="section-description">
-            If you would like to get updates on what we are up to, you should join our Discord server: <a href="https://discord.gg/e34cdWdKbG">https://discord.gg/e34cdWdKbG</a>.
-          </p>
-        </div>
+            <div class="fade-wrapper3">
+                <div id="why-join-box">
+                    <h3 id="why-join-header" class="section-header">
+                        Why Join AutoBoat?
+                    </h3>
 
-        <div id="looking-to-sponsor-us-box">
-          <h3 id="looking-to-sponsor-us-header" class="section-header">Looking to Sponsor Us?</h3>
-          
-          <p class="section-description">
-            We are always looking for sponsors to help us build better boats, so if you are interested in sponsoring us, please reach out to <a href="mailto:autoboat@vt.edu">autoboat@vt.edu</a>.
-          </p>
+                    <p class="section-description">
+                        On AutoBoat, you will gain hands-on experience in
+                        robotics, naval architecture, electronics, and software
+                        development while working on cutting-edge technology.
+                        The skills you will learn on the team are invaluable to
+                        employers for internships/ jobs, and you will have
+                        enough freedom to work on whatever projects you want!
+                    </p>
+                </div>
 
-          <p class="section-description">
-            If you are an individual, looking to make a quick one time donation, then you can do so through this link: <a href="https://giving.adv.vt.edu/gift?fund=821082&amt=25&frequency=onetime&desc=AutoBoat%20Design%20Team">AutoBoat Donation Link</a>.
-          </p>
+                <div id="looking-to-sponsor-us-box">
+                    <h3
+                        id="looking-to-sponsor-us-header"
+                        class="section-header"
+                    >
+                        Join Our Discord Server!
+                    </h3>
 
-        </div>
+                    <p class="section-description">
+                        If you would like to get updates on what we are up to,
+                        you should join our Discord server:
+                        <a href="https://discord.gg/e34cdWdKbG"
+                            >https://discord.gg/e34cdWdKbG</a
+                        >.
+                    </p>
+                </div>
 
-      </div>
+                <div id="looking-to-sponsor-us-box">
+                    <h3
+                        id="looking-to-sponsor-us-header"
+                        class="section-header"
+                    >
+                        Looking to Sponsor Us?
+                    </h3>
 
-    </main>
-    <footer>
-      <img src="images/background_images/pineapple.webp" alt="Pineapple" class="floating-pineapple" id="pineapple" loading="lazy">
-      <img src="images/background_images/enchanted_book.webp" alt="Enchanted Book" class="floating-enchanted-book" id="enchanted-book" loading="lazy">
-      <img src="images/background_images/chest.webp" alt="Chest" class="floating-chest" id="chest" loading="lazy">
-      
-      
-      <nav id="bottom-navbar">
-        <div id="bottom-navbar-container">
-          <div id="follow-us">
-          </div>
-          <div id="contact-us">
-          </div>
-        </div>
-      </nav>
-    </footer>
-  </body>
+                    <p class="section-description">
+                        We are always looking for sponsors to help us build
+                        better boats, so if you are interested in sponsoring us,
+                        please reach out to
+                        <a href="mailto:autoboat@vt.edu">autoboat@vt.edu</a>.
+                    </p>
+
+                    <p class="section-description">
+                        If you are an individual, looking to make a quick one
+                        time donation, then you can do so through this link:
+                        <a
+                            href="https://giving.adv.vt.edu/gift?fund=821082&amt=25&frequency=onetime&desc=AutoBoat%20Design%20Team"
+                            >AutoBoat Donation Link</a
+                        >.
+                    </p>
+                </div>
+            </div>
+        </main>
+        <footer>
+            <img
+                src="images/background_images/pineapple.webp"
+                alt="Pineapple"
+                class="floating-pineapple"
+                id="pineapple"
+                loading="lazy"
+            />
+            <img
+                src="images/background_images/enchanted_book.webp"
+                alt="Enchanted Book"
+                class="floating-enchanted-book"
+                id="enchanted-book"
+                loading="lazy"
+            />
+            <img
+                src="images/background_images/chest.webp"
+                alt="Chest"
+                class="floating-chest"
+                id="chest"
+                loading="lazy"
+            />
+
+            <nav id="bottom-navbar">
+                <div id="bottom-navbar-container">
+                    <div id="follow-us"></div>
+                    <div id="contact-us"></div>
+                </div>
+            </nav>
+        </footer>
+    </body>
 </html>
