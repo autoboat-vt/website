@@ -1,3 +1,7 @@
+/* ===== HOW TO JOIN STYLES MOVED TO ALL.CSS ===== */
+/* This file is kept for legacy compatibility but all styles moved to all.css */
+/* Please use all.css for all styling needs */
+
 .join-section {
   width: 100%;
   margin: 3em auto;
@@ -43,7 +47,6 @@
   width: 100%;
 }
 
-/* Mobile responsive design */
 @media (max-width: 620px) {
   .join-box {
     width: 85%;

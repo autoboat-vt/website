@@ -1,191 +1,68 @@
-/* left sliding animation */
+/* ===== SIMPLIFIED ANIMATIONS ===== */
+/* All animations are now consolidated in all.css */
+/* This file is kept for legacy compatibility but all styles moved to all.css */
+
+/* Slide Animations */
 .slide-left {
-  animation: slideLeft ease-in;
-  animation-duration: .6s;
+  animation: slideLeft 0.6s ease-in;
 }
 
-@keyframes slideLeft {
-  0% {
-    transform: skewX(30deg) translateX(500px);
-  }
-
-  60% {
-    transform: translateX(0px);
-  }
-
-  62% {
-    transform: skewX(0deg) translateX(-30px);
-  }
-
-  100% {
-    transform: skewX(0deg);
-  }
-}
-
-/* right sliding animation */
 .slide-right {
-  animation: slideRight ease-in;
-  animation-duration: .6s;
+  animation: slideRight 0.6s ease-in;
 }
 
-@keyframes slideRight {
-  0% {
-    transform: skewX(30deg) translateX(-500px);
-  }
-
-  60% {
-    transform: translateX(0px);
-  }
-
-  62% {
-    transform: skewX(0deg) translateX(30px);
-  }
-
-  100% {
-    transform: skewX(0deg);
-  }
-}
-
+/* Zoom Animation */
 .zoom-in {
-  animation: animatezoom 0.6s
+  animation: animatezoom 0.6s;
 }
 
-@keyframes animatezoom {
-  from {
-    transform: scale(0)
-  }
-
-  to {
-    transform: scale(1)
-  }
-}
-
+/* Fade Animations */
 .fade-in {
-  animation: fadeIn ease 3s;
-  -webkit-animation: fadeIn ease 3s;
-  -moz-animation: fadeIn ease 3s;
-  -o-animation: fadeIn ease 3s;
-  -ms-animation: fadeIn ease 3s;
-}
-
-@keyframes fadeIn {
-  0% {
-    opacity: 0;
-  }
-
-  100% {
-    opacity: 1;
-  }
-}
-
-@-moz-keyframes fadeIn {
-  0% {
-    opacity: 0;
-  }
-
-  100% {
-    opacity: 1;
-  }
-}
-
-@-webkit-keyframes fadeIn {
-  0% {
-    opacity: 0;
-  }
-
-  100% {
-    opacity: 1;
-  }
-}
-
-@-o-keyframes fadeIn {
-  0% {
-    opacity: 0;
-  }
-
-  100% {
-    opacity: 1;
-  }
-}
-
-@-ms-keyframes fadeIn {
-  0% {
-    opacity: 0;
-  }
-
-  100% {
-    opacity: 1;
-  }
+  animation: fadeIn 3s ease;
 }
 
 .fade-out {
-  animation: fadeOut ease 3s;
-  -webkit-animation: fadeOut ease 3s;
-  -moz-animation: fadeOut ease 3s;
-  -o-animation: fadeOut ease 3s;
-  -ms-animation: fadeOut ease 3s;
+  animation: fadeOut 3s ease;
 }
 
-@keyframes fadeOut {
-  0% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-  }
-}
-
-@-moz-keyframes fadeOut {
-  0% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-  }
-}
-
-@-webkit-keyframes fadeOut {
-  0% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-  }
-}
-
-@-o-keyframes fadeOut {
-  0% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-  }
-}
-
-@-ms-keyframes fadeOut {
-  0% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-  }
-}
-
+/* Slide Up/Down */
 .slideup,
 .slidedown {
   max-height: 0;
   overflow-y: hidden;
-  -webkit-transition: max-height 0.8s ease-in-out;
-  -moz-transition: max-height 0.8s ease-in-out;
-  -o-transition: max-height 0.8s ease-in-out;
   transition: max-height 0.8s ease-in-out;
 }
 
 .slidedown {
   max-height: 500px;
+}
+
+/* Keyframes */
+@keyframes slideLeft {
+  0% { transform: skewX(30deg) translateX(500px); }
+  60% { transform: translateX(0); }
+  62% { transform: skewX(0deg) translateX(-30px); }
+  100% { transform: skewX(0deg); }
+}
+
+@keyframes slideRight {
+  0% { transform: skewX(30deg) translateX(-500px); }
+  60% { transform: translateX(0); }
+  62% { transform: skewX(0deg) translateX(30px); }
+  100% { transform: skewX(0deg); }
+}
+
+@keyframes animatezoom {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
 }

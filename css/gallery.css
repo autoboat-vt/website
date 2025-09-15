@@ -1,3 +1,7 @@
+/* ===== GALLERY STYLES MOVED TO ALL.CSS ===== */
+/* This file is kept for legacy compatibility but all styles moved to all.css */
+/* Please use all.css for all styling needs */
+
 #photo-container {
   display: flex;
   flex-direction: row;
@@ -7,14 +11,13 @@
 
 #photo-container img {
   width: 20%;
-  margin: .5em;
+  margin: 0.5em;
   align-self: center;
   box-shadow: 1px 1px 2px 0 rgb(59, 59, 59);
   box-sizing: border-box;
 }
 
 @media (max-width: 700px) {
-
   #photo-container img {
     width: 40%;
   }
@@ -22,5 +25,4 @@
   main {
     margin-bottom: 8em;
   }
-
 }
