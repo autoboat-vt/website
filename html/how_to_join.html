@@ -8,51 +8,32 @@
             name="description"
             content="Learn how to join AutoBoat at Virginia Tech. Find out about our team structure, recruitment process, and how to get involved in autonomous boat design."
         />
-        <link rel="preconnect" href="https://fonts.gstatic.com" />
-        <link
-            href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap"
-            rel="stylesheet"
-        />
-        <link rel="stylesheet" href="../css/all.css" />
-        <script defer src="../js/all.js"></script>
-        <link rel="stylesheet" href="../css/how_to_join.css" />
-        <link rel="stylesheet" href="../css/animations.css" />
-        <script defer src="../js/sponsorship.js"></script>
+    <link rel="stylesheet" href="../css/styles.css" />
         <!-- Favicon -->
         <link rel="icon" type="image/x-icon" href="../images/favicon.ico" />
     </head>
 
     <body>
         <header>
-            <nav id="top-navbar">
-                <div id="navbar-links-container">
-                    <a class="notOnThisPage" href="../index.html">About</a>
-                    <a class="notOnThisPage" href="ourteam.html"
-                        >Meet the Team</a
-                    >
-                    <!-- <a class="notOnThisPage" href="fleet.html">Our Fleet</a> -->
-                    <a class="onThisPage" href="how_to_join.html"
-                        >How To Join</a
-                    >
-                    <!-- <a class="notOnThisPage" href="gallery.html">Gallery</a> -->
+            <nav class="nav" id="site-nav">
+                <div class="nav__brand">
+                    <a href="../index.html" aria-label="AutoBoat Home">
+                        <img class="nav__logo" src="../images/favicon.ico" alt="AutoBoat logo" />
+                    </a>
+                    <a href="../index.html">AutoBoat</a>
                 </div>
-                <img
-                    id="hamburger-icon"
-                    src="../images/hamburger.svg"
-                    alt="Menu"
-                    style="display: none"
-                />
-            </nav>
-            <nav class="navhidden" id="mobile-top-navbar">
-                <div id="mobile-navbar-links-container">
-                    <a class="notOnThisPage" href="../index.html">About</a>
-                    <a class="notOnThisPage" href="ourteam.html">Our Team</a>
-                    <!-- <a class="notOnThisPage" href="fleet.html">Fleet</a> -->
-                    <a class="onThisPage" href="how_to_join.html"
-                        >How To Join</a
-                    >
-                    <!-- <a class="notOnThisPage" href="gallery.html">Gallery</a> -->
+                <div class="nav__links">
+                    <a class="nav__link" href="../index.html">About</a>
+                    <a class="nav__link" href="ourteam.html">Meet the Team</a>
+                    <a class="nav__link is-active" href="how_to_join.html">How To Join</a>
                 </div>
+                <button class="nav__toggle" type="button" aria-label="Toggle menu" aria-expanded="false">
+                    <svg class="nav__icon" width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                      <rect y="6" width="32" height="4" rx="2" />
+                      <rect y="14" width="32" height="4" rx="2" />
+                      <rect y="22" width="32" height="4" rx="2" />
+                    </svg>
+                </button>
             </nav>
         </header>
         <main>
@@ -71,35 +52,28 @@
                 </div>
             </div>
         </main>
-        <footer>
-            <img
-                src="../images/background_images/pineapple.webp"
-                alt="Pineapple"
-                class="floating-pineapple"
-                id="pineapple"
-                loading="lazy"
-            />
-            <img
-                src="../images/background_images/enchanted_book.webp"
-                alt="Enchanted Book"
-                class="floating-enchanted-book"
-                id="enchanted-book"
-                loading="lazy"
-            />
-            <img
-                src="../images/background_images/chest.webp"
-                alt="Chest"
-                class="floating-chest"
-                id="chest"
-                loading="lazy"
-            />
-
-            <nav id="bottom-navbar">
-                <div id="bottom-navbar-container">
-                    <div id="follow-us"></div>
-                    <div id="contact-us"></div>
-                </div>
-            </nav>
+        <script>
+            (function(){
+                const nav = document.getElementById('site-nav');
+                const btn = nav ? nav.querySelector('.nav__toggle') : null;
+                if (!btn) return;
+                btn.addEventListener('click', function(){
+                    const open = nav.classList.toggle('nav--open');
+                    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                });
+            })();
+        </script>
+        <footer class="footer">
+            <div class="footer__inner">
+                <nav class="footer__links">
+                    <a href="../index.html">About</a>
+                    <a href="https://discord.gg/e34cdWdKbG">Discord</a>
+                    <a href="https://www.linkedin.com/company/abvt">LinkedIn</a>
+                    <a href="https://giving.adv.vt.edu/gift?fund=821082&amt=25&frequency=onetime&desc=AutoBoat%20Design%20Team">Donate</a>
+                    <a href="mailto:autoboat@vt.edu">Email</a>
+                </nav>
+                <small>© AutoBoat @ Virginia Tech</small>
+            </div>
         </footer>
     </body>
 </html>
