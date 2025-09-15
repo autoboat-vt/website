@@ -103,10 +103,14 @@ header { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: 
 /* Gallery */
 .gallery {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(200px, 260px));
-	justify-content: center;
+	grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 	gap: 0.75rem;
 	margin-top: 0.75rem;
+}
+/* Our Team page: center tiles with fixed min/max widths */
+.page-ourteam .gallery {
+	grid-template-columns: repeat(auto-fit, minmax(200px, 260px));
+	justify-content: center;
 }
 .gallery img {
 	width: 100%; display: block; border-radius: 8px;
