@@ -47,34 +47,46 @@
                 const btn = nav ? nav.querySelector('.nav__toggle') : null;
                 const links = nav ? nav.querySelector('#site-links') : null;
                 if (!btn || !links) return;
+                
+                let isAnimating = false;
+                
                 btn.addEventListener('click', function(){
+                    if (isAnimating) return; // Prevent spam clicking
+                    
+                    isAnimating = true;
                     const open = nav.classList.toggle('nav--open');
                     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
                     links.setAttribute('aria-hidden', open ? 'false' : 'true');
+                    
+                    // Reset animation lock after transition completes
+                    setTimeout(() => {
+                        isAnimating = false;
+                    }, 300); // Slightly longer than the CSS transition (250ms)
                 });
+                
                 links.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+                    if (isAnimating) return;
+                    
+                    isAnimating = true;
                     nav.classList.remove('nav--open');
                     btn.setAttribute('aria-expanded','false');
                     links.setAttribute('aria-hidden','true');
+                    
+                    setTimeout(() => {
+                        isAnimating = false;
+                    }, 300);
                 }));
             })();
         </script>
 
-        <script>
-            (function(){
-                const nav = document.getElementById('site-nav');
-                const btn = nav ? nav.querySelector('.nav__toggle') : null;
-                if (!btn) return;
-                btn.addEventListener('click', function(){
-                    const open = nav.classList.toggle('nav--open');
-                    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-                });
-            })();
-        </script>
+        <div class="section">
+            <h1>Our Fleet</h1>
+            <p>Work in progress.</p>
+        </div>
+
         <footer class="footer">
             <div class="footer__inner">
                 <nav class="footer__links">
-                    <a href="../index.html">About</a>
                     <a href="https://discord.gg/e34cdWdKbG" target="_blank" rel="noopener noreferrer">Discord<span class="visually-hidden"> (opens in a new tab)</span></a>
                     <a href="https://www.linkedin.com/company/abvt" target="_blank" rel="noopener noreferrer">LinkedIn<span class="visually-hidden"> (opens in a new tab)</span></a>
                     <a href="https://github.com/autoboat-vt" target="_blank" rel="noopener noreferrer">GitHub<span class="visually-hidden"> (opens in a new tab)</span></a>
