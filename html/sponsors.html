@@ -2,17 +2,16 @@
 <html lang="en">
     <head>
         <meta charset="utf-8" />
-        <title>AutoBoat | How to Join</title>
+        <title>AutoBoat | Fleet</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta
             name="description"
-            content="Learn how to join AutoBoat at Virginia Tech. Find out about our team structure, recruitment process, and how to get involved in autonomous boat design."
+            content="Sponsors of AutoBoat at Virginia Tech."
         />
     <link rel="stylesheet" href="../css/styles.css" />
     <link rel="preload" href="../images/favicon.ico" as="image" fetchpriority="high" />
-    <link rel="canonical" href="https://autoboat.aoe.vt.edu/html/how_to_join.html" />
         <!-- Favicon -->
-        <link rel="icon" type="image/x-icon" href="../images/favicon.ico" />
+    <link rel="icon" type="image/x-icon" href="../images/favicon.ico" />
     </head>
 
     <body>
@@ -28,10 +27,10 @@
                     <a class="nav__link" href="../index.html">About</a>
                     <a class="nav__link" href="ourteam.html">Meet the Team</a>
                     <a class="nav__link" href="fleet.html">Our Fleet</a>
-                    <a class="nav__link is-active" href="how_to_join.html">How To Join</a>
-                    <a class="nav__link" href="sponsors.html">Sponsors</a>
+                    <a class="nav__link" href="how_to_join.html">How To Join</a>
+                    <a class="nav__link is-active" href="sponsors.html">Sponsors</a>
                 </div>
-                <button class="nav__toggle" type="button" aria-label="Toggle menu" aria-controls="site-links" aria-expanded="false">
+                <button class="nav__toggle" type="button" aria-label="Toggle menu" aria-expanded="false">
                     <svg class="nav__icon" width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
                       <rect y="6" width="32" height="4" rx="2" />
                       <rect y="14" width="32" height="4" rx="2" />
@@ -40,39 +39,23 @@
                 </button>
             </nav>
         </header>
-        <main>
-            <div class="section">
-                <div id="how-to-join-box">
-                    <p>
-                        AutoBoat is open to all, no experience necessary! Fill
-                        out the form below to join us.
-                        <br />
-                        <a
-                            href="https://docs.google.com/forms/d/e/1FAIpQLScViTYzAYHl671SGp_dmYO9MvrleM3VWAem8Ep7FROBCVOB9Q/viewform?usp=sharing&ouid=116978117130571796595"
-                            target="_blank" rel="noopener noreferrer"
-                        >
-                            Join Now!<span class="visually-hidden"> (opens in a new tab)</span>
-                        </a>
-                    </p>
-                </div>
-            </div>
-        </main>
+
+        <div class="section">
+            <h1>Our Sponsors</h1>
+            <p>We would like to thank our sponsors for their generous support:</p>
+            <ul>
+                <li>Virginia Tech College of Engineering</li>
+            </ul>
+
         <script>
-            (function(){
+           (function(){
                 const nav = document.getElementById('site-nav');
                 const btn = nav ? nav.querySelector('.nav__toggle') : null;
-                const links = nav ? nav.querySelector('#site-links') : null;
-                if (!btn || !links) return;
+                if (!btn) return;
                 btn.addEventListener('click', function(){
                     const open = nav.classList.toggle('nav--open');
                     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-                    links.setAttribute('aria-hidden', open ? 'false' : 'true');
                 });
-                links.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
-                    nav.classList.remove('nav--open');
-                    btn.setAttribute('aria-expanded','false');
-                    links.setAttribute('aria-hidden','true');
-                }));
             })();
         </script>
         <footer class="footer">

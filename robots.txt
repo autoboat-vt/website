@@ -1,2 +1,10 @@
+User-agent: *
+Allow: /
+
 User-agent: Googlebot-Image
-Disallow: /images
+Disallow: /images/
+
+# Sitemap location
+Sitemap: https://autoboat.aoe.vt.edu/sitemap.xml
+
+Crawl-delay: 5

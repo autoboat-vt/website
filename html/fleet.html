@@ -9,6 +9,8 @@
             content="Explore the AutoBoat fleet at Virginia Tech, featuring our autonomous sailboats and electric motorboats designed for robotics competitions."
         />
     <link rel="stylesheet" href="../css/styles.css" />
+    <link rel="preload" href="../images/favicon.ico" as="image" fetchpriority="high" />
+    <link rel="canonical" href="https://autoboat.aoe.vt.edu/html/fleet.html" />
         <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="../images/favicon.ico" />
     </head>
@@ -17,19 +19,19 @@
         <header>
             <nav class="nav" id="site-nav">
                 <div class="nav__brand">
-                    <a href="../index.html" aria-label="AutoBoat Home">
-                        <img class="nav__logo" src="../images/favicon.ico" alt="AutoBoat logo" />
+                    <a href="../index.html" aria-label="AutoBoat Home" style="display:inline-block;width:32px;height:32px;">
+                        <img class="nav__logo" src="../images/favicon.ico" alt="" aria-hidden="true" width="32" height="32" fetchpriority="high" loading="eager" decoding="sync" />
                     </a>
                     <a href="../index.html">AutoBoat</a>
                 </div>
-                <div class="nav__links">
+                <div class="nav__links" id="site-links" aria-hidden="true">
                     <a class="nav__link" href="../index.html">About</a>
                     <a class="nav__link" href="ourteam.html">Meet the Team</a>
                     <a class="nav__link is-active" href="fleet.html">Our Fleet</a>
                     <a class="nav__link" href="how_to_join.html">How To Join</a>
-                    <a class="nav__link" href="gallery.html">Gallery</a>
+                    <a class="nav__link" href="sponsors.html">Sponsors</a>
                 </div>
-                <button class="nav__toggle" type="button" aria-label="Toggle menu" aria-expanded="false">
+                <button class="nav__toggle" type="button" aria-label="Toggle menu" aria-controls="site-links" aria-expanded="false">
                     <svg class="nav__icon" width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
                       <rect y="6" width="32" height="4" rx="2" />
                       <rect y="14" width="32" height="4" rx="2" />
@@ -38,6 +40,25 @@
                 </button>
             </nav>
         </header>
+
+        <script>
+            (function(){
+                const nav = document.getElementById('site-nav');
+                const btn = nav ? nav.querySelector('.nav__toggle') : null;
+                const links = nav ? nav.querySelector('#site-links') : null;
+                if (!btn || !links) return;
+                btn.addEventListener('click', function(){
+                    const open = nav.classList.toggle('nav--open');
+                    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    links.setAttribute('aria-hidden', open ? 'false' : 'true');
+                });
+                links.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+                    nav.classList.remove('nav--open');
+                    btn.setAttribute('aria-expanded','false');
+                    links.setAttribute('aria-hidden','true');
+                }));
+            })();
+        </script>
 
         <script>
             (function(){
@@ -54,10 +75,10 @@
             <div class="footer__inner">
                 <nav class="footer__links">
                     <a href="../index.html">About</a>
-                    <a href="https://discord.gg/e34cdWdKbG">Discord</a>
-                    <a href="https://www.linkedin.com/company/abvt">LinkedIn</a>
-                    <a href="https://github.com/autoboat-vt">GitHub</a>
-                    <a href="https://giving.adv.vt.edu/gift?fund=821082&amt=25&frequency=onetime&desc=AutoBoat%20Design%20Team">Donate</a>
+                    <a href="https://discord.gg/e34cdWdKbG" target="_blank" rel="noopener noreferrer">Discord<span class="visually-hidden"> (opens in a new tab)</span></a>
+                    <a href="https://www.linkedin.com/company/abvt" target="_blank" rel="noopener noreferrer">LinkedIn<span class="visually-hidden"> (opens in a new tab)</span></a>
+                    <a href="https://github.com/autoboat-vt" target="_blank" rel="noopener noreferrer">GitHub<span class="visually-hidden"> (opens in a new tab)</span></a>
+                    <a href="https://giving.adv.vt.edu/gift?fund=821082&amt=25&frequency=onetime&desc=AutoBoat%20Design%20Team" target="_blank" rel="noopener noreferrer">Donate<span class="visually-hidden"> (opens in a new tab)</span></a>
                     <a href="mailto:autoboat@vt.edu">Email</a>
                 </nav>
                 <small>© AutoBoat @ Virginia Tech</small>

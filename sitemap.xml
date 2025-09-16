@@ -1,6 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="https://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
    <url>
-      <loc>https://www.autoboat.aoe.vt.edu/</loc>
+      <loc>https://autoboat.aoe.vt.edu/</loc>
+   </url>
+   <url>
+      <loc>https://autoboat.aoe.vt.edu/index.html</loc>
+   </url>
+   <url>
+      <loc>https://autoboat.aoe.vt.edu/html/ourteam.html</loc>
+   </url>
+   <url>
+      <loc>https://autoboat.aoe.vt.edu/html/fleet.html</loc>
+   </url>
+   <url>
+      <loc>https://autoboat.aoe.vt.edu/html/how_to_join.html</loc>
+   </url>
+   <url>
+      <loc>https://autoboat.aoe.vt.edu/html/sponsors.html</loc>
    </url>
 </urlset>
