@@ -183,7 +183,7 @@ header { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: 
 		pointer-events: none;
 		transition: max-height 250ms ease, opacity 200ms ease, transform 200ms ease, padding 200ms ease, border-width 200ms ease;
 		white-space: normal;
-		width: 100vw;
+		width: 100%;
 		margin: 0;
 	}
 	.nav.nav--open .nav__links {
@@ -205,4 +205,9 @@ header { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: 
 @media (prefers-color-scheme: dark) {
 	.nav { border-bottom-color: rgba(255,255,255,0.12); }
 	.footer { border-top-color: rgba(255,255,255,0.12); }
+}
+
+/* Accessibility: honor reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+	* { transition: none !important; animation: none !important; }
 }
