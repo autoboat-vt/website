@@ -8,58 +8,54 @@
             name="description"
             content="Meet the AutoBoat team at Virginia Tech. Learn about our software, electronics, naval architecture, mechanical, sail, and business subteams."
         />
-        <link rel="preconnect" href="https://fonts.gstatic.com" />
-        <link
-            href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap"
-            rel="stylesheet"
-        />
-        <link
-            href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap"
-            rel="stylesheet"
-        />
-        <link rel="stylesheet" href="../css/all.css" />
-        <script defer src="../js/all.js"></script>
-        <link rel="stylesheet" href="../css/ourteam.css" />
-        <link rel="stylesheet" href="../css/animations.css" />
-        <script defer src="../js/ourteam.js"></script>
+    <link rel="stylesheet" href="../css/styles.css" />
+    <link rel="preload" href="../images/favicon.ico" as="image" fetchpriority="high" />
+        <link rel="canonical" href="https://autoboat.aoe.vt.edu/html/ourteam.html" />
         <!-- Favicon -->
         <link rel="icon" type="image/x-icon" href="../images/favicon.ico" />
     </head>
 
-    <body>
+    <body class="page-ourteam">
         <header>
-            <nav id="top-navbar">
-                <div id="navbar-links-container">
-                    <a class="notOnThisPage" href="../index.html">About</a>
-                    <a class="onThisPage" href="ourteam.html">Meet the Team</a>
-                    <!-- <a class="notOnThisPage" href="fleet.html">Our Fleet</a> -->
-                    <a class="notOnThisPage" href="how_to_join.html"
-                        >How To Join</a
-                    >
-                    <!-- <a class="notOnThisPage" href="gallery.html">Gallery</a> -->
+            <nav class="nav" id="site-nav">
+                <div class="nav__brand">
+                    <a href="../index.html" aria-label="AutoBoat Home" style="display:inline-block;width:32px;height:32px;">
+                        <img class="nav__logo" src="../images/favicon.ico" alt="" aria-hidden="true" width="32" height="32" fetchpriority="high" loading="eager" decoding="sync" />
+                    </a>
+                    <a href="../index.html">AutoBoat</a>
                 </div>
-                <img
-                    id="hamburger-icon"
-                    src="../images/hamburger.svg"
-                    alt="Menu"
-                    style="display: none"
-                />
-            </nav>
-            <nav class="navhidden" id="mobile-top-navbar">
-                <div id="mobile-navbar-links-container">
-                    <a class="notOnThisPage" href="../index.html">About</a>
-                    <a class="onThisPage" href="ourteam.html">Our Team</a>
-                    <!-- <a class="notOnThisPage" href="fleet.html">Fleet</a> -->
-                    <a class="notOnThisPage" href="how_to_join.html"
-                        >How To Join</a
-                    >
-                    <!-- <a class="notOnThisPage" href="gallery.html">Gallery</a> -->
+                <div class="nav__links" id="site-links" aria-hidden="true">
+                    <a class="nav__link" href="../index.html">About</a>
+                    <a class="nav__link is-active" href="ourteam.html">Meet the Team</a>
+                    <a class="nav__link" href="fleet.html">Our Fleet</a>
+                    <a class="nav__link" href="how_to_join.html">How To Join</a>
+                    <a class="nav__link" href="sponsors.html">Sponsors</a>
                 </div>
+                <button class="nav__toggle" type="button" aria-label="Toggle menu" aria-controls="site-links" aria-expanded="false">
+                    <svg class="nav__icon" width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                      <rect y="6" width="32" height="4" rx="2" />
+                      <rect y="14" width="32" height="4" rx="2" />
+                      <rect y="22" width="32" height="4" rx="2" />
+                    </svg>
+                </button>
             </nav>
         </header>
         <main>
+            <section class="section" id="toc">
+                <div class="card">
+                    <h3>Sub-Teams</h3>
+                    <nav class="gallery">
+                        <a href="#software">Software</a>
+                        <a href="#electronics">Electronics</a>
+                        <a href="#naval-architecture">Naval Architecture</a>
+                        <a href="#mechanical">Mechanical</a>
+                        <a href="#sail">Sail</a>
+                        <a href="#business">Business</a>
+                    </nav>
+                </div>
+            </section>
             <div id="subteams-section">
-                <div class="subteam-box" id="software-box">
+                <section class="card" id="software">
                     <h3 class="subteam-title">Software</h3>
                     <p class="subteam-description">
                         The Software Subteam develops the autonomous navigation
@@ -75,48 +71,16 @@
                         working on autonomous systems! If you would like to
                         check out some of our code, most of it is open source!
                         and is available on our
-                        <a href="https://github.com/autoboat-vt">GitHub</a>.
+                        <a href="https://github.com/autoboat-vt" target="_blank" rel="noopener noreferrer">GitHub<span class="visually-hidden"> (opens in a new tab)</span></a>.
                     </p>
-                </div>
-
-                <div class="subteam-images-section" id="software-images">
-                    <div class="subteam-images">
-                        <div class="image-container">
-                            <img
-                                src="../images/our_team_images/software/computer_vision1.webp"
-                                alt="Computer Vision System"
-                                class="subteam-image"
-                                loading="lazy"
-                            />
-                        </div>
-                        <div class="image-container">
-                            <img
-                                src="../images/our_team_images/software/groundstation.webp"
-                                alt="Ground Station Software"
-                                class="subteam-image"
-                                loading="lazy"
-                            />
-                        </div>
-                        <div class="image-container">
-                            <img
-                                src="../images/our_team_images/software/computer_vision2.webp"
-                                alt="Computer Vision Analysis"
-                                class="subteam-image"
-                                loading="lazy"
-                            />
-                        </div>
-                        <div class="image-container">
-                            <img
-                                src="../images/our_team_images/software/simulation.webp"
-                                alt="Simulation Environment"
-                                class="subteam-image"
-                                loading="lazy"
-                            />
-                        </div>
+                    <div class="gallery" aria-label="Software gallery">
+                        <img src="../images/our_team_images/software/computer_vision1.webp" alt="Computer Vision System" loading="lazy" />
+                        <img src="../images/our_team_images/software/groundstation.webp" alt="Ground Station Software" loading="lazy" />
+                        <img src="../images/our_team_images/software/simulation.webp" alt="Simulation Environment" loading="lazy" />
                     </div>
-                </div>
+                </section>
 
-                <div class="subteam-box" id="electronics-box">
+                <section class="card" id="electronics">
                     <h3 class="subteam-title">Electronics</h3>
                     <p class="subteam-description">
                         The Electronics Subteam develops the infrastructure to
@@ -133,64 +97,17 @@
                         electronics, embedded systems, or just like to solder,
                         we will happily welcome you to our team!
                     </p>
-                </div>
-
-                <div class="subteam-images-section" id="electronics-images">
-                    <div class="subteam-images">
-                        <div class="subteam-images">
-                            <div class="image-container">
-                                <img
-                                    src="../images/our_team_images/electronics/electronics1.webp"
-                                    alt="Electronics1"
-                                    class="subteam-image"
-                                    loading="lazy"
-                                />
-                            </div>
-                            <div class="image-container">
-                                <img
-                                    src="../images/our_team_images/electronics/electronics2.webp"
-                                    alt="Electronics2"
-                                    class="subteam-image"
-                                    loading="lazy"
-                                />
-                            </div>
-                            <div class="image-container">
-                                <img
-                                    src="../images/our_team_images/electronics/electronics3.webp"
-                                    alt="Electronics3"
-                                    class="subteam-image"
-                                    loading="lazy"
-                                />
-                            </div>
-                            <div class="image-container">
-                                <img
-                                    src="../images/our_team_images/electronics/electronics4.webp"
-                                    alt="Electronics4"
-                                    class="subteam-image"
-                                    loading="lazy"
-                                />
-                            </div>
-                            <div class="image-container">
-                                <img
-                                    src="../images/our_team_images/electronics/electronics5.webp"
-                                    alt="Electronics5"
-                                    class="subteam-image"
-                                    loading="lazy"
-                                />
-                            </div>
-                            <div class="image-container">
-                                <img
-                                    src="../images/our_team_images/electronics/electronics6.webp"
-                                    alt="Electronics6"
-                                    class="subteam-image"
-                                    loading="lazy"
-                                />
-                            </div>
-                        </div>
+                    <div class="gallery" aria-label="Electronics gallery">
+                        <img src="../images/our_team_images/electronics/electronics1.webp" alt="Electronics 1" loading="lazy" />
+                        <img src="../images/our_team_images/electronics/electronics2.webp" alt="Electronics 2" loading="lazy" />
+                        <img src="../images/our_team_images/electronics/electronics3.webp" alt="Electronics 3" loading="lazy" />
+                        <img src="../images/our_team_images/electronics/electronics4.webp" alt="Electronics 4" loading="lazy" />
+                        <img src="../images/our_team_images/electronics/electronics5.webp" alt="Electronics 5" loading="lazy" />
+                        <img src="../images/our_team_images/electronics/electronics6.webp" alt="Electronics 6" loading="lazy" />
                     </div>
-                </div>
+                </section>
 
-                <div class="subteam-box" id="naval-architecture-box">
+                <section class="card" id="naval-architecture">
                     <h3 class="subteam-title">Naval Architecture</h3>
                     <p class="subteam-description">
                         The Naval Architecture Subteam focuses on the
@@ -203,38 +120,14 @@
                         hydrodynamic modifications to enhance performance on the
                         water.
                     </p>
-                </div>
-
-                <div class="subteam-images-section" id="navarch-images">
-                    <div class="subteam-images">
-                        <div class="image-container">
-                            <img
-                                src="../images/our_team_images/navarch/michio_spray_paint.webp"
-                                alt="Hull Design and Construction"
-                                class="subteam-image"
-                                loading="lazy"
-                            />
-                        </div>
-                        <div class="image-container">
-                            <img
-                                src="../images/our_team_images/navarch/boat1.webp"
-                                alt="Boat1"
-                                class="subteam-image"
-                                loading="lazy"
-                            />
-                        </div>
-                        <div class="image-container">
-                            <img
-                                src="../images/our_team_images/navarch/boat2.webp"
-                                alt="Boat2"
-                                class="subteam-image"
-                                loading="lazy"
-                            />
-                        </div>
+                    <div class="gallery" aria-label="Naval Architecture gallery">
+                        <img src="../images/our_team_images/navarch/michio_spray_paint.webp" alt="Hull Design and Construction" loading="lazy" />
+                        <img src="../images/our_team_images/navarch/boat1.webp" alt="Boat 1" loading="lazy" />
+                        <img src="../images/our_team_images/navarch/boat2.webp" alt="Boat 2" loading="lazy" />
                     </div>
-                </div>
+                </section>
 
-                <div class="subteam-box" id="mechanical-box">
+                <section class="card" id="mechanical">
                     <h3 class="subteam-title">Mechanical</h3>
                     <p class="subteam-description">
                         The Mechanical Subteam transforms ideas into tangible
@@ -253,38 +146,14 @@
                         that just works, there's a place for you on the
                         Mechanical subteam.
                     </p>
-                </div>
-
-                <div class="subteam-images-section" id="mechanical-images">
-                    <div class="subteam-images">
-                        <div class="image-container">
-                            <img
-                                src="../images/our_team_images/mechanical/mech1.webp"
-                                alt="Mech1"
-                                class="subteam-image"
-                                loading="lazy"
-                            />
-                        </div>
-                        <div class="image-container">
-                            <img
-                                src="../images/our_team_images/mechanical/mech2.webp"
-                                alt="Mech2"
-                                class="subteam-image"
-                                loading="lazy"
-                            />
-                        </div>
-                        <div class="image-container">
-                            <img
-                                src="../images/our_team_images/mechanical/mech3.webp"
-                                alt="Mech3"
-                                class="subteam-image"
-                                loading="lazy"
-                            />
-                        </div>
+                    <div class="gallery" aria-label="Mechanical gallery">
+                        <img src="../images/our_team_images/mechanical/mech1.webp" alt="Mechanical 1" loading="lazy" />
+                        <img src="../images/our_team_images/mechanical/mech2.webp" alt="Mechanical 2" loading="lazy" />
+                        <img src="../images/our_team_images/mechanical/mech3.webp" alt="Mechanical 3" loading="lazy" />
                     </div>
-                </div>
+                </section>
 
-                <div class="subteam-box" id="sail-box">
+                <section class="card" id="sail">
                     <h3 class="subteam-title">Sail</h3>
                     <p class="subteam-description">
                         The Sail Subteam is responsible for designing and
@@ -296,30 +165,13 @@
                         selection, patterning, and sewing, ensuring peak
                         aerodynamic performance in competition conditions.
                     </p>
-                </div>
-
-                <div class="subteam-images-section" id="sail-images">
-                    <div class="subteam-images">
-                        <div class="image-container">
-                            <img
-                                src="../images/our_team_images/sail/michio_sail.webp"
-                                alt="Sail Design and Testing"
-                                class="subteam-image"
-                                loading="lazy"
-                            />
-                        </div>
-                        <div class="image-container">
-                            <img
-                                src="../images/our_team_images/sail/sail1.webp"
-                                alt="Sail1"
-                                class="subteam-image"
-                                loading="lazy"
-                            />
-                        </div>
+                    <div class="gallery" aria-label="Sail gallery">
+                        <img src="../images/our_team_images/sail/michio_sail.webp" alt="Sail Design and Testing" loading="lazy" />
+                        <img src="../images/our_team_images/sail/sail1.webp" alt="Sail 1" loading="lazy" />
                     </div>
-                </div>
+                </section>
 
-                <div class="subteam-box" id="business-box">
+                <section class="card" id="business">
                     <h3 class="subteam-title">Business</h3>
                     <p class="subteam-description">
                         The Business subteam handles team outreach, sponsorship
@@ -327,20 +179,14 @@
                         This team maintains relationships with sponsors, creates
                         promotional materials, and manage team finances.
                     </p>
-                </div>
-
-                <div class="subteam-images-section" id="business-images">
-                    <div class="subteam-images">
-                        <!-- Business images will be added when available -->
-                    </div>
-                </div>
+                </section>
             </div>
         </main>
 
         <!-- Image Modal -->
-        <div id="imageModal" class="image-modal">
+        <div id="imageModal" class="image-modal" role="dialog" aria-modal="true" aria-label="Image preview">
             <div class="modal-content">
-                <button class="close-modal">&times;</button>
+                <button class="close-modal" aria-label="Close image preview">&times;</button>
                 <img
                     id="modalImage"
                     class="modal-image"
@@ -350,35 +196,85 @@
             </div>
         </div>
 
-        <footer>
-            <img
-                src="../images/background_images/pineapple.webp"
-                alt="Pineapple"
-                class="floating-pineapple"
-                id="pineapple"
-                loading="lazy"
-            />
-            <img
-                src="../images/background_images/enchanted_book.webp"
-                alt="Enchanted Book"
-                class="floating-enchanted-book"
-                id="enchanted-book"
-                loading="lazy"
-            />
-            <img
-                src="../images/background_images/chest.webp"
-                alt="Chest"
-                class="floating-chest"
-                id="chest"
-                loading="lazy"
-            />
-
-            <nav id="bottom-navbar">
-                <div id="bottom-navbar-container">
-                    <div id="follow-us"></div>
-                    <div id="contact-us"></div>
-                </div>
-            </nav>
+        <script>
+            (function(){
+                const nav = document.getElementById('site-nav');
+                const btn = nav ? nav.querySelector('.nav__toggle') : null;
+                const links = nav ? nav.querySelector('#site-links') : null;
+                if (!btn || !links) return;
+                
+                let isAnimating = false;
+                
+                btn.addEventListener('click', function(){
+                    if (isAnimating) return; // Prevent spam clicking
+                    
+                    isAnimating = true;
+                    const open = nav.classList.toggle('nav--open');
+                    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    links.setAttribute('aria-hidden', open ? 'false' : 'true');
+                    
+                    // Reset animation lock after transition completes
+                    setTimeout(() => {
+                        isAnimating = false;
+                    }, 300); // Slightly longer than the CSS transition (250ms)
+                });
+                
+                links.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+                    if (isAnimating) return;
+                    
+                    isAnimating = true;
+                    nav.classList.remove('nav--open');
+                    btn.setAttribute('aria-expanded','false');
+                    links.setAttribute('aria-hidden','true');
+                    
+                    setTimeout(() => {
+                        isAnimating = false;
+                    }, 300);
+                }));
+            })();
+        </script>
+        <script>
+            (function(){
+                const modal = document.getElementById('imageModal');
+                const modalImg = document.getElementById('modalImage');
+                const closeBtn = modal ? modal.querySelector('.close-modal') : null;
+                let lastActive = null;
+                if (!modal || !modalImg || !closeBtn) return;
+                document.querySelectorAll('.gallery img').forEach(img => {
+                    img.style.cursor = 'zoom-in';
+                    img.addEventListener('click', () => {
+                        lastActive = document.activeElement;
+                        modalImg.src = img.src;
+                        modal.classList.add('is-open');
+                        closeBtn.focus();
+                    });
+                });
+                closeBtn.addEventListener('click', () => modal.classList.remove('is-open'));
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) modal.classList.remove('is-open');
+                });
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') modal.classList.remove('is-open');
+                });
+                modal.addEventListener('transitionend', () => {
+                    if (!modal.classList.contains('is-open') && lastActive && lastActive.focus) {
+                        lastActive.focus();
+                        lastActive = null;
+                    }
+                });
+            })();
+        </script>
+        <footer class="footer">
+            <div class="footer__inner">
+                <nav class="footer__links">
+                    <a href="https://discord.gg/e34cdWdKbG" target="_blank" rel="noopener noreferrer">Discord<span class="visually-hidden"> (opens in a new tab)</span></a>
+                    <a href="https://www.linkedin.com/company/abvt" target="_blank" rel="noopener noreferrer">LinkedIn<span class="visually-hidden"> (opens in a new tab)</span></a>
+                    <a href="https://github.com/autoboat-vt" target="_blank" rel="noopener noreferrer">GitHub<span class="visually-hidden"> (opens in a new tab)</span></a>
+                    <a href="https://giving.adv.vt.edu/gift?fund=821082&amt=25&frequency=onetime&desc=AutoBoat%20Design%20Team" target="_blank" rel="noopener noreferrer">Donate<span class="visually-hidden"> (opens in a new tab)</span></a>
+                    <a href="mailto:autoboat@vt.edu">Email</a>
+                </nav>
+                <small>© AutoBoat @ Virginia Tech</small>
+            </div>
         </footer>
     </body>
 </html>
