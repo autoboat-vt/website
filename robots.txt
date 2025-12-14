@@ -1,5 +1,5 @@
 User-agent: *
-Disallow: /
+Disallow: /images/
 
 # Sitemap location
 Sitemap: https://autoboat.aoe.vt.edu/sitemap.xml
