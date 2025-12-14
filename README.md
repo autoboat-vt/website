@@ -6,12 +6,11 @@ This website is written in raw HTML, JS, and CSS.
 
 -   `index.html`: Main **about** page
 -   `html` folder: Contains the html source for all the auxiliary pages (e.g., meet the team)
--   `css` folder: Styling for the overall website as well as specific styles for each subpage
--   `js` folder: JavaScript source for each of the pages
+-   `css` folder: Styling for the overall website
 
 ## Running for Development
 
-There are 2 main ways to run this website if you are developing and would like to test changes locally: through VSCode and through Python.
+There are two main ways to run this website if you are developing and would like to test changes locally: through VSCode and through Python.
 
 ### VS Code
 
@@ -40,6 +39,3 @@ Finally, to deploy the website, run the following commands:
 ```git push origin main```
 
 ```git push aoe_sites main```
-
-
-
