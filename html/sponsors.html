@@ -1,25 +1,36 @@
 <!doctype html>
 <html lang="en">
     <head>
-        <meta charset="utf-8" />
-    <title>AutoBoat | Sponsors</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta
-            name="description"
-            content="Sponsors of AutoBoat at Virginia Tech."
-        />
-    <link rel="stylesheet" href="../css/styles.css" />
-    <link rel="preload" href="../images/favicon.ico" as="image" fetchpriority="high" />
+        <meta charset="utf-8">
+        <title>AutoBoat | Sponsors</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="description" content="Sponsors of AutoBoat at Virginia Tech.">
+        <link rel="stylesheet" href="../css/styles.css">
+        <link rel="preload" href="../images/favicon.ico" as="image" fetchpriority="high">
         <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="../images/favicon.ico" />
+        <link rel="icon" type="image/x-icon" href="../images/favicon.ico">
     </head>
 
     <body>
         <header>
             <nav class="nav" id="site-nav">
                 <div class="nav__brand">
-                    <a href="../index.html" aria-label="AutoBoat Home" style="display:inline-block;width:32px;height:32px;">
-                        <img class="nav__logo" src="../images/favicon.ico" alt="" aria-hidden="true" width="32" height="32" fetchpriority="high" loading="eager" decoding="sync" />
+                    <a
+                        href="../index.html"
+                        aria-label="AutoBoat Home"
+                        style="display:inline-block;width:32px;height:32px;"
+                    >
+                        <img
+                            class="nav__logo"
+                            src="../images/favicon.ico"
+                            alt=""
+                            aria-hidden="true"
+                            width="32"
+                            height="32"
+                            fetchpriority="high"
+                            loading="eager"
+                            decoding="sync"
+                        >
                     </a>
                     <a href="../index.html">AutoBoat</a>
                 </div>
@@ -30,11 +41,24 @@
                     <a class="nav__link" href="how_to_join.html">How To Join</a>
                     <a class="nav__link is-active" href="sponsors.html">Sponsors</a>
                 </div>
-                <button class="nav__toggle" type="button" aria-label="Toggle menu" aria-expanded="false">
-                    <svg class="nav__icon" width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-                      <rect y="6" width="32" height="4" rx="2" />
-                      <rect y="14" width="32" height="4" rx="2" />
-                      <rect y="22" width="32" height="4" rx="2" />
+                <button
+                    class="nav__toggle"
+                    type="button"
+                    aria-label="Toggle menu"
+                    aria-expanded="false"
+                >
+                    <svg
+                        class="nav__icon"
+                        width="32"
+                        height="32"
+                        viewBox="0 0 32 32"
+                        xmlns="http://www.w3.org/2000/svg"
+                        aria-hidden="true"
+                        focusable="false"
+                    >
+                        <rect y="6" width="32" height="4" rx="2" />
+                        <rect y="14" width="32" height="4" rx="2" />
+                        <rect y="22" width="32" height="4" rx="2" />
                     </svg>
                 </button>
             </nav>
@@ -46,54 +70,77 @@
             <ul>
                 <li>Virginia Tech College of Engineering</li>
             </ul>
-            </div>
+        </div>
         <script>
-           (function(){
-                const nav = document.getElementById('site-nav');
-                const btn = nav ? nav.querySelector('.nav__toggle') : null;
-                const links = nav ? nav.querySelector('#site-links') : null;
+            (() => {
+                const nav = document.getElementById("site-nav");
+                const btn = nav ? nav.querySelector(".nav__toggle") : null;
+                const links = nav ? nav.querySelector("#site-links") : null;
                 if (!btn || !links) return;
-                
+
                 let isAnimating = false;
-                
-                btn.addEventListener('click', function(){
+
+                btn.addEventListener("click", () => {
                     if (isAnimating) return; // Prevent spam clicking
-                    
+
                     isAnimating = true;
-                    const open = nav.classList.toggle('nav--open');
-                    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-                    links.setAttribute('aria-hidden', open ? 'false' : 'true');
-                    
+                    const open = nav.classList.toggle("nav--open");
+                    btn.setAttribute("aria-expanded", open ? "true" : "false");
+                    links.setAttribute("aria-hidden", open ? "false" : "true");
+
                     // Reset animation lock after transition completes
                     setTimeout(() => {
                         isAnimating = false;
                     }, 300); // Slightly longer than the CSS transition (250ms)
                 });
-                
-                links.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
-                    if (isAnimating) return;
-                    
-                    isAnimating = true;
-                    nav.classList.remove('nav--open');
-                    btn.setAttribute('aria-expanded','false');
-                    links.setAttribute('aria-hidden','true');
-                    
-                    setTimeout(() => {
-                        isAnimating = false;
-                    }, 300);
-                }));
+
+                links.querySelectorAll("a").forEach((a) => {
+                    a.addEventListener("click", () => {
+                        if (isAnimating) return;
+
+                        isAnimating = true;
+                        nav.classList.remove("nav--open");
+                        btn.setAttribute("aria-expanded", "false");
+                        links.setAttribute("aria-hidden", "true");
+
+                        setTimeout(() => {
+                            isAnimating = false;
+                        }, 300);
+                    });
+                });
             })();
         </script>
-    </body>
         <footer class="footer">
             <div class="footer__inner">
                 <nav class="footer__links">
                     <a href="mailto:autoboat@vt.edu">Email</a>
-                    <a href="https://giving.adv.vt.edu/gift?fund=821082&amt=25&frequency=onetime&desc=AutoBoat%20Design%20Team" target="_blank" rel="noopener noreferrer">Donate<span class="visually-hidden"> (opens in a new tab)</span></a>
-                    <a href="https://discord.gg/e34cdWdKbG" target="_blank" rel="noopener noreferrer">Discord<span class="visually-hidden"> (opens in a new tab)</span></a>
-                    <a href="https://github.com/autoboat-vt" target="_blank" rel="noopener noreferrer">GitHub<span class="visually-hidden"> (opens in a new tab)</span></a>
-                    <a href="https://www.linkedin.com/company/abvt" target="_blank" rel="noopener noreferrer">LinkedIn<span class="visually-hidden"> (opens in a new tab)</span></a>
+                    <a
+                        href="https://giving.adv.vt.edu/gift?fund=821082&amt=25&frequency=onetime&desc=AutoBoat%20Design%20Team"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >Donate<span class="visually-hidden"> (opens in a new tab)</span></a
+                    >
+                    <a
+                        href="https://discord.gg/e34cdWdKbG"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >Discord<span class="visually-hidden"> (opens in a new tab)</span></a
+                    >
+                    <a
+                        href="https://github.com/autoboat-vt"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >GitHub<span class="visually-hidden"> (opens in a new tab)</span></a
+                    >
+                    <a
+                        href="https://www.linkedin.com/company/abvt"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >LinkedIn<span class="visually-hidden"> (opens in a new tab)</span></a
+                    >
                 </nav>
                 <small>© AutoBoat @ Virginia Tech</small>
+            </div>
         </footer>
+    </body>
 </html>
