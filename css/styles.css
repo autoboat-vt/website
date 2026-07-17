@@ -316,6 +316,38 @@ header {
     grid-template-columns: repeat(auto-fit, minmax(200px, 260px));
     justify-content: center;
 }
+/* Subteam navigation buttons */
+#toc .gallery a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.85rem 1.25rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-decoration: none;
+    background-color: var(--fontcolor);
+    color: var(--bgcolor);
+    border: 1px solid var(--fontcolor);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    transition: background-color 200ms ease, border-color 200ms ease, transform 150ms ease, box-shadow 150ms ease;
+    text-align: center;
+}
+#toc .gallery a:hover {
+    background-color: var(--hovercolor);
+    border-color: var(--hovercolor);
+    color: var(--bgcolor);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+#toc .gallery a:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+#toc .gallery a:focus-visible {
+    outline: 2px solid var(--fontcolor);
+    outline-offset: 3px;
+}
 .gallery img {
     width: 100%;
     display: block;
