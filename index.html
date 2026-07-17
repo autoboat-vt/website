@@ -11,6 +11,9 @@
         >
         <link rel="preload" href="images/gallery/14.webp" as="image">
         <link rel="preload" href="images/favicon.ico" as="image" fetchpriority="high">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="css/styles.css">
         <link rel="canonical" href="https://autoboat.aoe.vt.edu/">
 
@@ -77,6 +80,9 @@
                     <h1>AutoBoat @ Virginia Tech</h1>
                     <p class="hero__subtitle">Autonomous Electric Motorboats and Sailboats</p>
                 </div>
+                <div class="hero__scroll" aria-hidden="true">
+                    <span class="hero__scroll-arrow"></span>
+                </div>
             </section>
             <section class="section">
                 <div class="card">
@@ -116,11 +122,36 @@
                 <div class="card">
                     <h3>Our Sub-Teams</h3>
                     <p>
-                        The team is divided into 6 sub-teams: <b>Software</b>, <b>Electronics</b>,
-                        <b>Naval Architecture</b>, <b>Mechanical</b>, <b>Sail</b>, and
-                        <b>Business</b>. We are always looking for new members to join the team
-                        throughout the year, so don't hesitate to reach out! There is no experience
-                        required—we'll teach you everything you need to know.
+                        The team is divided into 6 sub-teams. Click any sub-team below to learn more about what we do and see our work:
+                    </p>
+                    <div class="subteam-grid">
+                        <a href="html/ourteam.html#software" class="subteam-badge">
+                            <span class="subteam-badge__dot subteam-badge__dot--software"></span>
+                            Software
+                        </a>
+                        <a href="html/ourteam.html#electronics" class="subteam-badge">
+                            <span class="subteam-badge__dot subteam-badge__dot--electronics"></span>
+                            Electronics
+                        </a>
+                        <a href="html/ourteam.html#naval-architecture" class="subteam-badge">
+                            <span class="subteam-badge__dot subteam-badge__dot--navarch"></span>
+                            Naval Architecture
+                        </a>
+                        <a href="html/ourteam.html#mechanical" class="subteam-badge">
+                            <span class="subteam-badge__dot subteam-badge__dot--mechanical"></span>
+                            Mechanical
+                        </a>
+                        <a href="html/ourteam.html#sail" class="subteam-badge">
+                            <span class="subteam-badge__dot subteam-badge__dot--sail"></span>
+                            Sail
+                        </a>
+                        <a href="html/ourteam.html#business" class="subteam-badge">
+                            <span class="subteam-badge__dot subteam-badge__dot--business"></span>
+                            Business
+                        </a>
+                    </div>
+                    <p>
+                        We are always looking for new members to join the team throughout the year, so don't hesitate to reach out! There is no experience required—we'll teach you everything you need to know.
                     </p>
                     <div class="gallery">
                         <img
@@ -143,39 +174,45 @@
 
                 <div class="card">
                     <h3>Join Our Discord Server!</h3>
-                    <p>
-                        If you would like to get updates on what we are up to, join our Discord
-                        server:
+                    <p style="margin-bottom: 1.5rem;">
+                        Get real-time updates, ask questions, and chat with members of the team.
+                    </p>
+                    <div class="cta-actions">
                         <a
                             href="https://discord.gg/e34cdWdKbG"
                             target="_blank"
                             rel="noopener noreferrer"
-                            >https://discord.gg/e34cdWdKbG<span class="visually-hidden">
-                                (opens in a new tab)</span
-                            ></a
-                        >.
-                    </p>
+                            class="btn btn--discord"
+                        >
+                            <svg class="btn__icon" width="20" height="20" viewBox="0 0 127.14 96.36" fill="currentColor" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+                                <path d="M107.7,8.07A105.15,105.15,0,0,0,77.26,0a77.19,77.19,0,0,0-3.3,6.83A96.67,96.67,0,0,0,53.22,6.83,77.19,77.19,0,0,0,49.88,0,105.15,105.15,0,0,0,19.44,8.07C3.66,31.58-1.95,54.65,1,77.53a105.53,105.53,0,0,0,32,16.15,77.7,77.7,0,0,0,6.72-10.93,68.6,68.6,0,0,1-10.64-5.12c.91-.67,1.81-1.37,2.65-2.1a75.22,75.22,0,0,0,62,0c.84.73,1.74,1.43,2.65,2.1a68.6,68.6,0,0,1-10.64,5.12,77.7,77.7,0,0,0,6.72,10.93,105.53,105.53,0,0,0,32-16.15C129.66,50.24,123.75,27.34,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53S36.18,40.36,42.45,40.36,53.83,46,53.83,53,48.72,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.24,60,73.24,53S78.41,40.36,84.69,40.36,96.07,46,96.07,53,91,65.69,84.69,65.69Z"/>
+                            </svg>
+                            Join Discord
+                        </a>
+                    </div>
                 </div>
 
                 <div class="card">
-                    <h3>Looking to Sponsor Us?</h3>
+                    <h3>Sponsor AutoBoat</h3>
                     <p>
-                        We're always looking for sponsors to help us build better boats. If you're
-                        interested in sponsoring us, please reach out to
-                        <a href="mailto:autoboat@vt.edu">autoboat@vt.edu</a>.
+                        We're always looking for sponsors to help us build better boats. If you or your organization are interested in partnering with us, please reach out.
                     </p>
-                    <p>
-                        If you are an individual looking to make a one-time donation, you can do so
-                        here:
+                    <p style="margin-bottom: 1.5rem;">
+                        If you are an individual looking to make a direct donation, you can make a tax-deductible contribution to our design team fund.
+                    </p>
+                    <div class="cta-actions">
                         <a
                             href="https://giving.adv.vt.edu/gift?fund=821082&amt=25&frequency=onetime&desc=AutoBoat%20Design%20Team"
                             target="_blank"
                             rel="noopener noreferrer"
-                            >AutoBoat Donation Link<span class="visually-hidden">
-                                (opens in a new tab)</span
-                            ></a
-                        >.
-                    </p>
+                            class="btn btn--primary"
+                        >
+                            Make a Gift / Donate
+                        </a>
+                        <a href="mailto:autoboat@vt.edu" class="btn btn--secondary">
+                            Email Sponsorship
+                        </a>
+                    </div>
                 </div>
             </section>
         </main>
@@ -247,7 +284,7 @@
                         >LinkedIn<span class="visually-hidden"> (opens in a new tab)</span></a
                     >
                 </nav>
-                <small>© AutoBoat @ Virginia Tech</small>
+                <small>AutoBoat @ Virginia Tech</small>
             </div>
         </footer>
     </body>
