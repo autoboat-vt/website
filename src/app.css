@@ -1209,13 +1209,10 @@
     .boat-trends__plots {
         display: grid;
         gap: 0.75rem;
+        /* Always stack plots vertically so each is full-width and taller,
+           keeping the History tab's height close to the Current tab's
+           instead of shrinking dramatically. */
         grid-template-columns: 1fr;
-    }
-
-    @media (min-width: 480px) {
-        .boat-trends__plots {
-            grid-template-columns: 1fr 1fr;
-        }
     }
 
     /* Specificity bump: .card p (0,1,1) in components layer beats a single
@@ -1267,6 +1264,10 @@
     .trend-plot__svg {
         width: 100%;
         height: auto;
+        /* Prevent the plot from collapsing too short when the panel is
+           narrow. Keeps the History tab body height comparable to the
+           Current tab so the card doesn't shrink on tab switch. */
+        min-height: 90px;
         display: block;
     }
 
