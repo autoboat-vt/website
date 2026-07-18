@@ -901,6 +901,19 @@
         max-width: none !important;
         margin: 0 !important;
         padding: 0.75rem !important;
+        /* The map card should not lift on hover — the translate-y animation
+           visually "moves the map" when the cursor enters the card, which is
+           jarring for a pannable surface. Neutralize the Card component's
+           hover:-translate-y-1 + transition utilities (they live in the
+           `utilities` layer, so !important is required here). */
+        transition: none !important;
+    }
+    .live-map__card:hover {
+        transform: none !important;
+        box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05) !important;
+    }
+    .dark .live-map__card:hover {
+        box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3) !important;
     }
 
     @media (max-width: 768px) {
