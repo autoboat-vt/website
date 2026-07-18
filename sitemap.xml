@@ -1,32 +1,41 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<?xml-model href="https://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd" type="application/xml" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 https://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
    <url>
       <loc>https://autoboat.aoe.vt.edu/</loc>
+      <lastmod>2026-07-18</lastmod>
       <changefreq>monthly</changefreq>
       <priority>1.0</priority>
    </url>
    <url>
-      <loc>https://autoboat.aoe.vt.edu/ourteam</loc>
+      <loc>https://autoboat.aoe.vt.edu/ourteam/</loc>
+      <lastmod>2026-07-18</lastmod>
       <changefreq>monthly</changefreq>
       <priority>0.8</priority>
    </url>
    <url>
-      <loc>https://autoboat.aoe.vt.edu/fleet</loc>
+      <loc>https://autoboat.aoe.vt.edu/fleet/</loc>
+      <lastmod>2026-07-18</lastmod>
       <changefreq>monthly</changefreq>
       <priority>0.8</priority>
    </url>
    <url>
-      <loc>https://autoboat.aoe.vt.edu/how-to-join</loc>
+      <loc>https://autoboat.aoe.vt.edu/how-to-join/</loc>
+      <lastmod>2026-07-18</lastmod>
       <changefreq>monthly</changefreq>
       <priority>0.7</priority>
    </url>
    <url>
-      <loc>https://autoboat.aoe.vt.edu/sponsors</loc>
+      <loc>https://autoboat.aoe.vt.edu/sponsors/</loc>
+      <lastmod>2026-07-18</lastmod>
       <changefreq>monthly</changefreq>
       <priority>0.6</priority>
    </url>
    <url>
-      <loc>https://autoboat.aoe.vt.edu/gallery</loc>
+      <loc>https://autoboat.aoe.vt.edu/gallery/</loc>
+      <lastmod>2026-07-18</lastmod>
       <changefreq>monthly</changefreq>
       <priority>0.6</priority>
    </url>

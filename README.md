@@ -79,26 +79,9 @@ required, and `main` can stay protected.
    git remote add aoe_sites ssh://git@code.vt.edu/s4-hosting-sites/aoe/sailbot
    ```
 
-2. For automated deploys from GitHub Actions, add the following repository
-   secrets/variables (GitHub repo **Settings → Secrets and variables → Actions**):
-
-   - **Secret `AOE_SITES_SSH_KEY`** — private SSH key authorized to push to
-     `code.vt.edu/s4-hosting-sites/aoe/sailbot`. Generate one with
-     `ssh-keygen -t ed25519 -f aoe_sites_deploy` and add the public key to a
-     VT GitLab deploy key for the `sailbot` project.
-   - **Variable `AOE_DEPLOY_ENABLED`** — set to `true` to enable the deploy
-     step. Without this, the workflow only builds and uploads the artifact.
-     (Lets forks and PRs run the build without attempting to deploy.)
-
 ### Deploying
 
-**Automated (GitHub Actions):** The `.github/workflows/build.yml` workflow
-runs on every push to `main`. It builds the site and, when
-`AOE_DEPLOY_ENABLED=true`, runs `scripts/deploy.sh --skip-build` to push the
-built files as a fast-forward commit on top of `aoe_sites/main` (no force-push).
-You can also trigger it manually from the GitHub Actions UI (**Run workflow**).
-
-**Manual (local script):** For debug or one-off deploys:
+**Manual (local script):** Deploys are run manually from a local checkout:
 
 ```bash
 ./scripts/deploy.sh
@@ -107,8 +90,8 @@ You can also trigger it manually from the GitHub Actions UI (**Run workflow**).
 This runs `bun run build`, fetches the latest `aoe_sites/main`, creates a
 worktree based on it, replaces all contents with the built `dist/` files
 (`index.html`, `assets/`, `images/`, `_redirects`), commits, and pushes as a
-fast-forward to `aoe_sites/main`. The source repo (`origin` on GitHub)
-is untouched.
+fast-forward to `aoe_sites/main` (no force-push). The source repo (`origin` on
+GitHub) is untouched.
 
 To deploy an existing `dist/` without rebuilding:
 
@@ -125,11 +108,10 @@ To deploy an existing `dist/` without rebuilding:
 ## Continuous Integration
 
 A GitHub Actions workflow (`.github/workflows/build.yml`) runs on every push
-to `main`. It uses [Bun](https://bun.sh/) to install dependencies, type-check,
-and build the site, then uploads `dist/` as a build artifact. When the
-`AOE_SITES_SSH_KEY` secret and `AOE_DEPLOY_ENABLED=true` variable are
-configured, it also deploys the build to the VT GitLab (see **Deploying**
-above).
+to `main` and on pull requests. It uses [Bun](https://bun.sh/) to install
+dependencies, type-check, and build the site, then uploads `dist/` as a build
+artifact. Deploys to the VT GitLab are run manually via `scripts/deploy.sh`
+(see **Deploying** above).
 
 While npm is the default for local development, Bun is fully compatible and
 can be used as a faster drop-in replacement:
