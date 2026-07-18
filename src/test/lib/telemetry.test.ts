@@ -338,8 +338,8 @@ describe("telemetry client", () => {
             expect(formatSpeed(NaN)).toBe("—");
         });
         it("formats m/s directly", () => {
-            expect(formatSpeed(1)).toBe("1.0 m/s");
-            expect(formatSpeed(0)).toBe("0.0 m/s");
+            expect(formatSpeed(1)).toBe("1.000 m/s");
+            expect(formatSpeed(0)).toBe("0.000 m/s");
         });
     });
 
