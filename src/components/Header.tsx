@@ -1,5 +1,7 @@
+import { Menu, Moon, Sun, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
+import { useTheme } from "../hooks/useTheme";
 
 interface NavLinkItem {
     to: string;
@@ -18,6 +20,7 @@ const NAV_LINKS: NavLinkItem[] = [
 export default function Header() {
     const [open, setOpen] = useState(false);
     const [animating, setAnimating] = useState(false);
+    const { theme, toggleTheme } = useTheme();
 
     // Close menu on route change
     const closeMenu = () => {
@@ -44,38 +47,50 @@ export default function Header() {
 
     return (
         <header>
-            <nav className={`nav${open ? " nav--open" : ""}`} id="site-nav">
-                <div className="nav__brand">
-                    <Link
-                        to="/"
-                        aria-label="AutoBoat Home"
-                        style={{ display: "inline-block", width: "32px", height: "32px" }}
-                        onClick={closeMenu}
-                    >
+            <nav
+                className={`nav relative grid h-(--nav-height) grid-cols-[48px_1fr_auto] items-center bg-transparent px-4 min-[1025px]:grid-cols-[200px_1fr_200px]${open ? " nav--open" : ""}`}
+                id="site-nav"
+            >
+                <div className="nav__brand flex min-w-0 items-center justify-self-start gap-2">
+                    <Link to="/" aria-label="AutoBoat Home" className="inline-block h-8 w-8" onClick={closeMenu}>
                         <img
-                            className="nav__logo"
+                            className="h-8 w-8 object-contain"
                             src="/images/favicon.ico"
                             alt=""
                             aria-hidden="true"
                             width="32"
                             height="32"
-                            fetchPriority="high"
+                            // fetchPriority is a React 19 feature; use loading="eager" for now
                             loading="eager"
                             decoding="sync"
                         />
                     </Link>
-                    <Link to="/" onClick={closeMenu}>
+                    <Link
+                        to="/"
+                        onClick={closeMenu}
+                        className="hidden whitespace-nowrap font-heading font-bold text-fontcolor no-underline min-[1025px]:inline"
+                    >
                         AutoBoat
                     </Link>
                 </div>
 
-                <div className="nav__links" id="site-links" aria-hidden={!open}>
+                <div
+                    className="nav__links flex items-center justify-self-center gap-6 whitespace-nowrap max-[1024px]:gap-5 max-[900px]:gap-4 max-[620px]:gap-3"
+                    id="site-links"
+                    aria-hidden={!open}
+                >
                     {NAV_LINKS.map((link) => (
                         <NavLink
                             key={link.to}
                             to={link.to}
                             end={link.end}
-                            className={({ isActive }) => `nav__link${isActive ? " is-active" : ""}`}
+                            className={({ isActive }) =>
+                                `nav__link rounded-lg px-4 py-2 font-heading font-bold no-underline transition-[background-color,color] duration-200 ease-out hover:bg-black/5 dark:hover:bg-white/10 max-[620px]:px-1.5 max-[620px]:py-1 max-[620px]:text-sm${
+                                    isActive
+                                        ? " is-active bg-[linear-gradient(135deg,#373533_0%,#171615_100%)] text-bgcolor dark:bg-[linear-gradient(135deg,#ffffff_0%,#e2ded5_100%)]"
+                                        : " text-fontcolor"
+                                }`
+                            }
                             onClick={closeMenu}
                         >
                             {link.label}
@@ -83,28 +98,34 @@ export default function Header() {
                     ))}
                 </div>
 
-                <button
-                    className="nav__toggle"
-                    type="button"
-                    aria-label="Toggle menu"
-                    aria-controls="site-links"
-                    aria-expanded={open}
-                    onClick={toggleMenu}
-                >
-                    <svg
-                        className="nav__icon"
-                        width="32"
-                        height="32"
-                        viewBox="0 0 32 32"
-                        xmlns="http://www.w3.org/2000/svg"
-                        aria-hidden="true"
-                        focusable="false"
+                <div className="nav__actions flex items-center justify-self-end gap-2">
+                    <button
+                        className="nav__theme-toggle inline-flex h-9 w-9 items-center justify-center rounded-lg border-none bg-transparent text-fontcolor transition-colors duration-150 hover:bg-black/5 hover:text-hovercolor focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current dark:hover:bg-white/10"
+                        type="button"
+                        aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                        title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                        onClick={toggleTheme}
                     >
-                        <rect y="6" width="32" height="4" rx="2" />
-                        <rect y="14" width="32" height="4" rx="2" />
-                        <rect y="22" width="32" height="4" rx="2" />
-                    </svg>
-                </button>
+                        {theme === "dark" ? <Sun size={20} strokeWidth={2.25} /> : <Moon size={20} strokeWidth={2.25} />}
+                    </button>
+
+                    <button
+                        className={`nav__toggle hidden rounded-lg border-none px-1 leading-none transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current max-[750px]:flex max-[750px]:items-center max-[750px]:gap-1.5${
+                            open
+                                ? " bg-[linear-gradient(135deg,#373533_0%,#171615_100%)] text-bgcolor dark:bg-[linear-gradient(135deg,#ffffff_0%,#e2ded5_100%)]"
+                                : " bg-transparent text-fontcolor hover:text-hovercolor"
+                        }`}
+                        type="button"
+                        aria-label="Toggle menu"
+                        aria-controls="site-links"
+                        aria-expanded={open}
+                        onClick={toggleMenu}
+                    >
+                        <span className="nav__icon block h-7 w-7" aria-hidden="true">
+                            {open ? <X size={28} strokeWidth={2.5} /> : <Menu size={28} strokeWidth={2.5} />}
+                        </span>
+                    </button>
+                </div>
             </nav>
         </header>
     );

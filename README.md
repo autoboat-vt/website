@@ -8,7 +8,7 @@ This website is built with **React** + **TypeScript** and **Vite**, using `react
 -   `src/`: React application source
     -   `main.tsx`: App entry point (renders `<App />` into `#root`)
     -   `App.tsx`: Route definitions and layout (Header / main / Footer)
-    -   `styles.css`: Global styles (ported from the original `css/styles.css`)
+    -   `app.css`: Tailwind CSS entry point (theme tokens, base styles, and component-layer CSS for complex selectors like hero animations, hotspots, and the mobile nav dropdown)
     -   `vite-env.d.ts`: Vite client type declarations
     -   `components/`: Shared UI components (`Header`, `Footer`, `Card`, `Gallery`, `ImageModal`)
     -   `pages/`: One component per route (`Home`, `OurTeam`, `Fleet`, `HowToJoin`, `Sponsors`, `Gallery`)

@@ -17,6 +17,16 @@
         <title>AutoBoat | Virginia Tech</title>
     </head>
     <body>
+        <script>
+            // Apply theme before first paint to avoid FOUC.
+            // Order: saved preference > system preference > light.
+            (() => {
+                var stored = localStorage.getItem("autoboat-theme");
+                var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+                var dark = stored ? stored === "dark" : prefersDark;
+                if (dark) document.documentElement.classList.add("dark");
+            })();
+        </script>
         <div id="root"></div>
         <script type="module" src="/src/main.tsx"></script>
     </body>

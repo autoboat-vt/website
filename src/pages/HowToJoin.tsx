@@ -1,6 +1,6 @@
 export default function HowToJoin() {
     return (
-        <div className="section">
+        <div className="section mx-auto grid max-w-275 gap-8 px-4 py-16">
             <div id="how-to-join-box">
                 <p>
                     AutoBoat is open to all, no experience necessary! Fill out the form below to join us.
@@ -10,7 +10,7 @@ export default function HowToJoin() {
                         target="_blank"
                         rel="noopener noreferrer"
                     >
-                        Join Now!<span className="visually-hidden"> (opens in a new tab)</span>
+                        Join Now!<span className="sr-only"> (opens in a new tab)</span>
                     </a>
                 </p>
             </div>

@@ -155,10 +155,19 @@ function Hotspot({ hotspot }: { hotspot: Hotspot }) {
 
 function FleetCard({ vessel }: { vessel: Vessel }) {
     const imageCol = (
-        <div className="fleet-card__image-col">
-            <span className={`fleet-card__badge fleet-card__badge--${vessel.badgeType}`}>{vessel.badge}</span>
-            <div className="fleet-image-container">
-                <img src={vessel.image} alt={vessel.imageAlt} loading={vessel.loading} />
+        <div className="relative max-[900px]:order-1">
+            <span
+                className={`fleet-card__badge fleet-card__badge--${vessel.badgeType} mx-auto mb-4 flex w-fit items-center justify-center rounded-[50px] px-4 py-1.5 text-[0.95rem] font-bold ${vessel.badgeType === "active" ? "bg-[rgba(16,185,129,0.15)] text-[#10b981]" : "bg-[rgba(234,179,8,0.15)] text-[#eab308]"}`}
+            >
+                {vessel.badge}
+            </span>
+            <div className="fleet-image-container relative w-full overflow-hidden rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.08)]">
+                <img
+                    className="block aspect-4/3 w-full object-cover"
+                    src={vessel.image}
+                    alt={vessel.imageAlt}
+                    loading={vessel.loading}
+                />
                 {vessel.hotspots.map((h) => (
                     <Hotspot key={h.title} hotspot={h} />
                 ))}
@@ -167,15 +176,15 @@ function FleetCard({ vessel }: { vessel: Vessel }) {
     );
 
     const infoCol = (
-        <div className="fleet-card__info-col">
-            <h2 className="fleet-card__title">{vessel.name}</h2>
-            <span className="fleet-card__subtitle">{vessel.subtitle}</span>
-            <p>{vessel.description}</p>
+        <div className="flex max-[900px]:order-2 flex-col justify-center">
+            <h2 className="mb-2 font-heading text-[clamp(22px,3.5vw,36px)] font-extrabold">{vessel.name}</h2>
+            <span className="mb-6 font-semibold uppercase tracking-wide text-hovercolor text-[1.05rem]">{vessel.subtitle}</span>
+            <p className="text-[1.1rem]">{vessel.description}</p>
             {vessel.specs.length > 0 && (
-                <div className="fleet-card__specs">
+                <div className="mt-6 grid grid-cols-2 gap-4 border-t border-black/8 pt-6 dark:border-white/8">
                     {vessel.specs.map((spec) => (
-                        <div key={spec.label} className="fleet-card__spec-item">
-                            <strong>{spec.label}</strong>
+                        <div key={spec.label} className="text-[0.9rem]">
+                            <strong className="block text-[1rem] text-fontcolor">{spec.label}</strong>
                             {spec.value}
                         </div>
                     ))}
@@ -185,7 +194,9 @@ function FleetCard({ vessel }: { vessel: Vessel }) {
     );
 
     return (
-        <Card className={`fleet-card${vessel.reverse ? " fleet-card--reverse" : ""}`}>
+        <Card
+            className={`fleet-card my-16 grid grid-cols-[1.4fr_1fr] gap-12 p-12 max-[900px]:grid-cols-1 max-[900px]:gap-8 max-[900px]:p-8${vessel.reverse ? " fleet-card--reverse min-[901px]:grid-cols-[1fr_1.4fr]" : ""}`}
+        >
             {vessel.reverse ? (
                 <>
                     {infoCol}
@@ -203,8 +214,8 @@ function FleetCard({ vessel }: { vessel: Vessel }) {
 
 export default function Fleet() {
     return (
-        <section className="section" id="fleet-section">
-            <h1 style={{ textAlign: "center", marginBottom: "2rem" }}>Our Fleet</h1>
+        <section className="section mx-auto grid max-w-275 gap-8 px-4 py-16" id="fleet-section">
+            <h1 className="mb-8 text-center">Our Fleet</h1>
             {VESSELS.map((vessel) => (
                 <FleetCard key={vessel.name} vessel={vessel} />
             ))}

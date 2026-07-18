@@ -102,7 +102,7 @@ function Description({ text, githubLink }: DescriptionProps) {
         <p className="subteam-description">
             {parts[0]}
             <a href="https://github.com/autoboat-vt" target="_blank" rel="noopener noreferrer">
-                GitHub<span className="visually-hidden"> (opens in a new tab)</span>
+                GitHub<span className="sr-only"> (opens in a new tab)</span>
             </a>
             {parts.length > 1 ? `.${parts.slice(1).join("")}` : ""}
         </p>
@@ -120,13 +120,19 @@ export default function OurTeam() {
 
     return (
         <div className="page-ourteam">
-            <section className="section" id="toc">
+            <section className="section mx-auto grid max-w-275 gap-8 px-4 py-16" id="toc">
                 <Card>
                     <h3>Subteams</h3>
-                    <nav className="subteam-grid">
+                    <nav className="subteam-grid my-6 grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
                         {SUBTEAM_NAV.map((s) => (
-                            <a key={s.id} href={`#${s.id}`} className="subteam-badge">
-                                <span className={`subteam-badge__dot subteam-badge__dot--${s.dot}`}></span>
+                            <a
+                                key={s.id}
+                                href={`#${s.id}`}
+                                className="subteam-badge flex items-center gap-3 rounded-lg border border-black/5 bg-black/3 px-4 py-3 text-base font-semibold text-fontcolor no-underline transition-[background,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-black/10 hover:bg-black/6 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-fontcolor dark:border-white/5 dark:bg-white/3 dark:hover:border-white/10 dark:hover:bg-white/6"
+                            >
+                                <span
+                                    className={`subteam-badge__dot subteam-badge__dot--${s.dot} h-2.5 w-2.5 rounded-full`}
+                                ></span>
                                 {s.label}
                             </a>
                         ))}
@@ -137,7 +143,9 @@ export default function OurTeam() {
             <div id="subteams-section">
                 {SUBTEAMS.map((subteam) => (
                     <Card key={subteam.id} id={subteam.id}>
-                        <h3 className="subteam-title">{subteam.title}</h3>
+                        <h3 className="subteam-title m-0 mb-4 text-left font-heading text-[clamp(22px,3vw,36px)] font-extrabold">
+                            {subteam.title}
+                        </h3>
                         <Description text={subteam.description} githubLink={subteam.githubLink} />
                         {subteam.images.length > 0 && (
                             <Gallery

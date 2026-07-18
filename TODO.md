@@ -1,4 +1,4 @@
-sponsors page
+~~sponsors page~~ ✓ done
 
 our fleet
 

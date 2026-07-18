@@ -1,0 +1,576 @@
+@import "tailwindcss";
+
+/*
+ * Tailwind v4 CSS-first config.
+ *
+ * Dark mode strategy: class-based (.dark on <html>), toggled by the user via
+ * the sun/moon button in the Header. The .dark class is set before first paint
+ * by an inline script in index.html (prevents FOUC) and persisted to
+ * localStorage under "autoboat-theme". The useTheme hook in src/hooks keeps
+ * React state in sync with the DOM.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+    --color-bgcolor: #f0eee6;
+    --color-fontcolor: #1f1e1d;
+    --color-hovercolor: #3a3836;
+
+    --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Arial, Helvetica, sans-serif;
+    --font-heading: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+
+    --nav-height: 72px;
+}
+
+/* Dark-mode token overrides (.dark class on <html>) */
+.dark {
+    --color-bgcolor: #1f1e1d;
+    --color-fontcolor: #f0eee6;
+    --color-hovercolor: #d8d4c8;
+    --nav-height: 72px;
+}
+
+/* Responsive nav-height (matches original @media max-width: 900px) */
+@media (max-width: 900px) {
+    :root {
+        --nav-height: 64px;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Base layer: resets, element styles, body gradients, reduced motion  */
+/* ------------------------------------------------------------------ */
+@layer base {
+    *,
+    *::before,
+    *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    html,
+    body {
+        height: 100%;
+    }
+
+    html {
+        scroll-behavior: smooth;
+        font-size: 16px;
+    }
+
+    body {
+        margin: 0;
+        line-height: 1.6;
+        font-size: 1.25rem;
+        font-family: var(--font-sans);
+        background: linear-gradient(to bottom, #fcfbf9 0%, #eae7de 100%) no-repeat fixed;
+        color: var(--color-fontcolor);
+        padding: 0;
+        padding-top: var(--nav-height);
+    }
+
+    .dark body {
+        background: radial-gradient(circle at 50% 0%, #2f2d2b 0%, #161514 100%) no-repeat fixed;
+    }
+
+    h1,
+    h2,
+    h3 {
+        font-family: var(--font-heading);
+    }
+
+    h1,
+    h2 {
+        margin: 1rem 0;
+    }
+
+    h1 {
+        font-size: 2.25rem;
+    }
+
+    h2 {
+        font-size: 1.75rem;
+    }
+
+    a {
+        color: var(--color-fontcolor);
+        text-decoration: underline;
+    }
+
+    h1 a {
+        text-decoration: none;
+    }
+
+    a:hover {
+        color: var(--color-hovercolor);
+    }
+
+    a:focus {
+        outline: none;
+    }
+
+    a:focus-visible {
+        outline: 2px solid var(--color-fontcolor);
+        outline-offset: 1px;
+    }
+
+    ul {
+        list-style: disc;
+        margin-left: 1rem;
+        padding-left: 0;
+    }
+
+    p {
+        margin-bottom: 0.5rem;
+    }
+
+    strong {
+        font-weight: 700;
+    }
+
+    figcaption {
+        color: var(--color-fontcolor);
+        font-size: 0.875rem;
+        text-align: center;
+    }
+
+    figure {
+        margin: auto;
+    }
+
+    img {
+        display: inline-block;
+        max-width: 100%;
+        height: auto;
+        vertical-align: middle;
+    }
+
+    main {
+        min-height: 100vh;
+        padding-bottom: 200px;
+        text-align: center;
+    }
+
+    main img {
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        background: rgba(240, 238, 230, 0.8);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .dark header {
+        background: rgba(31, 30, 29, 0.8);
+        border-bottom-color: rgba(255, 255, 255, 0.1);
+    }
+
+    :target {
+        scroll-margin-top: var(--nav-height);
+    }
+
+    /* Honor reduced-motion preferences (WCAG-recommended pattern) */
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            /* biome-ignore lint/complexity/noImportantStyles: required to override component-layer animations for accessibility */
+            transition: none !important;
+            /* biome-ignore lint/complexity/noImportantStyles: required to override component-layer animations for accessibility */
+            animation: none !important;
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Keyframes (referenced by component-layer animations below)          */
+/* ------------------------------------------------------------------ */
+@keyframes scrollBounce {
+    0%,
+    20%,
+    50%,
+    80%,
+    100% {
+        transform: translateY(0) rotate(45deg);
+    }
+    40% {
+        transform: translateY(-8px) rotate(45deg);
+    }
+    60% {
+        transform: translateY(-4px) rotate(45deg);
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -20%);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -35%);
+    }
+}
+
+@keyframes pulseGlow {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
+}
+
+@keyframes hotspotPulse {
+    0% {
+        transform: scale(0.6);
+        opacity: 0.8;
+    }
+    100% {
+        transform: scale(1.4);
+        opacity: 0;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Component layer: styles that are hard or impossible to express as   */
+/* inline Tailwind utilities (pseudo-elements, nth-child transforms,   */
+/* compound hover states with transitions on children, etc.)           */
+/* ------------------------------------------------------------------ */
+@layer components {
+    /* --- Hero overlay + entrance animation --- */
+    .hero {
+        position: relative;
+        display: grid;
+        place-items: center;
+        min-height: 80vh;
+        width: 100%;
+        overflow: hidden;
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+    }
+
+    .hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(to bottom, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.6));
+        z-index: 1;
+    }
+
+    .hero--one {
+        background-image: url("/images/gallery/14.webp");
+    }
+
+    .hero__title {
+        position: absolute;
+        top: 35%;
+        left: 50%;
+        transform: translate(-50%, -35%);
+        text-align: center;
+        color: #f0eee6;
+        z-index: 2;
+        animation: fadeInUp 1s ease-out forwards;
+    }
+
+    .hero__title h1 {
+        margin: 0 0 0.3em;
+        font-size: clamp(24px, 6.5vw, 80px);
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .hero__subtitle {
+        margin: 0;
+        font-size: clamp(16px, 3vw, 28px);
+        font-weight: 600;
+    }
+
+    .hero__scroll {
+        position: absolute;
+        bottom: 2rem;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 2;
+        cursor: pointer;
+        opacity: 0.8;
+        transition: opacity 300ms ease;
+    }
+
+    .hero__scroll:hover {
+        opacity: 1;
+    }
+
+    .hero__scroll-arrow {
+        display: block;
+        width: 20px;
+        height: 20px;
+        border-bottom: 2px solid #f0eee6;
+        border-right: 2px solid #f0eee6;
+        transform: rotate(45deg);
+        animation: scrollBounce 2s infinite;
+    }
+
+    @media (max-width: 750px) {
+        .hero__title {
+            top: 30%;
+            transform: translate(-50%, -30%);
+        }
+    }
+
+    /* --- Hotspot overlay system: pulse ring + tooltip triangle --- */
+    .hotspot {
+        position: absolute;
+        z-index: 10;
+        transform: translate(-50%, -50%);
+        cursor: pointer;
+    }
+
+    .hotspot__pin {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background-color: var(--color-fontcolor);
+        border: 2px solid var(--color-bgcolor);
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        position: relative;
+        transition: transform 200ms ease;
+    }
+
+    .hotspot__pin::after {
+        content: "";
+        position: absolute;
+        inset: -6px;
+        border-radius: 50%;
+        border: 2px solid var(--color-fontcolor);
+        opacity: 0;
+        animation: hotspotPulse 2s infinite;
+    }
+
+    .hotspot:hover .hotspot__pin {
+        transform: scale(1.3);
+    }
+
+    .hotspot:hover .hotspot__pin::after {
+        animation: none;
+        opacity: 0;
+    }
+
+    .hotspot__tooltip {
+        position: absolute;
+        bottom: calc(100% + 10px);
+        left: 50%;
+        transform: translateX(-50%) translateY(10px);
+        width: 220px;
+        background: rgba(31, 30, 29, 0.95);
+        color: #f0eee6;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+        opacity: 0;
+        pointer-events: none;
+        transition:
+            opacity 250ms ease,
+            transform 250ms ease;
+        font-size: 0.875rem;
+        line-height: 1.4;
+        text-align: left;
+        z-index: 100;
+    }
+
+    .hotspot__tooltip h4 {
+        margin: 0 0 0.25rem;
+        font-family: var(--font-heading);
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #ffffff;
+    }
+
+    .hotspot__tooltip p {
+        margin: 0;
+        font-size: 0.8rem;
+        color: #d8d4c8;
+    }
+
+    /* CSS triangle pointing down (default: tooltip above pin) */
+    .hotspot__tooltip::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border-width: 6px;
+        border-style: solid;
+        border-color: rgba(31, 30, 29, 0.95) transparent transparent transparent;
+    }
+
+    .hotspot:hover .hotspot__tooltip {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateX(-50%) translateY(0);
+    }
+
+    /* Variant: tooltip below pin (for top-anchored hotspots) */
+    .hotspot--top .hotspot__tooltip {
+        bottom: auto;
+        top: calc(100% + 10px);
+        transform: translateX(-50%) translateY(-10px);
+    }
+
+    .hotspot--top .hotspot__tooltip::after {
+        top: auto;
+        bottom: 100%;
+        border-color: transparent transparent rgba(31, 30, 29, 0.95) transparent;
+    }
+
+    .hotspot--top:hover .hotspot__tooltip {
+        transform: translateX(-50%) translateY(0);
+    }
+
+    /* --- Image modal open/close transition --- */
+    .image-modal {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.8);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 200ms ease;
+        z-index: 1500;
+    }
+
+    .image-modal.is-open {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    /*
+     * Mobile nav dropdown: kept as component CSS because the max-height
+     * transition + compound `.nav--open .nav__links` selector + multiple
+     * simultaneous transitions are impractical to express as utilities.
+     * Only active at max-width: 750px (hamburger breakpoint).
+     */
+    @media (max-width: 750px) {
+        .nav__links {
+            position: fixed;
+            left: 0;
+            right: 0;
+            top: var(--nav-height);
+            transform: translateY(-8px);
+            flex-direction: column;
+            align-items: center;
+            gap: 0.75rem;
+            background: var(--color-bgcolor);
+            padding: 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+            max-height: 0;
+            opacity: 0;
+            pointer-events: none;
+            transition:
+                max-height 250ms ease,
+                opacity 200ms ease,
+                transform 200ms ease,
+                padding 200ms ease,
+                border-width 200ms ease;
+            white-space: normal;
+            width: 100%;
+            margin: 0;
+        }
+
+        .nav.nav--open .nav__links {
+            max-height: 60vh;
+            opacity: 1;
+            transform: translateY(0);
+            padding: 0.75rem 0 1rem;
+            pointer-events: auto;
+        }
+    }
+
+    /* --- Card content typography (descendant styles for .card) --- */
+    .card h3 {
+        margin: 0 0 1rem;
+        font-size: clamp(22px, 3vw, 36px);
+        font-weight: 800;
+        text-align: left;
+    }
+
+    .card p {
+        margin: 0;
+        font-size: clamp(14px, 2.2vw, 20px);
+        line-height: 1.6;
+    }
+
+    /*
+     * Gallery image hover + 620px single-column collapse.
+     * The :first-child display rule at 620px needs sibling/structural
+     * selectors, kept here for fidelity.
+     */
+    @media (max-width: 620px) {
+        .gallery {
+            grid-template-columns: 1fr;
+        }
+
+        .gallery img {
+            display: none;
+        }
+
+        .gallery img:first-child {
+            display: block;
+        }
+    }
+
+    /*
+     * Our Team page gallery override: center tiles with fixed min/max widths.
+     * Kept as component CSS because it's a page-scoped (body class) override
+     * of the utility-driven grid on .gallery.
+     */
+    .page-ourteam .gallery {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 260px));
+        justify-content: center;
+    }
+
+    /* --- Subteam badge dot colors (data-driven via modifier class) --- */
+    .subteam-badge__dot--software {
+        background-color: #3b82f6;
+    }
+
+    .subteam-badge__dot--electronics {
+        background-color: #eab308;
+    }
+
+    .subteam-badge__dot--navarch {
+        background-color: #06b6d4;
+    }
+
+    .subteam-badge__dot--mechanical {
+        background-color: #ef4444;
+    }
+
+    .subteam-badge__dot--sail {
+        background-color: #10b981;
+    }
+
+    .subteam-badge__dot--business {
+        background-color: #a855f7;
+    }
+
+    /* --- Fleet badge "todo" pulse animation --- */
+    .fleet-card__badge--todo {
+        animation: pulseGlow 2s infinite;
+    }
+}
