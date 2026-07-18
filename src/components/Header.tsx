@@ -15,6 +15,7 @@ const NAV_LINKS: NavLinkItem[] = [
     { to: "/fleet", label: "Our Fleet" },
     { to: "/how-to-join", label: "How To Join" },
     { to: "/sponsors", label: "Sponsors" },
+    { to: "/live", label: "Live Map" },
 ];
 
 export default function Header() {

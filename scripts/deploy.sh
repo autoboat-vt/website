@@ -55,7 +55,15 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
     echo "==> You have uncommitted changes:"
     git status -sb
     echo
-    read -r -p "   Commit message [\"$DEFAULT_MSG\"]: " COMMIT_MSG
+    # Use readline (`-e`) so arrow keys, Home/End, etc. work when editing the
+    # commit message. Also bind the Delete key explicitly: some terminals send
+    # `\e[3~` which readline doesn't bind to delete-char by default, causing it
+    # to insert a literal `~`. `bind` only works in interactive shells, so
+    # silence errors when the script runs non-interactively.
+    if [[ $- == *i* ]]; then
+        bind '"\e[3~": delete-char' 2>/dev/null || true
+    fi
+    read -r -e -p "   Commit message [\"$DEFAULT_MSG\"]: " COMMIT_MSG
     COMMIT_MSG="${COMMIT_MSG:-$DEFAULT_MSG}"
     git add -A
     git commit -m "$COMMIT_MSG"

@@ -6,6 +6,7 @@ import Fleet from "./pages/Fleet";
 import Gallery from "./pages/Gallery";
 import Home from "./pages/Home";
 import HowToJoin from "./pages/HowToJoin";
+import LiveMap from "./pages/LiveMap";
 import OurTeam from "./pages/OurTeam";
 import Sponsors from "./pages/Sponsors";
 
@@ -30,6 +31,7 @@ export default function App() {
                     <Route path="/how-to-join" element={<HowToJoin />} />
                     <Route path="/sponsors" element={<Sponsors />} />
                     <Route path="/gallery" element={<Gallery />} />
+                    <Route path="/live" element={<LiveMap />} />
                     <Route path="*" element={<Home />} />
                 </Routes>
             </main>

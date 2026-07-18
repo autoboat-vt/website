@@ -52,8 +52,8 @@ export default function Home() {
                 <Card>
                     <h3>Getting Involved</h3>
                     <p>
-                        The team is divided into four subteams. Click any subteam below to learn more about what we do and
-                        see our work:
+                        The team is divided into four subteams. Click any subteam below to learn more about what we do
+                        and see our work:
                     </p>
                     <div className="subteam-grid my-6 grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
                         {SUBTEAMS.map((s) => (

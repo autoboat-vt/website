@@ -839,4 +839,146 @@
     .fleet-status-dot {
         animation: statusPulse 2.4s ease-in-out infinite;
     }
+
+    /* --- Live map page (Leaflet) ---
+       Leaflet needs an explicit height on its container or it renders at 0px.
+       The map fills a Card; on narrow viewports it shrinks to a usable min. */
+    .live-map {
+        height: 60vh;
+        min-height: 360px;
+        width: 100%;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .live-map__leaflet {
+        height: 100%;
+        width: 100%;
+        /* Leaflet's own controls are absolutely positioned; the container
+           needs position: relative (Leaflet sets this) + a z-index context
+           below the site header. */
+        z-index: 0;
+    }
+
+    /* Reset Leaflet's default border so the map blends into the card. */
+    .live-map__leaflet .leaflet-container {
+        background: #a9a9a9;
+        font-family: var(--font-sans);
+    }
+
+    .dark .live-map__leaflet .leaflet-container {
+        background: #1f1e1d;
+    }
+
+    /* Boat marker (divIcon): the SVG handles its own rotation; we just
+       center it and add a subtle drop shadow for contrast on light tiles. */
+    .boat-marker {
+        background: transparent;
+        border: none;
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+    }
+
+    /* Popup content: tighten Leaflet's defaults to match the site type scale. */
+    .leaflet-popup-content {
+        margin: 0.75rem 0.9rem;
+    }
+
+    .boat-popup {
+        min-width: 180px;
+        font-family: var(--font-sans);
+    }
+
+    .boat-popup__title {
+        margin: 0 0 0.15rem;
+        font-family: var(--font-heading);
+        font-size: 1rem;
+        font-weight: 800;
+        color: #1f1e1d;
+    }
+
+    .boat-popup__mode {
+        margin: 0 0 0.5rem;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-accent);
+    }
+
+    .boat-popup__stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.4rem 0.75rem;
+        margin: 0 0 0.5rem;
+    }
+
+    .boat-popup__stats dt {
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #6b6b6b;
+    }
+
+    .boat-popup__stats dd {
+        margin: 0;
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #1f1e1d;
+    }
+
+    .boat-popup__last-seen {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        margin: 0 0 0.15rem;
+        font-size: 0.7rem;
+        color: #6b6b6b;
+    }
+
+    .boat-popup__dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #22c55e;
+        animation: statusPulse 2.4s ease-in-out infinite;
+    }
+
+    .boat-popup__coords {
+        margin: 0;
+        font-family: var(--font-mono);
+        font-size: 0.65rem;
+        color: #9a9a9a;
+    }
+
+    /* Status pill in the toolbar: green dot when boats are reporting. */
+    .live-map__status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .live-map__dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #9ca3af;
+        transition: background-color 200ms ease;
+    }
+
+    .live-map__dot.is-live {
+        background: #22c55e;
+        animation: statusPulse 2.4s ease-in-out infinite;
+    }
+
+    /* Dark-mode popup text: Leaflet popups have a white background by
+       default; we keep that (good contrast on dark tiles) but tone the
+       secondary text down a touch. */
+    .dark .boat-popup__stats dt,
+    .dark .boat-popup__last-seen {
+        color: #6b6b6b;
+    }
 }

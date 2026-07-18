@@ -26,6 +26,7 @@ const NAV_LINKS = [
     { to: "/fleet", label: "Fleet" },
     { to: "/ourteam", label: "Team" },
     { to: "/sponsors", label: "Sponsors" },
+    { to: "/live", label: "Live Map" },
 ] as const;
 
 const DONATE_URL = "https://giving.adv.vt.edu/gift?fund=821082&amt=25&frequency=onetime&desc=AutoBoat%20Design%20Team";
