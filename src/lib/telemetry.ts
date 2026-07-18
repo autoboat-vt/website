@@ -348,7 +348,7 @@ export function headingToCompass(degrees?: number): string {
 /** Format a speed in m/s, or "—" if missing. */
 export function formatSpeed(speedMs?: number): string {
     if (typeof speedMs !== "number" || !Number.isFinite(speedMs)) return "—";
-    return `${speedMs.toFixed(1)} m/s`;
+    return `${speedMs.toFixed(3)} m/s`;
 }
 
 /** Format a Unix epoch ms as a relative "x seconds ago" string. */
