@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { BoatHistoryMap } from "../hooks/useBoatHistory";
 import type { BoatWithPosition } from "../lib/telemetry";
-import { boatModeLabel } from "../lib/telemetry";
 import BoatDetails from "./BoatDetails";
 import BoatTrends from "./BoatTrends";
 
@@ -27,15 +26,9 @@ export default function BoatPanel({ boat, history }: BoatPanelProps) {
     const [tab, setTab] = useState<Tab>("current");
 
     const name = boat.instance.instance_identifier || `Boat #${boat.instance.instance_id}`;
-    const mode = boatModeLabel(boat.status);
 
     return (
         <section className="boat-panel" aria-label={`Telemetry for ${name}`}>
-            <header className="boat-panel__header">
-                <h5 className="boat-panel__title">{name}</h5>
-                {mode && <span className="boat-panel__mode">{mode}</span>}
-            </header>
-
             <div className="boat-panel__tabs" role="tablist">
                 <button
                     type="button"

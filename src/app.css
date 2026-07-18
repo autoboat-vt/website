@@ -1151,30 +1151,6 @@
         background: rgba(255, 255, 255, 0.04);
     }
 
-    .boat-panel__header {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 0.5rem;
-    }
-
-    .boat-panel__title {
-        margin: 0;
-        font-family: var(--font-heading);
-        font-size: 0.95rem;
-        font-weight: 800;
-        color: var(--color-fontcolor);
-    }
-
-    .boat-panel__mode {
-        font-size: 0.62rem;
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: var(--color-fontcolor);
-        opacity: 0.6;
-    }
-
     .boat-panel__tabs {
         display: inline-flex;
         gap: 0.2rem;
