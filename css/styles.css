@@ -352,7 +352,7 @@ header {
     border-radius: 16px;
     padding: 2.5rem;
     width: min(1100px, 90%);
-    margin: 2.5rem auto;
+    margin: 1.5rem auto;
     transition: transform 300ms ease, box-shadow 300ms ease;
     text-align: left;
 }
@@ -386,12 +386,13 @@ header {
 .section {
     padding: 4rem 1rem;
     display: grid;
-    gap: 2rem;
+    gap: 1.5rem;
     max-width: 1100px;
     margin: 0 auto;
 }
 .section .card {
     width: min(1100px, 90%);
+    margin: 0 auto;
 }
 .section .card p {
     text-align: left;
@@ -755,8 +756,11 @@ header {
     grid-template-columns: 1.4fr 1fr;
     gap: 3rem;
     align-items: center;
-    margin: 4rem auto;
+    margin: 1.5rem auto;
     padding: 3rem;
+}
+.section .fleet-card {
+    margin: 1.5rem auto;
 }
 .fleet-card--reverse {
     grid-template-columns: 1fr 1.4fr;
