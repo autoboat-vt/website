@@ -94,6 +94,9 @@ export interface BoatStatus {
 /**
  * A boat with its latest known position and metadata, ready to render on
  * the map. `position` is null when the boat has no GPS fix yet.
+ *
+ * `waypoints` holds the latest waypoint list for the boat's instance, or
+ * null if the waypoints fetch failed / hadn't been requested.
  */
 export interface BoatWithPosition {
     instance: InstanceInfo;
@@ -101,7 +104,21 @@ export interface BoatWithPosition {
     /** Epoch ms of the last status update we successfully fetched. */
     lastUpdated: number | null;
     position: { lat: number; lng: number } | null;
+    /**
+     * Latest waypoint list for this instance (read from
+     * `/waypoints/get/<id>`), or null if the fetch failed or returned no
+     * list. Each waypoint is `[lat, lng]` in decimal degrees.
+     */
+    waypoints: Waypoint[] | null;
 }
+
+/**
+ * A single waypoint as stored on the telemetry server. The server stores
+ * waypoints as `[[lat, lng], ...]` (see telemetry_server `routes/waypoints.py`
+ * — each point must be a `[lat, lng]` pair of numbers). We model the pair as
+ * a typed tuple for clarity at call sites.
+ */
+export type Waypoint = [number, number];
 
 /** Options for fetchWithTimeout. */
 interface FetchOptions {
@@ -242,22 +259,57 @@ export async function fetchBoatStatusIfNew(instanceId: number, opts?: FetchOptio
 }
 
 /**
+ * GET /waypoints/get/<id>
+ * Returns the current waypoint list for an instance, or null when the
+ * instance has no waypoints (server returns `[]`) or the payload is
+ * malformed. The server stores waypoints as `[[lat, lng], ...]`.
+ */
+export async function fetchWaypoints(instanceId: number, opts?: FetchOptions): Promise<Waypoint[] | null> {
+    const data = await fetchJson<unknown>(`/waypoints/get/${instanceId}`, opts);
+    if (!Array.isArray(data)) return null;
+    // Normalize: keep only entries that are `[lat, lng]` pairs of finite
+    // numbers. The server validates on write, but the client is defensive.
+    const waypoints: Waypoint[] = [];
+    for (const point of data) {
+        if (!Array.isArray(point) || point.length !== 2) continue;
+        const [lat, lng] = point;
+        if (typeof lat === "number" && Number.isFinite(lat) && typeof lng === "number" && Number.isFinite(lng)) {
+            waypoints.push([lat, lng]);
+        }
+    }
+    return waypoints.length > 0 ? waypoints : null;
+}
+
+/**
  * Fetch all instances and their latest boat_status in parallel, returning a
  * list of `BoatWithPosition` ready for the map. Instances whose status fetch
  * fails (e.g. transient error) are still included with `status: null` so the
  * UI can show "last known" without dropping the boat entirely.
+ *
+ * Waypoints are fetched alongside each instance's status (one extra
+ * `/waypoints/get/<id>` call per boat). A failed waypoints fetch leaves
+ * `waypoints: null` on that boat but keeps the rest of its data intact.
  */
 export async function fetchFleetState(opts?: FetchOptions): Promise<BoatWithPosition[]> {
     const instances = await fetchAllInstances(opts);
 
     const results = await Promise.allSettled(
         instances.map(async (instance): Promise<BoatWithPosition> => {
-            const status = await fetchBoatStatus(instance.instance_id, opts);
+            // Fetch status and waypoints in parallel — they're independent
+            // endpoints. If either fails, we keep the other's result and
+            // surface null for the failed one so the UI still shows the boat.
+            const [statusResult, waypointsResult] = await Promise.allSettled([
+                fetchBoatStatus(instance.instance_id, opts),
+                fetchWaypoints(instance.instance_id, opts),
+            ]);
+            const status = statusResult.status === "fulfilled" ? statusResult.value : null;
+            const waypoints = waypointsResult.status === "fulfilled" ? waypointsResult.value : null;
             return {
                 instance,
                 status,
                 lastUpdated: status ? Date.now() : null,
                 position: positionFromStatus(status),
+                waypoints,
             };
         }),
     );
@@ -279,6 +331,7 @@ export async function fetchFleetState(opts?: FetchOptions): Promise<BoatWithPosi
             status: null,
             lastUpdated: null,
             position: null,
+            waypoints: null,
         } satisfies BoatWithPosition;
     });
 }
@@ -308,4 +361,22 @@ export function formatLastSeen(epochMs: number | null): string {
     if (minutes < 60) return `${minutes}m ago`;
     const hours = Math.floor(minutes / 60);
     return `${hours}h ago`;
+}
+
+/**
+ * Infer a human label for the boat's mode from which optional field groups
+ * are present. The boat registers either SailboatStatusPayload or
+ * MotorboatStatusPayload (both inherit the base), so presence of a
+ * mode-specific field is a reliable signal. Returns null if the boat has
+ * no status yet or its mode can't be inferred.
+ */
+export function boatModeLabel(status: BoatStatus | null): string | null {
+    if (!status) return null;
+    if (status.apparent_wind_speed !== undefined || status.current_sail_angle !== undefined) {
+        return "Sailboat";
+    }
+    if (status.rpm !== undefined || status.voltage_to_vesc !== undefined || status.duty_cycle !== undefined) {
+        return "Motorboat";
+    }
+    return null;
 }

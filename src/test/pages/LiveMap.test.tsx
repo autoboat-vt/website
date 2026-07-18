@@ -131,12 +131,15 @@ describe("LiveMap page", () => {
     });
 
     it("renders boat markers after a successful poll", async () => {
-        // fetchFleetState does: GET instances, then GET /boat_status/get/<id> for each.
-        // So the first 3 fetches are: instances, status 1, status 2.
+        // fetchFleetState does: GET instances, then per instance GET /boat_status/get/<id>
+        // and GET /waypoints/get/<id> (fired in parallel via Promise.allSettled).
+        // So the first 5 fetches are: instances, status 1, waypoints 1, status 2, waypoints 2.
         mockFetchSequence([
             { body: instances }, // GET /instance_manager/get_all_instance_info
             { body: statusTheseus }, // GET /boat_status/get/1
+            { body: [] }, // GET /waypoints/get/1 (no waypoints)
             { body: statusPersephone }, // GET /boat_status/get/2
+            { body: [] }, // GET /waypoints/get/2 (no waypoints)
         ]);
         renderLiveMap();
 
@@ -150,6 +153,71 @@ describe("LiveMap page", () => {
         expect(markers[1]).toHaveAttribute("data-boat-id", "2");
         // Status line reports how many boats are reporting.
         expect(screen.getByText(/2 of 2 boats reporting/i)).toBeInTheDocument();
+    });
+
+    it("renders a telemetry card below the map for each reporting boat", async () => {
+        mockFetchSequence([
+            { body: instances },
+            { body: statusTheseus },
+            { body: [] },
+            { body: statusPersephone },
+            { body: [] },
+        ]);
+        renderLiveMap();
+
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        // The "Boat telemetry" heading marks the below-map section.
+        const detailsHeading = screen.getByRole("heading", { name: /Boat telemetry/i });
+        const detailsSection = detailsHeading.closest("section, div, article");
+        expect(detailsSection).not.toBeNull();
+
+        if (detailsSection) {
+            const withinDetails = within(detailsSection as HTMLElement);
+            // Both boat names appear in the details section.
+            expect(withinDetails.getByText("theseus")).toBeInTheDocument();
+            expect(withinDetails.getByText("persephone")).toBeInTheDocument();
+            // Speed (from statusTheseus.speed = 2.5 m/s → ~4.9 kn) appears.
+            expect(withinDetails.getByText(/4\.9 kn/)).toBeInTheDocument();
+        }
+    });
+
+    it("renders waypoints (polyline + numbered circle markers) when a boat has them", async () => {
+        // Boat 1 has a 3-waypoint route; boat 2 has none.
+        const wps = [
+            [37.23, -80.41],
+            [37.235, -80.415],
+            [37.24, -80.42],
+        ];
+        mockFetchSequence([
+            { body: instances },
+            { body: { ...statusTheseus, current_waypoint_index: 1 } },
+            { body: wps }, // GET /waypoints/get/1
+            { body: statusPersephone },
+            { body: [] }, // GET /waypoints/get/2
+        ]);
+        renderLiveMap();
+
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        // One polyline for boat 1's route; boat 2 has no waypoints.
+        const polylines = screen.getAllByTestId("polyline");
+        expect(polylines).toHaveLength(1);
+        expect(polylines[0]).toHaveAttribute("data-positions", JSON.stringify(wps));
+
+        // Three circle markers (one per waypoint), each with a permanent tooltip.
+        const circleMarkers = screen.getAllByTestId("circle-marker");
+        expect(circleMarkers).toHaveLength(3);
+        const tooltips = screen.getAllByTestId("tooltip");
+        expect(tooltips).toHaveLength(3);
+        // Tooltips are 1-based waypoint numbers.
+        expect(tooltips[0]?.textContent).toBe("1");
+        expect(tooltips[1]?.textContent).toBe("2");
+        expect(tooltips[2]?.textContent).toBe("3");
     });
 
     it("shows the error card when fetch rejects", async () => {
@@ -184,6 +252,7 @@ describe("LiveMap page", () => {
         mockFetchSequence([
             { body: [{ instance_id: 7, instance_identifier: "ghost" }] },
             { body: {} }, // empty status → no GPS
+            { body: [] }, // GET /waypoints/get/7 (none)
         ]);
         renderLiveMap();
 
@@ -205,24 +274,28 @@ describe("LiveMap page", () => {
         const fn = mockFetchSequence([
             { body: instances },
             { body: statusTheseus },
+            { body: [] }, // waypoints 1
             { body: statusPersephone },
+            { body: [] }, // waypoints 2
             { body: instances }, // second poll
             { body: statusTheseus },
+            { body: [] },
             { body: statusPersephone },
+            { body: [] },
         ]);
         renderLiveMap();
 
         await act(async () => {
             await flushMicrotasks();
         });
-        // Initial poll: 3 fetches (instances + 2 statuses).
-        expect(fn).toHaveBeenCalledTimes(3);
+        // Initial poll: 5 fetches (instances + 2×(status + waypoints)).
+        expect(fn).toHaveBeenCalledTimes(5);
 
         // Advance past one polling interval (3000ms).
         await act(async () => {
             jest.advanceTimersByTime(3000);
             await flushMicrotasks();
         });
-        expect(fn).toHaveBeenCalledTimes(6);
+        expect(fn).toHaveBeenCalledTimes(10);
     });
 });

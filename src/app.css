@@ -981,4 +981,153 @@
     .dark .boat-popup__last-seen {
         color: #6b6b6b;
     }
+
+    /* Waypoint route + markers.
+       `--live-map-route` is the dashed polyline connecting waypoints.
+       `--live-map-waypoint` is the inactive marker fill/outline.
+       `--live-map-waypoint-active` highlights the waypoint the boat is
+       currently heading toward (matches boat_status.current_waypoint_index).
+       Chicago Maroon / Burnt Orange are the official VT brand accents. */
+    :root {
+        --live-map-route: #861f41;
+        --live-map-waypoint: #5b6470;
+        --live-map-waypoint-active: #e5751f;
+    }
+
+    .dark {
+        --live-map-route: #e5751f;
+        --live-map-waypoint: #9ca3af;
+        --live-map-waypoint-active: #f59e0b;
+    }
+
+    /* Permanent numbered tooltip on each waypoint circle. Leaflet renders
+       tooltips with its own .leaflet-tooltip class; we override only the
+       bits that matter for the small numeric badge. */
+    .live-map__wp-tooltip.leaflet-tooltip {
+        background: rgba(255, 255, 255, 0.92);
+        color: #1f1e1d;
+        border: 1px solid rgba(0, 0, 0, 0.15);
+        border-radius: 999px;
+        padding: 0 0.35rem;
+        min-width: 1.1rem;
+        text-align: center;
+        font-family: var(--font-mono);
+        font-size: 0.65rem;
+        font-weight: 700;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+
+    .dark .live-map__wp-tooltip.leaflet-tooltip {
+        background: rgba(31, 30, 29, 0.92);
+        color: #f0eee6;
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Hide the little tooltip arrow — the pill looks cleaner without it. */
+    .live-map__wp-tooltip.leaflet-tooltip::before {
+        display: none;
+    }
+
+    /* Boat telemetry cards rendered below the map (BoatDetails component).
+       Mirrors the popup stats but as always-visible tiles so you can read
+       telemetry without clicking a marker. */
+    .boat-details__card {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        padding: 0.85rem 1rem;
+        border-radius: 0.75rem;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        background: rgba(255, 255, 255, 0.55);
+        transition:
+            border-color 200ms ease,
+            background 200ms ease;
+    }
+
+    .dark .boat-details__card {
+        border-color: rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.04);
+    }
+
+    .boat-details__header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .boat-details__name {
+        font-family: var(--font-heading);
+        font-size: 0.95rem;
+        font-weight: 800;
+        color: var(--color-fontcolor);
+    }
+
+    .boat-details__mode {
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-accent);
+    }
+
+    .dark .boat-details__mode {
+        color: var(--color-accent-2);
+    }
+
+    .boat-details__stat {
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+    }
+
+    .boat-details__stat-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-fontcolor);
+        opacity: 0.55;
+    }
+
+    .boat-details__stat-icon {
+        display: inline-flex;
+        opacity: 0.7;
+    }
+
+    .boat-details__stat-value {
+        font-family: var(--font-mono);
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--color-fontcolor);
+    }
+
+    .boat-details__footer {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.68rem;
+        color: var(--color-fontcolor);
+        opacity: 0.6;
+    }
+
+    .boat-details__dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #22c55e;
+        animation: statusPulse 2.4s ease-in-out infinite;
+    }
+
+    .boat-details__coords {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 0.62rem;
+        opacity: 0.8;
+    }
 }

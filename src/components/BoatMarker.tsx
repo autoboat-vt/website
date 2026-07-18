@@ -3,7 +3,7 @@ import "leaflet-rotatedmarker";
 import { useMemo } from "react";
 import { Marker, Popup } from "react-leaflet";
 import type { BoatWithPosition } from "../lib/telemetry";
-import { formatKnots, formatLastSeen, headingToCompass } from "../lib/telemetry";
+import { boatModeLabel, formatKnots, formatLastSeen, headingToCompass } from "../lib/telemetry";
 
 interface BoatMarkerProps {
     boat: BoatWithPosition;
@@ -97,21 +97,4 @@ export default function BoatMarker({ boat }: BoatMarkerProps) {
             </Popup>
         </Marker>
     );
-}
-
-/**
- * Infer a human label for the boat's mode from which optional field groups
- * are present. The boat registers either SailboatStatusPayload or
- * MotorboatStatusPayload (both inherit the base), so presence of a
- * mode-specific field is a reliable signal.
- */
-function boatModeLabel(status: BoatWithPosition["status"]): string | null {
-    if (!status) return null;
-    if (status.apparent_wind_speed !== undefined || status.current_sail_angle !== undefined) {
-        return "Sailboat";
-    }
-    if (status.rpm !== undefined || status.voltage_to_vesc !== undefined || status.duty_cycle !== undefined) {
-        return "Motorboat";
-    }
-    return null;
 }

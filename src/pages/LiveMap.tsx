@@ -3,8 +3,10 @@ import { AlertCircle, Crosshair, Loader2, RefreshCw, Sailboat, Satellite } from 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
+import BoatDetails from "../components/BoatDetails";
 import BoatMarker from "../components/BoatMarker";
 import Card from "../components/Card";
+import Waypoints from "../components/Waypoints";
 import {
     type BoatWithPosition,
     fetchFleetState,
@@ -32,6 +34,13 @@ function RecenterOnTrigger({ boats, fitTrigger }: { boats: BoatWithPosition[]; f
         const positions: Array<[number, number]> = [];
         for (const b of boats) {
             if (b.position) positions.push([b.position.lat, b.position.lng]);
+            // Include waypoints in the fit bounds so the route is visible
+            // alongside the boat when recentering.
+            if (b.waypoints) {
+                for (const [lat, lng] of b.waypoints) {
+                    positions.push([lat, lng]);
+                }
+            }
         }
         if (positions.length === 0) return;
         if (positions.length === 1) {
@@ -265,6 +274,15 @@ export default function LiveMap() {
                                 zoomOffset={-1}
                                 crossOrigin
                             />
+                            {boatsWithPosition.map((boat) =>
+                                boat.waypoints && boat.waypoints.length > 0 ? (
+                                    <Waypoints
+                                        key={`wp-${boat.instance.instance_id}`}
+                                        waypoints={boat.waypoints}
+                                        currentIndex={boat.status?.current_waypoint_index}
+                                    />
+                                ) : null,
+                            )}
                             {boatsWithPosition.map((boat) => (
                                 <BoatMarker key={boat.instance.instance_id} boat={boat} />
                             ))}
@@ -272,6 +290,13 @@ export default function LiveMap() {
                             <ScaleControl />
                         </MapContainer>
                     </section>
+                </Card>
+            )}
+
+            {!error && boatsWithPosition.length > 0 && (
+                <Card className="live-map__details-card">
+                    <h4 className="m-0 mb-4 text-lg font-bold">Boat telemetry</h4>
+                    <BoatDetails boats={boatsWithPosition} />
                 </Card>
             )}
 

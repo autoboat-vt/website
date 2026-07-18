@@ -3,6 +3,7 @@ import {
     fetchBoatStatus,
     fetchBoatStatusIfNew,
     fetchFleetState,
+    fetchWaypoints,
     formatKnots,
     formatLastSeen,
     headingToCompass,
@@ -40,7 +41,7 @@ function jsonResponse(body: unknown, init?: { status?: number }): MockResponse {
 
 function mockFetchOnce(body: unknown, init?: { status?: number }): FetchMock {
     const fn = jest.fn(() => Promise.resolve(jsonResponse(body, init))) as unknown as FetchMock;
-    global.fetch = fn;
+    global.fetch = fn as unknown as typeof fetch;
     return fn;
 }
 
@@ -93,12 +94,12 @@ describe("telemetry client", () => {
         it("throws TelemetryError on HTTP 500", async () => {
             global.fetch = jest.fn(() =>
                 Promise.resolve(jsonResponse({ error: "server error" }, { status: 500 })),
-            ) as unknown as FetchMock;
+            ) as unknown as typeof fetch;
             await expect(fetchAllInstances()).rejects.toThrow(/HTTP 500/);
         });
 
         it("throws TelemetryError on network failure", async () => {
-            global.fetch = jest.fn(() => Promise.reject(new Error("Failed to fetch"))) as unknown as FetchMock;
+            global.fetch = jest.fn(() => Promise.reject(new Error("Failed to fetch"))) as unknown as typeof fetch;
             await expect(fetchAllInstances()).rejects.toThrow(/Network error/);
         });
     });
@@ -135,9 +136,54 @@ describe("telemetry client", () => {
         });
     });
 
+    describe("fetchWaypoints", () => {
+        it("GETs /waypoints/get/<id> and returns parsed [lat,lng] pairs", async () => {
+            const wps = [
+                [37.22, -80.41],
+                [37.23, -80.42],
+            ];
+            const fn = mockFetchOnce(wps);
+            const result = await fetchWaypoints(7);
+            const firstCall = fn.mock.calls[0];
+            expect(firstCall?.[0]).toBe(`${TELEMETRY_URL}/waypoints/get/7`);
+            expect(result).toEqual([
+                [37.22, -80.41],
+                [37.23, -80.42],
+            ]);
+        });
+
+        it("returns null when the server returns an empty list (no waypoints)", async () => {
+            mockFetchOnce([]);
+            const result = await fetchWaypoints(1);
+            expect(result).toBeNull();
+        });
+
+        it("returns null when the payload is not an array", async () => {
+            mockFetchOnce({ not: "a list" });
+            const result = await fetchWaypoints(1);
+            expect(result).toBeNull();
+        });
+
+        it("filters out malformed entries (non-pairs / non-numeric)", async () => {
+            mockFetchOnce([[37.22, -80.41], [999], ["x", "y"], [37.23, -80.42], null]);
+            const result = await fetchWaypoints(1);
+            expect(result).toEqual([
+                [37.22, -80.41],
+                [37.23, -80.42],
+            ]);
+        });
+
+        it("returns null if every entry is malformed", async () => {
+            mockFetchOnce([["a", "b"], [1]]);
+            const result = await fetchWaypoints(1);
+            expect(result).toBeNull();
+        });
+    });
+
     describe("fetchFleetState", () => {
-        it("fetches all instances and each boat_status in parallel, merging into BoatWithPosition[]", async () => {
-            // First call: get_all_instance_info. Then one call per instance.
+        it("fetches all instances and each boat_status + waypoints in parallel, merging into BoatWithPosition[]", async () => {
+            // Call order: get_all_instance_info, then per instance: status, waypoints.
+            // (Promise.allSettled fires both fetches synchronously per instance.)
             const instances = [
                 {
                     instance_id: 1,
@@ -158,12 +204,18 @@ describe("telemetry client", () => {
             ];
             const status1 = { latitude: 37.22, longitude: -80.41, speed: 1, heading: 0 };
             const status2 = { latitude: 0, longitude: 0 }; // GPS sentinel — should yield null position
+            const wps1 = [
+                [37.22, -80.41],
+                [37.23, -80.42],
+            ];
 
             global.fetch = jest
                 .fn()
                 .mockResolvedValueOnce(jsonResponse(instances))
                 .mockResolvedValueOnce(jsonResponse(status1))
-                .mockResolvedValueOnce(jsonResponse(status2)) as unknown as FetchMock;
+                .mockResolvedValueOnce(jsonResponse(wps1))
+                .mockResolvedValueOnce(jsonResponse(status2))
+                .mockResolvedValueOnce(jsonResponse([])) as unknown as typeof fetch; // no waypoints for boat 2
 
             const fleet = await fetchFleetState();
 
@@ -174,11 +226,14 @@ describe("telemetry client", () => {
             expect(boat1?.status).toEqual(status1);
             expect(boat1?.position).toEqual({ lat: 37.22, lng: -80.41 });
             expect(boat1?.lastUpdated).not.toBeNull();
+            expect(boat1?.waypoints).toEqual(wps1);
             // Boat 2 sent (0,0) — position should be null (treated as no GPS fix).
             expect(boat2?.position).toBeNull();
+            // Boat 2 has no waypoints (server returned []).
+            expect(boat2?.waypoints).toBeNull();
         });
 
-        it("includes instances whose status fetch fails, with status/position null", async () => {
+        it("includes instances whose status fetch fails, with status/position null but waypoints intact", async () => {
             const instances = [
                 {
                     instance_id: 9,
@@ -189,10 +244,13 @@ describe("telemetry client", () => {
                     updated_at: "",
                 },
             ];
+            const wps = [[37.5, -80.0]];
+            // Call order: instances, status (rejects), waypoints (succeeds).
             global.fetch = jest
                 .fn()
                 .mockResolvedValueOnce(jsonResponse(instances))
-                .mockRejectedValueOnce(new Error("boom")) as unknown as FetchMock;
+                .mockRejectedValueOnce(new Error("boom"))
+                .mockResolvedValueOnce(jsonResponse(wps)) as unknown as typeof fetch;
 
             const fleet = await fetchFleetState();
             expect(fleet).toHaveLength(1);
@@ -201,6 +259,34 @@ describe("telemetry client", () => {
             expect(boat?.status).toBeNull();
             expect(boat?.position).toBeNull();
             expect(boat?.lastUpdated).toBeNull();
+            // Waypoints fetch is independent — it still succeeds.
+            expect(boat?.waypoints).toEqual(wps);
+        });
+
+        it("sets waypoints to null when the waypoints fetch fails but status succeeds", async () => {
+            const instances = [
+                {
+                    instance_id: 3,
+                    instance_identifier: "argus",
+                    user: "y",
+                    current_config_hash: "",
+                    created_at: "",
+                    updated_at: "",
+                },
+            ];
+            const status = { latitude: 37.22, longitude: -80.41, heading: 90 };
+            global.fetch = jest
+                .fn()
+                .mockResolvedValueOnce(jsonResponse(instances))
+                .mockResolvedValueOnce(jsonResponse(status))
+                .mockRejectedValueOnce(new Error("wp boom")) as unknown as typeof fetch;
+
+            const fleet = await fetchFleetState();
+            expect(fleet).toHaveLength(1);
+            const boat = fleet[0];
+            expect(boat?.status).toEqual(status);
+            expect(boat?.position).toEqual({ lat: 37.22, lng: -80.41 });
+            expect(boat?.waypoints).toBeNull();
         });
 
         it("returns [] when there are no instances", async () => {
