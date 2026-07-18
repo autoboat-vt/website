@@ -384,7 +384,7 @@
         transition:
             opacity 250ms ease,
             transform 250ms ease;
-        font-size: 0.875rem;
+        font-size: 0.78rem;
         line-height: 1.4;
         text-align: left;
         z-index: 100;
@@ -393,14 +393,14 @@
     .hotspot__tooltip h4 {
         margin: 0 0 0.25rem;
         font-family: var(--font-heading);
-        font-size: 0.95rem;
+        font-size: 0.85rem;
         font-weight: 700;
         color: #ffffff;
     }
 
     .hotspot__tooltip p {
         margin: 0;
-        font-size: 0.8rem;
+        font-size: 0.72rem;
         color: #d8d4c8;
     }
 
