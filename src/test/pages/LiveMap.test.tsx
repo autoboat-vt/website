@@ -184,6 +184,36 @@ describe("LiveMap page", () => {
         }
     });
 
+    it("displays the waypoint stat as 1-based in the telemetry card", async () => {
+        // current_waypoint_index is zero-based from the server (0 = first
+        // waypoint), but BoatDetails displays it as 1-based (#1 for the
+        // first waypoint) to match the Waypoints map tooltips.
+        mockFetchSequence([
+            { body: instances },
+            { body: { ...statusTheseus, current_waypoint_index: 1 } },
+            { body: [] },
+            { body: statusPersephone },
+            { body: [] },
+        ]);
+        renderLiveMap();
+
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        const detailsHeading = screen.getByRole("heading", { name: /Boat telemetry/i });
+        const detailsSection = detailsHeading.closest("section, div, article");
+        expect(detailsSection).not.toBeNull();
+        if (detailsSection) {
+            const withinDetails = within(detailsSection as HTMLElement);
+            // Index 1 (zero-based) → displayed as #2 (1-based).
+            expect(withinDetails.getByText("#2")).toBeInTheDocument();
+            // The zero-based value #1 must NOT appear for the waypoint stat
+            // (it would be the bug we're guarding against).
+            expect(withinDetails.queryByText("#1")).not.toBeInTheDocument();
+        }
+    });
+
     it("renders waypoints (polyline + numbered circle markers) when a boat has them", async () => {
         // Boat 1 has a 3-waypoint route; boat 2 has none.
         const wps = [
