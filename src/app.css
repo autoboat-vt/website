@@ -1027,10 +1027,19 @@
        Always-visible tiles so you can read telemetry without clicking a
        marker. */
     /* In the side-by-side layout (wide screens), the right column is narrower
-       so the boat cards stack in a single column instead of 2-3 across. */
+       so the boat cards stack in a single column instead of 2-3 across, and
+       the stats within each card stack vertically instead of cramming into
+       2 narrow columns. The !important is required because BoatDetails
+       applies lg:grid-cols-3 / grid-cols-2 utility classes (in the
+       `utilities` layer, which beats non-important `components`-layer
+       rules) — per the cascade-layers spec, !important in an earlier
+       layer (components) beats non-important in a later layer. */
     @media (min-width: 1025px) {
         .live-map__details-card .boat-details__list {
-            grid-template-columns: 1fr;
+            grid-template-columns: 1fr !important;
+        }
+        .live-map__details-card .boat-details__stats {
+            grid-template-columns: 1fr !important;
         }
     }
 

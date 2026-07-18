@@ -23,6 +23,57 @@ const DEFAULT_CENTER: [number, number] = [0, 0];
 const DEFAULT_ZOOM = 15;
 
 /**
+ * Collects all positions (boats + waypoints) for the given fleet, used to
+ * compute a centroid for centering the map.
+ */
+function collectPositions(boats: BoatWithPosition[]): Array<[number, number]> {
+    const positions: Array<[number, number]> = [];
+    for (const b of boats) {
+        if (b.position) positions.push([b.position.lat, b.position.lng]);
+        if (b.waypoints) {
+            for (const [lat, lng] of b.waypoints) {
+                positions.push([lat, lng]);
+            }
+        }
+    }
+    return positions;
+}
+
+/** Computes the centroid (mean lat/lng) of a list of positions. */
+function centroidOf(positions: Array<[number, number]>): [number, number] | null {
+    if (positions.length === 0) return null;
+    let latSum = 0;
+    let lngSum = 0;
+    for (const [lat, lng] of positions) {
+        latSum += lat ?? 0;
+        lngSum += lng ?? 0;
+    }
+    return [latSum / positions.length, lngSum / positions.length];
+}
+
+/**
+ * Initial centering: on first data arrival, pans the map so the boats are
+ * in view. The map starts at DEFAULT_CENTER ([0,0]) which is usually far
+ * from the actual boats — without this one-time pan the user would see an
+ * empty ocean until they click "Recenter". Fires exactly once (guarded by
+ * a ref) so it never overrides the user's subsequent pan/zoom.
+ */
+function CenterOnFirstData({ boats }: { boats: BoatWithPosition[] }) {
+    const map = useMap();
+    const didInitialCenter = useRef(false);
+    useEffect(() => {
+        if (didInitialCenter.current) return;
+        const positions = collectPositions(boats);
+        if (positions.length === 0) return;
+        const centroid = centroidOf(positions);
+        if (!centroid) return;
+        didInitialCenter.current = true;
+        map.panTo(centroid, { animate: false });
+    }, [boats, map]);
+    return null;
+}
+
+/**
  * Recenter helper: a child of <MapContainer> that imperatively re-centers
  * the map on the boats when `fitTrigger` changes. Lives inside the
  * MapContainer so it can grab the map instance via useMap().
@@ -37,25 +88,12 @@ function RecenterOnTrigger({ boats, fitTrigger }: { boats: BoatWithPosition[]; f
     const map = useMap();
     useEffect(() => {
         if (fitTrigger === 0) return;
-        const positions: Array<[number, number]> = [];
-        for (const b of boats) {
-            if (b.position) positions.push([b.position.lat, b.position.lng]);
-            if (b.waypoints) {
-                for (const [lat, lng] of b.waypoints) {
-                    positions.push([lat, lng]);
-                }
-            }
-        }
+        const positions = collectPositions(boats);
         if (positions.length === 0) return;
-        // Compute the centroid and pan to it, keeping the current zoom level
-        // so the user's view isn't disrupted.
-        let latSum = 0;
-        let lngSum = 0;
-        for (const [lat, lng] of positions) {
-            latSum += lat ?? 0;
-            lngSum += lng ?? 0;
-        }
-        const centroid: [number, number] = [latSum / positions.length, lngSum / positions.length];
+        const centroid = centroidOf(positions);
+        if (!centroid) return;
+        // Pan to the centroid, keeping the current zoom level so the user's
+        // view isn't disrupted.
         map.panTo(centroid, { animate: true });
     }, [fitTrigger, boats, map]);
     return null;
@@ -298,6 +336,7 @@ export default function LiveMap() {
                                 {boatsWithPosition.map((boat) => (
                                     <BoatMarker key={boat.instance.instance_id} boat={boat} />
                                 ))}
+                                <CenterOnFirstData boats={boats} />
                                 <RecenterOnTrigger boats={boats} fitTrigger={fitTrigger} />
                                 <ScaleControl />
                             </MapContainer>
