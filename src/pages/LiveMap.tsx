@@ -238,73 +238,79 @@ export default function LiveMap() {
                 </Card>
             )}
 
-            {/* Keep the map mounted across transient poll errors so a single
-                failed fetch doesn't tear down and rebuild the whole map
-                (re-fetching tiles, losing pan/zoom state). The map is shown
-                whenever there's no error OR we already have boat data to
-                display (stale-but-visible). Only the initial-load failure
-                (error + no boats) hides the map in favor of the error card. */}
+            {/* Map + telemetry side-by-side on wide screens (map left,
+                telemetry right); stacked on narrow viewports. Wrapped together
+                so the grid owns both children — the map stays mounted across
+                transient poll errors (see comment below). */}
             {(!error || boats.length > 0) && (
-                <Card className="live-map__card">
-                    {error && boats.length > 0 && (
-                        <div
-                            className="live-map__stale-banner mb-3 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent dark:border-accent-2/30 dark:bg-accent-2/10 dark:text-accent-2"
-                            role="status"
-                        >
-                            <AlertCircle size={14} className="shrink-0" />
-                            <span>
-                                Connection lost — showing last known positions.{" "}
-                                <button
-                                    type="button"
-                                    onClick={handleRetry}
-                                    className="font-semibold no-underline hover:opacity-80"
-                                >
-                                    Retry now
-                                </button>
-                            </span>
-                        </div>
-                    )}
-                    <section className="live-map" aria-label="Live boat positions map">
-                        <MapContainer
-                            center={DEFAULT_CENTER}
-                            zoom={DEFAULT_ZOOM}
-                            minZoom={3}
-                            maxZoom={20}
-                            preferCanvas
-                            scrollWheelZoom
-                            className="live-map__leaflet"
-                        >
-                            <TileLayer
-                                url={tileUrl}
-                                attribution={tileAttribution}
-                                tileSize={512}
-                                zoomOffset={-1}
-                                crossOrigin
-                            />
-                            {boatsWithPosition.map((boat) =>
-                                boat.waypoints && boat.waypoints.length > 0 ? (
-                                    <Waypoints
-                                        key={`wp-${boat.instance.instance_id}`}
-                                        waypoints={boat.waypoints}
-                                        currentIndex={boat.status?.current_waypoint_index}
-                                    />
-                                ) : null,
-                            )}
-                            {boatsWithPosition.map((boat) => (
-                                <BoatMarker key={boat.instance.instance_id} boat={boat} />
-                            ))}
-                            <RecenterOnTrigger boats={boats} fitTrigger={fitTrigger} />
-                            <ScaleControl />
-                        </MapContainer>
-                    </section>
-                </Card>
-            )}
+                <div className="live-map__layout">
+                    {/* Keep the map mounted across transient poll errors so a single
+                        failed fetch doesn't tear down and rebuild the whole map
+                        (re-fetching tiles, losing pan/zoom state). The map is shown
+                        whenever there's no error OR we already have boat data to
+                        display (stale-but-visible). Only the initial-load failure
+                        (error + no boats) hides the map in favor of the error card. */}
+                    <Card className="live-map__card">
+                        {error && boats.length > 0 && (
+                            <div
+                                className="live-map__stale-banner mb-3 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent dark:border-accent-2/30 dark:bg-accent-2/10 dark:text-accent-2"
+                                role="status"
+                            >
+                                <AlertCircle size={14} className="shrink-0" />
+                                <span>
+                                    Connection lost — showing last known positions.{" "}
+                                    <button
+                                        type="button"
+                                        onClick={handleRetry}
+                                        className="font-semibold no-underline hover:opacity-80"
+                                    >
+                                        Retry now
+                                    </button>
+                                </span>
+                            </div>
+                        )}
+                        <section className="live-map" aria-label="Live boat positions map">
+                            <MapContainer
+                                center={DEFAULT_CENTER}
+                                zoom={DEFAULT_ZOOM}
+                                minZoom={3}
+                                maxZoom={20}
+                                preferCanvas
+                                scrollWheelZoom
+                                className="live-map__leaflet"
+                            >
+                                <TileLayer
+                                    url={tileUrl}
+                                    attribution={tileAttribution}
+                                    tileSize={512}
+                                    zoomOffset={-1}
+                                    crossOrigin
+                                />
+                                {boatsWithPosition.map((boat) =>
+                                    boat.waypoints && boat.waypoints.length > 0 ? (
+                                        <Waypoints
+                                            key={`wp-${boat.instance.instance_id}`}
+                                            waypoints={boat.waypoints}
+                                            currentIndex={boat.status?.current_waypoint_index}
+                                        />
+                                    ) : null,
+                                )}
+                                {boatsWithPosition.map((boat) => (
+                                    <BoatMarker key={boat.instance.instance_id} boat={boat} />
+                                ))}
+                                <RecenterOnTrigger boats={boats} fitTrigger={fitTrigger} />
+                                <ScaleControl />
+                            </MapContainer>
+                        </section>
+                    </Card>
 
-            {boatsWithPosition.length > 0 && (
-                <Card className="live-map__details-card">
-                    <h4 className="m-0 mb-4 text-lg font-bold">Boat telemetry</h4>
-                    <BoatDetails boats={boatsWithPosition} />
-                </Card>
+                    {boatsWithPosition.length > 0 && (
+                        <Card className="live-map__details-card">
+                            <h4 className="m-0 mb-4 text-lg font-bold">Boat telemetry</h4>
+                            <BoatDetails boats={boatsWithPosition} />
+                        </Card>
+                    )}
+                </div>
             )}
 
             {!error && boats.length === 0 && !loading && (

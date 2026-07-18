@@ -867,17 +867,49 @@
         }
     }
 
-    /* The map card breaks out of the default 1100px card width on wide
-       screens so the map can stretch. Padding is reduced so the map fills
-       more of the card. */
+    /* Side-by-side layout: map on the left, telemetry on the right.
+       On narrow viewports the grid collapses to a single column so the
+       map stacks above the telemetry (mobile-friendly). The layout
+       container breaks out of the default 1100px card width on wide
+       screens so the map has room to stretch. */
+    .live-map__layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+        width: 100%;
+    }
+
+    @media (min-width: 1025px) {
+        .live-map__layout {
+            grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr);
+            width: min(1400px, 94%);
+            margin-inline: auto;
+            align-items: start;
+        }
+    }
+
+    /* The map card fills its grid cell. Padding is reduced so the map
+       fills more of the card. */
     .live-map__card {
-        width: min(1400px, 94%);
+        width: 100%;
         padding: 0.75rem;
     }
 
     @media (max-width: 768px) {
         .live-map__card {
             padding: 0.5rem;
+        }
+    }
+
+    /* Telemetry card on the right: scrolls independently if the list is
+       long, so the map stays in view. On narrow viewports it just sits
+       below the map at natural height. */
+    @media (min-width: 1025px) {
+        .live-map__details-card {
+            max-height: 75vh;
+            overflow-y: auto;
+            position: sticky;
+            top: 1rem;
         }
     }
 
@@ -975,9 +1007,17 @@
         display: none;
     }
 
-    /* Boat telemetry cards rendered below the map (BoatDetails component).
-       Mirrors the popup stats but as always-visible tiles so you can read
-       telemetry without clicking a marker. */
+    /* Boat telemetry cards rendered beside the map (BoatDetails component).
+       Always-visible tiles so you can read telemetry without clicking a
+       marker. */
+    /* In the side-by-side layout (wide screens), the right column is narrower
+       so the boat cards stack in a single column instead of 2-3 across. */
+    @media (min-width: 1025px) {
+        .live-map__details-card .boat-details__list {
+            grid-template-columns: 1fr;
+        }
+    }
+
     .boat-details__card {
         display: flex;
         flex-direction: column;
