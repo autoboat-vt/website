@@ -6,7 +6,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta
             name="description"
-            content="Meet the AutoBoat team at Virginia Tech. Learn about our software, electronics, naval architecture, mechanical, sail, and business subteams."
+            content="Meet the AutoBoat team at Virginia Tech. Learn about our software, electronics, vehicle dynamics, and business subteams."
         >
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -74,14 +74,24 @@
         <main>
             <section class="section" id="toc">
                 <div class="card">
-                    <h3>Sub-Teams</h3>
-                    <nav class="gallery">
-                        <a href="#software">Software</a>
-                        <a href="#electronics">Electronics</a>
-                        <a href="#naval-architecture">Naval Architecture</a>
-                        <a href="#mechanical">Mechanical</a>
-                        <a href="#sail">Sail</a>
-                        <a href="#business">Business</a>
+                    <h3>Subteams</h3>
+                    <nav class="subteam-grid">
+                        <a href="#software" class="subteam-badge">
+                            <span class="subteam-badge__dot subteam-badge__dot--software"></span>
+                            Software
+                        </a>
+                        <a href="#electronics" class="subteam-badge">
+                            <span class="subteam-badge__dot subteam-badge__dot--electronics"></span>
+                            Electronics
+                        </a>
+                        <a href="#vehicle-dynamics" class="subteam-badge">
+                            <span class="subteam-badge__dot subteam-badge__dot--mechanical"></span>
+                            Vehicle Dynamics
+                        </a>
+                        <a href="#business" class="subteam-badge">
+                            <span class="subteam-badge__dot subteam-badge__dot--business"></span>
+                            Business
+                        </a>
                     </nav>
                 </div>
             </section>
@@ -173,88 +183,60 @@
                     </div>
                 </section>
 
-                <section class="card" id="naval-architecture">
-                    <h3 class="subteam-title">Naval Architecture</h3>
+                <section class="card" id="vehicle-dynamics">
+                    <h3 class="subteam-title">Vehicle Dynamics</h3>
                     <p class="subteam-description">
-                        The Naval Architecture Subteam focuses on the performance, durability, and
-                        the manuverability of the sailboat hull. Using Orca3D and other CAD tools,
-                        we design and optimize hull shapes for speed, stability, and
-                        maneuverability. Throughout the year we work on hull designs, fiberglass
-                        layups, conduct structural repairs, balancing weight distribution, and
-                        implementing hydrodynamic modifications to enhance performance on the water.
+                        The Vehicle Dynamics Subteam designs, builds, and optimizes the physical 
+                        structure and propulsion systems of our vessels. We focus on the performance, 
+                        durability, and maneuverability of the hull, rigging, and mechanical subsystems. 
+                        Using Orca3D, Fusion 360, SailCad, and principles of airfoil and hydrodynamic theory, 
+                        we design and optimize hull shapes and wingsails for speed, stability, and control. 
+                        Our workflow includes CAD modeling, finite element analysis, material selection, 
+                        fiberglass layups, structural repairs, weight distribution planning, and hands-on 
+                        fabrication (utilizing 3D printing, CNC machining, laser cutting, and sail patterning/sewing). 
+                        By transforming ideas into watertight systems, we serve as the physical backbone of the boat. 
+                        Whether you're interested in naval architecture, aerodynamics, mechanical design, turning 
+                        wrenches, or making hardware that just works, there's a place for you on our team!
                     </p>
-                    <div class="gallery" aria-label="Naval Architecture gallery">
+                    <div class="gallery" aria-label="Vehicle Dynamics gallery">
                         <img
                             src="../images/our_team_images/navarch/michio_spray_paint.webp"
                             alt="Hull Design and Construction"
                             loading="lazy"
                         >
                         <img
-                            src="../images/our_team_images/navarch/boat1.webp"
-                            alt="Boat 1"
-                            loading="lazy"
-                        >
-                        <img
-                            src="../images/our_team_images/navarch/boat2.webp"
-                            alt="Boat 2"
-                            loading="lazy"
-                        >
-                    </div>
-                </section>
-
-                <section class="card" id="mechanical">
-                    <h3 class="subteam-title">Mechanical</h3>
-                    <p class="subteam-description">
-                        The Mechanical Subteam transforms ideas into tangible systems that can
-                        survive the harsh realities of open water. We design, build, and refine the
-                        physical structure of the boat—ensuring it's lightweight, watertight, and
-                        battle-tested for competition. Our workflow includes CAD modeling in Fusion
-                        360, analysis in MATLAB, and hands-on fabrication using 3D printing, CNC
-                        machining, and laser cutting. Mechanical acts as the backbone of the boat,
-                        bringing together contributions from every team into a cohesive final
-                        product. Interdisciplinary decision-making and collaborative planning are at
-                        the core of what we do. If you like building things, turning wrenches, or
-                        making hardware that just works, there's a place for you on the Mechanical
-                        subteam.
-                    </p>
-                    <div class="gallery" aria-label="Mechanical gallery">
-                        <img
                             src="../images/our_team_images/mechanical/mech1.webp"
-                            alt="Mechanical 1"
+                            alt="Mechanical fabrication and assembly"
                             loading="lazy"
                         >
-                        <img
-                            src="../images/our_team_images/mechanical/mech2.webp"
-                            alt="Mechanical 2"
-                            loading="lazy"
-                        >
-                        <img
-                            src="../images/our_team_images/mechanical/mech3.webp"
-                            alt="Mechanical 3"
-                            loading="lazy"
-                        >
-                    </div>
-                </section>
-
-                <section class="card" id="sail">
-                    <h3 class="subteam-title">Sail</h3>
-                    <p class="subteam-description">
-                        The Sail Subteam is responsible for designing and fabricating the propulsion
-                        system of our sailboat. We utilize tools such as SailCad and principles of
-                        airfoil theory. We optimize sail shape and rigging for efficient propulsion
-                        and control. Additionally oversee the hands-on construction of sails,
-                        including material selection, patterning, and sewing, ensuring peak
-                        aerodynamic performance in competition conditions.
-                    </p>
-                    <div class="gallery" aria-label="Sail gallery">
                         <img
                             src="../images/our_team_images/sail/michio_sail.webp"
                             alt="Sail Design and Testing"
                             loading="lazy"
                         >
                         <img
+                            src="../images/our_team_images/navarch/boat1.webp"
+                            alt="Vessel Hull 1"
+                            loading="lazy"
+                        >
+                        <img
+                            src="../images/our_team_images/mechanical/mech2.webp"
+                            alt="Mechanical design testing"
+                            loading="lazy"
+                        >
+                        <img
                             src="../images/our_team_images/sail/sail1.webp"
-                            alt="Sail 1"
+                            alt="Sail construction and rigging"
+                            loading="lazy"
+                        >
+                        <img
+                            src="../images/our_team_images/navarch/boat2.webp"
+                            alt="Vessel Hull 2"
+                            loading="lazy"
+                        >
+                        <img
+                            src="../images/our_team_images/mechanical/mech3.webp"
+                            alt="Mechanical assembly work"
                             loading="lazy"
                         >
                     </div>
