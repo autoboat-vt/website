@@ -179,8 +179,8 @@ describe("LiveMap page", () => {
             // Both boat names appear in the details section.
             expect(withinDetails.getByText("theseus")).toBeInTheDocument();
             expect(withinDetails.getByText("persephone")).toBeInTheDocument();
-            // Speed (from statusTheseus.speed = 2.5 m/s → ~4.9 kn) appears.
-            expect(withinDetails.getByText(/4\.9 kn/)).toBeInTheDocument();
+            // Speed (from statusTheseus.speed = 2.5 m/s) appears.
+            expect(withinDetails.getByText(/2\.500 m\/s/)).toBeInTheDocument();
         }
     });
 

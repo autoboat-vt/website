@@ -62,6 +62,15 @@
     html,
     body {
         height: 100%;
+        /* The header is position: fixed with an opaque background and a high
+           z-index, so on mobile it sits on top of the browser's native
+           pull-to-refresh spinner — making the spinner invisible and leaving
+           the user with a confusing "broken" gesture. Disabling the overscroll
+           pull-to-refresh behavior on the root scroller prevents the gesture
+           from firing at all. Users can still reload via the browser menu.
+           `contain` (rather than `none`) still allows the scroll to chain to
+           a parent if this page is ever embedded. */
+        overscroll-behavior-y: contain;
     }
 
     html {
@@ -900,27 +909,36 @@
        layer (utilities). This lets the card fill its grid cell instead of
        being capped at 90% width and padded with 40px. */
     .live-map__card {
+        /* biome-ignore lint/complexity/noImportantStyles: Card utilities live in the `utilities` layer (after `components`); !important in this earlier layer is required to beat them per the cascade-layers spec. */
         width: 100% !important;
+        /* biome-ignore lint/complexity/noImportantStyles: see width above. */
         max-width: none !important;
+        /* biome-ignore lint/complexity/noImportantStyles: see width above. */
         margin: 0 !important;
+        /* biome-ignore lint/complexity/noImportantStyles: see width above. */
         padding: 0.75rem !important;
         /* The map card should not lift on hover — the translate-y animation
            visually "moves the map" when the cursor enters the card, which is
            jarring for a pannable surface. Neutralize the Card component's
            hover:-translate-y-1 + transition utilities (they live in the
            `utilities` layer, so !important is required here). */
+        /* biome-ignore lint/complexity/noImportantStyles: see width above. */
         transition: none !important;
     }
     .live-map__card:hover {
+        /* biome-ignore lint/complexity/noImportantStyles: neutralize Card hover utilities in the `utilities` layer; see .live-map__card above. */
         transform: none !important;
+        /* biome-ignore lint/complexity/noImportantStyles: see transform above. */
         box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05) !important;
     }
     .dark .live-map__card:hover {
+        /* biome-ignore lint/complexity/noImportantStyles: dark-mode variant of the hover shadow; see .live-map__card:hover above. */
         box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3) !important;
     }
 
     @media (max-width: 768px) {
         .live-map__card {
+            /* biome-ignore lint/complexity/noImportantStyles: mobile padding override; see .live-map__card above. */
             padding: 0.5rem !important;
         }
     }
@@ -930,9 +948,13 @@
        below the map at natural height. Same layer/!important reasoning as
        .live-map__card — override the Card's width/margin/padding utilities. */
     .live-map__details-card {
+        /* biome-ignore lint/complexity/noImportantStyles: Card utilities live in the `utilities` layer (after `components`); !important in this earlier layer is required to beat them per the cascade-layers spec. */
         width: 100% !important;
+        /* biome-ignore lint/complexity/noImportantStyles: see width above. */
         max-width: none !important;
+        /* biome-ignore lint/complexity/noImportantStyles: see width above. */
         margin: 0 !important;
+        /* biome-ignore lint/complexity/noImportantStyles: see width above. */
         padding: 1rem !important;
     }
 
@@ -1051,6 +1073,7 @@
        in a later layer. */
     @media (min-width: 1025px) {
         .live-map__details-card .boat-details__stats {
+            /* biome-ignore lint/complexity/noImportantStyles: BoatDetails applies grid-cols-2 utilities in the `utilities` layer; !important in this earlier `components` layer is required to override per the cascade-layers spec. */
             grid-template-columns: 1fr !important;
         }
     }
@@ -1066,12 +1089,6 @@
        title within the stats grid. */
     .boat-details__stat--full {
         grid-column: 1 / -1;
-    }
-
-    .boat-details__stat--full .boat-details__stat-value {
-        font-family: var(--font-heading);
-        font-size: 0.95rem;
-        font-weight: 800;
     }
 
     .boat-details__stat-label {
@@ -1096,6 +1113,12 @@
         font-size: 0.82rem;
         font-weight: 600;
         color: var(--color-fontcolor);
+    }
+
+    .boat-details__stat--full .boat-details__stat-value {
+        font-family: var(--font-heading);
+        font-size: 0.95rem;
+        font-weight: 800;
     }
 
     .boat-details__footer {

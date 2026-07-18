@@ -33,7 +33,7 @@ export default function BoatDetails({ boat }: BoatDetailsProps) {
                     <Stat
                         icon={<Navigation size={13} />}
                         label="Waypoint"
-                        value={`#${status.current_waypoint_index}`}
+                        value={`#${status.current_waypoint_index + 1}`}
                     />
                 )}
                 {typeof status?.distance_to_next_waypoint === "number" && (
