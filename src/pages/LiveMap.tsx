@@ -81,15 +81,23 @@ function CenterOnFirstData({ boats }: { boats: BoatWithPosition[] }) {
  * center and zoom to bring every boat and waypoint into view — a plain
  * panTo to the centroid would leave the boat off-center whenever waypoints
  * pull the average away from the boat's actual position.
+ *
+ * The latest `boats` is kept in a ref so the effect's dependency array is
+ * just `[fitTrigger]` — without this, every 3s poll (which updates `boats`)
+ * would re-run the effect and re-fit the bounds, disrupting the user's
+ * zoom/pan each time new data arrives.
  */
 function RecenterOnTrigger({ boats, fitTrigger }: { boats: BoatWithPosition[]; fitTrigger: number }) {
     const map = useMap();
+    const boatsRef = useRef(boats);
+    boatsRef.current = boats;
     useEffect(() => {
         if (fitTrigger === 0) return;
-        const bounds = boundsOf(boats);
+        const bounds = boundsOf(boatsRef.current);
         if (!bounds) return;
         map.fitBounds(bounds, { animate: true, padding: [40, 40] });
-    }, [fitTrigger, boats, map]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fitTrigger, map]);
     return null;
 }
 
