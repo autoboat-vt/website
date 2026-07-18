@@ -54,6 +54,7 @@ function useMap() {
     return {
         setView: () => {},
         fitBounds: () => {},
+        panTo: () => {},
         addControl: () => {},
         removeControl: () => {},
     };

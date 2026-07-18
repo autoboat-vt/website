@@ -1,5 +1,5 @@
 import L from "leaflet";
-import { AlertCircle, Crosshair, Loader2, RefreshCw, Sailboat, Satellite } from "lucide-react";
+import { AlertCircle, Crosshair, Loader2, RefreshCw, Sailboat } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -23,9 +23,15 @@ const DEFAULT_CENTER: [number, number] = [0, 0];
 const DEFAULT_ZOOM = 15;
 
 /**
- * Recenter helper: a child of <MapContainer> that imperatively fits the map
- * bounds to all boat positions when `fitTrigger` changes. Lives inside the
+ * Recenter helper: a child of <MapContainer> that imperatively re-centers
+ * the map on the boats when `fitTrigger` changes. Lives inside the
  * MapContainer so it can grab the map instance via useMap().
+ *
+ * Only fires on an explicit user action (the Recenter button) — polling
+ * new data does NOT trigger a recenter, so the user's pan/zoom is preserved
+ * across updates. The zoom level is also preserved: we pan to the centroid
+ * of the boats/waypoints without changing zoom, so a recenter never zooms
+ * the user in or out unexpectedly.
  */
 function RecenterOnTrigger({ boats, fitTrigger }: { boats: BoatWithPosition[]; fitTrigger: number }) {
     const map = useMap();
@@ -34,8 +40,6 @@ function RecenterOnTrigger({ boats, fitTrigger }: { boats: BoatWithPosition[]; f
         const positions: Array<[number, number]> = [];
         for (const b of boats) {
             if (b.position) positions.push([b.position.lat, b.position.lng]);
-            // Include waypoints in the fit bounds so the route is visible
-            // alongside the boat when recentering.
             if (b.waypoints) {
                 for (const [lat, lng] of b.waypoints) {
                     positions.push([lat, lng]);
@@ -43,17 +47,16 @@ function RecenterOnTrigger({ boats, fitTrigger }: { boats: BoatWithPosition[]; f
             }
         }
         if (positions.length === 0) return;
-        if (positions.length === 1) {
-            const first = positions[0];
-            if (first) map.setView(first, 17, { animate: true });
-            return;
+        // Compute the centroid and pan to it, keeping the current zoom level
+        // so the user's view isn't disrupted.
+        let latSum = 0;
+        let lngSum = 0;
+        for (const [lat, lng] of positions) {
+            latSum += lat ?? 0;
+            lngSum += lng ?? 0;
         }
-        const latLngs = positions.map((p) => {
-            const [lat, lng] = p;
-            return L.latLng(lat ?? 0, lng ?? 0);
-        });
-        const bounds = L.latLngBounds(latLngs);
-        map.fitBounds(bounds, { padding: [50, 50], animate: true });
+        const centroid: [number, number] = [latSum / positions.length, lngSum / positions.length];
+        map.panTo(centroid, { animate: true });
     }, [fitTrigger, boats, map]);
     return null;
 }
@@ -80,7 +83,6 @@ export default function LiveMap() {
     const [error, setError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<number | null>(null);
     const [fitTrigger, setFitTrigger] = useState(0);
-    const [autoRecenter, setAutoRecenter] = useState(true);
 
     // Abort controller for in-flight polls; cancelled on unmount or when a
     // newer poll starts. Keeps state clean across rapid re-renders.
@@ -133,13 +135,6 @@ export default function LiveMap() {
             abortRef.current?.abort();
         };
     }, [poll]);
-
-    // Auto-recenter whenever the fleet changes, if the user hasn't disabled it.
-    useEffect(() => {
-        if (autoRecenter && boats.some((b) => b.position)) {
-            setFitTrigger((t) => t + 1);
-        }
-    }, [boats, autoRecenter]);
 
     const boatsWithPosition = useMemo(() => boats.filter((b) => b.position), [boats]);
     const boatsWithoutPosition = useMemo(() => boats.filter((b) => !b.position), [boats]);
@@ -206,18 +201,6 @@ export default function LiveMap() {
                         className="live-map__btn inline-flex items-center gap-1.5 rounded-lg border border-black/10 bg-white/60 px-3 py-1.5 text-sm font-semibold text-fontcolor no-underline transition-colors hover:bg-white dark:border-white/15 dark:bg-white/5 dark:hover:bg-white/10"
                     >
                         <Crosshair size={14} /> Recenter
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setAutoRecenter((v) => !v)}
-                        aria-pressed={autoRecenter}
-                        className={`live-map__btn inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold no-underline transition-colors ${
-                            autoRecenter
-                                ? "border-accent/40 bg-accent/10 text-accent dark:border-accent-2/40 dark:bg-accent-2/10 dark:text-accent-2"
-                                : "border-black/10 bg-white/60 text-fontcolor hover:bg-white dark:border-white/15 dark:bg-white/5 dark:hover:bg-white/10"
-                        }`}
-                    >
-                        <Satellite size={14} /> Auto-follow {autoRecenter ? "on" : "off"}
                     </button>
                     <button
                         type="button"
