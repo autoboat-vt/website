@@ -5,8 +5,10 @@ import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import BoatDetails from "../components/BoatDetails";
 import BoatMarker from "../components/BoatMarker";
+import BoatTrends from "../components/BoatTrends";
 import Card from "../components/Card";
 import Waypoints from "../components/Waypoints";
+import { useBoatHistory } from "../hooks/useBoatHistory";
 import {
     type BoatWithPosition,
     fetchFleetState,
@@ -179,6 +181,10 @@ export default function LiveMap() {
     const boatsWithPosition = useMemo(() => boats.filter((b) => b.position), [boats]);
     const boatsWithoutPosition = useMemo(() => boats.filter((b) => !b.position), [boats]);
 
+    // Accumulate per-boat speed/distance samples for the trend plots.
+    // Session-scoped (server has no history endpoint); resets on reload.
+    const boatHistory = useBoatHistory(boats, lastUpdated);
+
     const handleRecenter = () => setFitTrigger((t) => t + 1);
     const handleRetry = () => {
         setLoading(true);
@@ -349,6 +355,7 @@ export default function LiveMap() {
                         <Card className="live-map__details-card">
                             <h4 className="m-0 mb-4 text-lg font-bold">Boat telemetry</h4>
                             <BoatDetails boats={boatsWithPosition} />
+                            <BoatTrends boats={boatsWithPosition} history={boatHistory} />
                         </Card>
                     )}
                 </div>

@@ -1129,4 +1129,168 @@
         font-size: 0.62rem;
         opacity: 0.8;
     }
+
+    /* ---- Per-boat trends tabs + plots (BoatTrends / TrendPlot) ---- */
+    /* Sits below the stat cards in the details panel. One tab per boat;
+       each tab shows speed + distance-to-next-WP line plots over 5 min. */
+
+    .boat-trends {
+        margin-top: 1.25rem;
+        border-top: 1px solid rgba(0, 0, 0, 0.08);
+        padding-top: 1rem;
+    }
+
+    .dark .boat-trends {
+        border-top-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .boat-trends__title {
+        margin: 0 0 0.6rem;
+        font-family: var(--font-heading);
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-fontcolor);
+        opacity: 0.55;
+    }
+
+    .boat-trends__tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .boat-trends__tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.3rem 0.65rem;
+        border-radius: 999px;
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        background: rgba(255, 255, 255, 0.5);
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--color-fontcolor);
+        cursor: pointer;
+        transition:
+            background-color 150ms ease,
+            border-color 150ms ease;
+    }
+
+    .boat-trends__tab:hover {
+        background: rgba(255, 255, 255, 0.8);
+    }
+
+    .boat-trends__tab.is-active {
+        border-color: var(--color-accent);
+        background: var(--color-accent);
+        color: #fff;
+    }
+
+    .dark .boat-trends__tab {
+        border-color: rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .dark .boat-trends__tab:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .dark .boat-trends__tab.is-active {
+        border-color: var(--color-accent-2);
+        background: var(--color-accent-2);
+        color: #1f1e1d;
+    }
+
+    .boat-trends__tab-mode {
+        font-size: 0.62rem;
+        opacity: 0.7;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .boat-trends__plots {
+        display: grid;
+        gap: 0.75rem;
+        grid-template-columns: 1fr;
+    }
+
+    @media (min-width: 480px) {
+        .boat-trends__plots {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+
+    .boat-trends__hint {
+        margin: 0.6rem 0 0;
+        font-size: 0.62rem;
+        color: var(--color-fontcolor);
+        opacity: 0.5;
+    }
+
+    /* TrendPlot (SVG line chart) */
+
+    .trend-plot {
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 0.6rem;
+        padding: 0.5rem 0.6rem 0.4rem;
+        background: rgba(255, 255, 255, 0.4);
+    }
+
+    .dark .trend-plot {
+        border-color: rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.03);
+    }
+
+    .trend-plot__header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-bottom: 0.2rem;
+    }
+
+    .trend-plot__label {
+        font-size: 0.66rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--color-fontcolor);
+        opacity: 0.6;
+    }
+
+    .trend-plot__current {
+        font-family: var(--font-mono);
+        font-size: 0.82rem;
+        font-weight: 700;
+    }
+
+    .trend-plot__svg {
+        width: 100%;
+        height: auto;
+        display: block;
+    }
+
+    .trend-plot__grid {
+        stroke: rgba(0, 0, 0, 0.08);
+        stroke-width: 1;
+    }
+
+    .dark .trend-plot__grid {
+        stroke: rgba(255, 255, 255, 0.1);
+    }
+
+    .trend-plot__axis {
+        font-family: var(--font-mono);
+        font-size: 7px;
+        fill: var(--color-fontcolor);
+        opacity: 0.5;
+    }
+
+    .trend-plot__empty {
+        font-size: 8px;
+        fill: var(--color-fontcolor);
+        opacity: 0.4;
+    }
 }
