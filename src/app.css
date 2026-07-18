@@ -888,22 +888,38 @@
         }
     }
 
-    /* The map card fills its grid cell. Padding is reduced so the map
-       fills more of the card. */
+    /* The map card fills its grid cell. The Card component applies
+       w-[min(1100px,90%)] / mx-auto / my-10 / p-10 utilities, which live
+       in the `utilities` layer (after `components`). Non-important
+       component-layer rules lose to those utilities, so we use !important
+       here — per the CSS cascade layers spec, an !important declaration in
+       an earlier layer (components) beats a non-important one in a later
+       layer (utilities). This lets the card fill its grid cell instead of
+       being capped at 90% width and padded with 40px. */
     .live-map__card {
-        width: 100%;
-        padding: 0.75rem;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0.75rem !important;
     }
 
     @media (max-width: 768px) {
         .live-map__card {
-            padding: 0.5rem;
+            padding: 0.5rem !important;
         }
     }
 
     /* Telemetry card on the right: scrolls independently if the list is
        long, so the map stays in view. On narrow viewports it just sits
-       below the map at natural height. */
+       below the map at natural height. Same layer/!important reasoning as
+       .live-map__card — override the Card's width/margin/padding utilities. */
+    .live-map__details-card {
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 1rem !important;
+    }
+
     @media (min-width: 1025px) {
         .live-map__details-card {
             max-height: 75vh;
