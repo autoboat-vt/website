@@ -1,4 +1,5 @@
 import L from "leaflet";
+import "leaflet-rotatedmarker";
 import { useMemo } from "react";
 import { Marker, Popup } from "react-leaflet";
 import type { BoatWithPosition } from "../lib/telemetry";
@@ -8,30 +9,32 @@ interface BoatMarkerProps {
     boat: BoatWithPosition;
 }
 
+// Icon size and anchor match ground_station's getBoatIcon(): 50px square,
+// centered. The boat-icon.png asset lives in public/images/ so it's served
+// at the site root.
+const BOAT_ICON_SIZE = 50;
+const BOAT_ICON = L.icon({
+    iconUrl: "/images/boat-icon.png",
+    iconSize: [BOAT_ICON_SIZE, BOAT_ICON_SIZE],
+    iconAnchor: [BOAT_ICON_SIZE / 2, BOAT_ICON_SIZE / 2],
+    popupAnchor: [0, -BOAT_ICON_SIZE / 2],
+});
+
 /**
- * A Leaflet marker for a single boat, rendered as a rotated SVG boat icon
- * (heading-aware) with a popup showing live telemetry.
- *
- * Uses `L.divIcon` with an inline SVG so we avoid the well-known Leaflet
- * default-marker-icon path issue entirely (no asset URL setup needed) and
- * can rotate the boat to match its heading.
+ * A Leaflet marker for a single boat, rendered with the team's `boat-icon.png`
+ * asset and rotated to match its heading. Mimics the ground_station map
+ * widget's BoatManager: same icon, same `rotationAngle: 90 - heading`
+ * convention (the icon's bow points east at 0°, so we rotate by `90 - heading`
+ * to make heading 0° = north).
  */
 export default function BoatMarker({ boat }: BoatMarkerProps) {
     const { position, status, instance, lastUpdated } = boat;
 
-    // Build the divIcon once per (instance, heading) so Leaflet doesn't
-    // tear down/rebuild the DOM node on every poll tick.
     const heading = status?.heading;
-    const icon = useMemo(() => {
-        const rotation = typeof heading === "number" && Number.isFinite(heading) ? heading : 0;
-        return L.divIcon({
-            className: "boat-marker",
-            html: boatIconSvg(rotation),
-            iconSize: [36, 36],
-            iconAnchor: [18, 18],
-            popupAnchor: [0, -18],
-        });
-    }, [heading]);
+    const icon = useMemo(() => BOAT_ICON, []);
+    // ground_station convention: icon points east at 0°, so rotate by 90 - heading
+    // to align heading 0° with north.
+    const rotationAngle = typeof heading === "number" && Number.isFinite(heading) ? 90 - heading : 0;
 
     if (!position) return null;
 
@@ -39,7 +42,12 @@ export default function BoatMarker({ boat }: BoatMarkerProps) {
     const mode = boatModeLabel(status);
 
     return (
-        <Marker position={[position.lat, position.lng]} icon={icon}>
+        <Marker
+            position={[position.lat, position.lng]}
+            icon={icon}
+            rotationAngle={rotationAngle}
+            rotationOrigin="center"
+        >
             <Popup>
                 <div className="boat-popup">
                     <h3 className="boat-popup__title">{name}</h3>
@@ -106,17 +114,4 @@ function boatModeLabel(status: BoatWithPosition["status"]): string | null {
         return "Motorboat";
     }
     return null;
-}
-
-/**
- * Inline SVG for the boat icon. The hull points up (north = 0°) by default;
- * the whole `<svg>` is rotated by `heading` degrees clockwise so it points
- * in the direction of travel. Uses `currentColor` so CSS can theme it.
- */
-function boatIconSvg(rotation: number): string {
-    return `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36" style="transform: rotate(${rotation}deg);">
-  <circle cx="18" cy="18" r="17" fill="rgba(31,30,29,0.85)" stroke="#e5751f" stroke-width="2"/>
-  <path d="M18 7 L23 24 L18 21 L13 24 Z" fill="#e5751f"/>
-</svg>`;
 }

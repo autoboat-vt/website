@@ -16,8 +16,9 @@
         "check:write": "biome check --config-path=./biome.json --write ."
     },
     "dependencies": {
+        "import": "^0.0.6",
         "leaflet": "latest",
-        "leaflet-rotatedmarker": "latest",
+        "leaflet-rotatedmarker": "^0.2.0",
         "lucide-react": "latest",
         "react": "latest",
         "react-dom": "latest",

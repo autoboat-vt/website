@@ -5,7 +5,6 @@ import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import BoatMarker from "../components/BoatMarker";
 import Card from "../components/Card";
-import { useTheme } from "../hooks/useTheme";
 import {
     type BoatWithPosition,
     fetchFleetState,
@@ -50,8 +49,23 @@ function RecenterOnTrigger({ boats, fitTrigger }: { boats: BoatWithPosition[]; f
     return null;
 }
 
+/**
+ * Scale control — mimics ground_station's `control.scale().addTo(map)`.
+ * Renders a small scale bar in the bottom-left of the map.
+ */
+function ScaleControl() {
+    const map = useMap();
+    useEffect(() => {
+        const scale = L.control.scale({ imperial: true, metric: true });
+        scale.addTo(map);
+        return () => {
+            map.removeControl(scale);
+        };
+    }, [map]);
+    return null;
+}
+
 export default function LiveMap() {
-    const { theme } = useTheme();
     const [boats, setBoats] = useState<BoatWithPosition[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -128,15 +142,15 @@ export default function LiveMap() {
         poll();
     };
 
-    const isDark = theme === "dark";
-    // CARTO dark tiles are free and key-less — good match for the site's
-    // dark mode. Light mode uses standard OSM raster tiles.
-    const tileUrl = isDark
-        ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-    const tileAttribution = isDark
-        ? "&copy; OpenStreetMap contributors &copy; CARTO"
-        : "&copy; OpenStreetMap contributors";
+    // MapTiler-hosted OpenStreetMap raster style. We use a single style for
+    // both light and dark site modes because MapTiler's dark styles render
+    // empty ocean tiles as solid black (0,0,0) — at (0,0) the map would look
+    // blank. The OSM style renders ocean as light blue, which stays visible.
+    // 512px tiles + zoomOffset -1 is MapTiler's hi-DPI convention.
+    const mapTilerKey = "M9yBkV9J49pYUg5o8SGC";
+    const tileUrl = `https://api.maptiler.com/maps/openstreetmap/{z}/{x}/{y}.jpg?key=${mapTilerKey}`;
+    const tileAttribution =
+        '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>';
 
     return (
         <section className="section mx-auto grid max-w-275 gap-6 px-4 py-10">
@@ -238,14 +252,24 @@ export default function LiveMap() {
                         <MapContainer
                             center={DEFAULT_CENTER}
                             zoom={DEFAULT_ZOOM}
+                            minZoom={3}
+                            maxZoom={20}
+                            preferCanvas
                             scrollWheelZoom
                             className="live-map__leaflet"
                         >
-                            <TileLayer url={tileUrl} attribution={tileAttribution} />
+                            <TileLayer
+                                url={tileUrl}
+                                attribution={tileAttribution}
+                                tileSize={512}
+                                zoomOffset={-1}
+                                crossOrigin
+                            />
                             {boatsWithPosition.map((boat) => (
                                 <BoatMarker key={boat.instance.instance_id} boat={boat} />
                             ))}
                             <RecenterOnTrigger boats={boats} fitTrigger={fitTrigger} />
+                            <ScaleControl />
                         </MapContainer>
                     </section>
                 </Card>

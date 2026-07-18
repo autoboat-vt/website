@@ -18,5 +18,7 @@ export function useMap() {
     return {
         setView: () => {},
         fitBounds: () => {},
+        addControl: () => {},
+        removeControl: () => {},
     };
 }

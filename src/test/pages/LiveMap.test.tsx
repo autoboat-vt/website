@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach } from "@jest/globals";
 import { act, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
@@ -42,10 +42,10 @@ function mockFetchSequence(responses: Array<{ body: unknown; status?: number }>)
     const canned = responses.map((r) => jsonResponse(r.body, { status: r.status }));
     const fn = jest.fn((): Promise<MockResponse> => {
         const i = fn.mock.calls.length - 1;
-        const r = i < canned.length ? canned[i] : jsonResponse([]);
+        const r = canned[i] ?? jsonResponse([]);
         return Promise.resolve(r);
     }) as unknown as FetchMock;
-    global.fetch = fn;
+    global.fetch = fn as unknown as typeof fetch;
     return fn;
 }
 
@@ -125,7 +125,7 @@ async function flushMicrotasks() {
 describe("LiveMap page", () => {
     it("shows the loading state before the first poll resolves", () => {
         // Never-resolving promise keeps us in the initial loading state.
-        global.fetch = jest.fn(() => new Promise<MockResponse>(() => {})) as unknown as FetchMock;
+        global.fetch = jest.fn(() => new Promise<MockResponse>(() => {})) as unknown as typeof fetch;
         renderLiveMap();
         expect(screen.getByText(/Connecting/i)).toBeInTheDocument();
     });
@@ -153,7 +153,7 @@ describe("LiveMap page", () => {
     });
 
     it("shows the error card when fetch rejects", async () => {
-        global.fetch = jest.fn(() => Promise.reject(new Error("boom"))) as unknown as FetchMock;
+        global.fetch = jest.fn(() => Promise.reject(new Error("boom"))) as unknown as typeof fetch;
         renderLiveMap();
 
         await act(async () => {
@@ -193,9 +193,9 @@ describe("LiveMap page", () => {
 
         expect(screen.getByText(/Registered but no GPS fix/i)).toBeInTheDocument();
         const card = screen.getByText(/Registered but no GPS fix/i).closest("section, div, article");
-        expect(card).toBeDefined();
+        expect(card).not.toBeNull();
         if (card) {
-            expect(within(card).getByText("ghost")).toBeInTheDocument();
+            expect(within(card as HTMLElement).getByText("ghost")).toBeInTheDocument();
         }
         // No marker for the GPS-less boat.
         expect(screen.queryByTestId("boat-marker")).not.toBeInTheDocument();
