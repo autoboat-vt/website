@@ -2,17 +2,32 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
    <url>
       <loc>https://autoboat.aoe.vt.edu/</loc>
+      <changefreq>monthly</changefreq>
+      <priority>1.0</priority>
    </url>
    <url>
-      <loc>https://autoboat.aoe.vt.edu/html/ourteam.html</loc>
+      <loc>https://autoboat.aoe.vt.edu/ourteam</loc>
+      <changefreq>monthly</changefreq>
+      <priority>0.8</priority>
    </url>
    <url>
-      <loc>https://autoboat.aoe.vt.edu/html/fleet.html</loc>
+      <loc>https://autoboat.aoe.vt.edu/fleet</loc>
+      <changefreq>monthly</changefreq>
+      <priority>0.8</priority>
    </url>
    <url>
-      <loc>https://autoboat.aoe.vt.edu/html/how_to_join.html</loc>
+      <loc>https://autoboat.aoe.vt.edu/how-to-join</loc>
+      <changefreq>monthly</changefreq>
+      <priority>0.7</priority>
    </url>
    <url>
-      <loc>https://autoboat.aoe.vt.edu/html/sponsors.html</loc>
+      <loc>https://autoboat.aoe.vt.edu/sponsors</loc>
+      <changefreq>monthly</changefreq>
+      <priority>0.6</priority>
+   </url>
+   <url>
+      <loc>https://autoboat.aoe.vt.edu/gallery</loc>
+      <changefreq>monthly</changefreq>
+      <priority>0.6</priority>
    </url>
 </urlset>

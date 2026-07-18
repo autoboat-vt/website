@@ -3,7 +3,7 @@ name: Convert images to WebP (In-place)
 on:
   push:
     paths:
-      - 'images/**'   # Run only when images change
+      - "public/images/**" # Run only when images change
 
 jobs:
   convert:
@@ -18,7 +18,7 @@ jobs:
 
       - name: Convert images to WebP (overwrite originals)
         run: |
-          find images -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) | while read img; do
+          find public/images -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) | while read img; do
             cwebp -quiet "$img" -o "${img%.*}.webp"
             rm "$img"
           done
@@ -27,6 +27,6 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add images
+          git add public/images
           git commit -m "Convert images to WebP in place" || echo "No changes to commit"
           git push
