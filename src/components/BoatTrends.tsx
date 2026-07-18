@@ -9,11 +9,8 @@ interface BoatTrendsProps {
     history: BoatHistoryMap;
 }
 
-/** m/s → knots conversion factor. */
-const MS_TO_KN = 1.94384;
-
 /**
- * Historical trend plots for a single boat: speed (kn) and distance to
+ * Historical trend plots for a single boat: speed (m/s) and distance to
  * next waypoint (m) over the last 5 minutes.
  *
  * History is session-scoped (the telemetry server is REST-only with no
@@ -26,15 +23,7 @@ export default function BoatTrends({ boat, history }: BoatTrendsProps) {
     return (
         <div className="boat-trends">
             <div className="boat-trends__plots" role="tabpanel">
-                <TrendPlot
-                    samples={samples}
-                    field="speed"
-                    label="Speed"
-                    unit="kn"
-                    color="#861f41"
-                    convert={(v) => v * MS_TO_KN}
-                    decimals={1}
-                />
+                <TrendPlot samples={samples} field="speed" label="Speed" unit="m/s" color="#861f41" decimals={1} />
                 <TrendPlot
                     samples={samples}
                     field="distance"
