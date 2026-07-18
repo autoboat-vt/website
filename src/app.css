@@ -68,9 +68,17 @@
            the user with a confusing "broken" gesture. Disabling the overscroll
            pull-to-refresh behavior on the root scroller prevents the gesture
            from firing at all. Users can still reload via the browser menu.
-           `contain` (rather than `none`) still allows the scroll to chain to
-           a parent if this page is ever embedded. */
-        overscroll-behavior-y: contain;
+
+           `none` (rather than `contain`) is required for cross-browser
+           coverage: per the CSS Overscroll Behavior spec, `contain` disables
+           scroll chaining but still allows the default scroll overflow
+           behavior (bounce/pull-to-refresh) inside the element. Firefox
+           mobile honors this distinction and still triggers pull-to-refresh
+           with `contain` on the root scroller, while Safari/Chrome mobile
+           treat `contain` on the root as sufficient to suppress it. `none`
+           suppresses both scroll chaining AND the default overflow behavior,
+           which is what we actually want on all browsers. */
+        overscroll-behavior-y: none;
     }
 
     html {
