@@ -338,6 +338,10 @@
         cursor: pointer;
     }
 
+    .hotspot:hover {
+        z-index: 20;
+    }
+
     .hotspot__pin {
         width: 18px;
         height: 18px;
@@ -370,9 +374,9 @@
 
     .hotspot__tooltip {
         position: absolute;
-        bottom: calc(100% + 10px);
+        bottom: 50%;
         left: 50%;
-        transform: translateX(-50%) translateY(10px);
+        transform: translate(-50%, -20%) scale(0.9);
         width: 180px;
         background: rgba(31, 30, 29, 0.95);
         color: #f0eee6;
@@ -408,39 +412,21 @@
         color: #d8d4c8;
     }
 
-    /* CSS triangle pointing down (default: tooltip above pin) */
-    .hotspot__tooltip::after {
-        content: "";
-        position: absolute;
-        top: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        border-width: 6px;
-        border-style: solid;
-        border-color: rgba(31, 30, 29, 0.95) transparent transparent transparent;
-    }
-
     .hotspot:hover .hotspot__tooltip {
         opacity: 1;
         pointer-events: auto;
-        transform: translateX(-50%) translateY(0);
+        transform: translate(-50%, -20%) scale(1);
     }
 
-    /* Variant: tooltip below pin (for top-anchored hotspots) */
+    /* Variant: tooltip extends downward (for top-anchored hotspots) */
     .hotspot--top .hotspot__tooltip {
         bottom: auto;
-        top: calc(100% + 10px);
-        transform: translateX(-50%) translateY(-10px);
-    }
-
-    .hotspot--top .hotspot__tooltip::after {
-        top: auto;
-        bottom: 100%;
-        border-color: transparent transparent rgba(31, 30, 29, 0.95) transparent;
+        top: 50%;
+        transform: translate(-50%, 20%) scale(0.9);
     }
 
     .hotspot--top:hover .hotspot__tooltip {
-        transform: translateX(-50%) translateY(0);
+        transform: translate(-50%, 20%) scale(1);
     }
 
     /* --- Image modal open/close transition --- */
