@@ -51,7 +51,7 @@ cd "$(git rev-parse --show-toplevel)"
 # Ask the user for a commit message and commit any staged/unstaged changes
 # before building. If there's nothing to commit, skip the prompt entirely.
 if ! git diff --quiet || ! git diff --cached --quiet; then
-    DEFAULT_MSG="Deploy $(date -u +%Y-%m-%d)"
+    DEFAULT_MSG="Deploy $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     echo "==> You have uncommitted changes:"
     git status -sb
     echo
