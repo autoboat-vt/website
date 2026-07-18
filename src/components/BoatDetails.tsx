@@ -40,7 +40,7 @@ export default function BoatDetails({ boat }: BoatDetailsProps) {
                     <Stat
                         icon={<Anchor size={13} />}
                         label="To next WP"
-                        value={`${status.distance_to_next_waypoint.toFixed(0)} m`}
+                        value={`${status.distance_to_next_waypoint.toFixed(2)} m`}
                     />
                 )}
                 {typeof status?.voltage_to_vesc === "number" && (

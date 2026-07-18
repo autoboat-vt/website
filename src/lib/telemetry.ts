@@ -342,7 +342,7 @@ export function headingToCompass(degrees?: number): string {
     const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
     const idx = Math.round((((degrees % 360) + 360) % 360) / 45) % 8;
     const dir = dirs[idx] ?? "?";
-    return `${dir} (${degrees.toFixed(0)}°)`;
+    return `${dir} (${degrees.toFixed(3)}°)`;
 }
 
 /** Format a speed in m/s, or "—" if missing. */
