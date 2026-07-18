@@ -1061,36 +1061,23 @@
         background: rgba(255, 255, 255, 0.04);
     }
 
-    .boat-details__header {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 0.5rem;
-    }
-
-    .boat-details__name {
-        font-family: var(--font-heading);
-        font-size: 0.95rem;
-        font-weight: 800;
-        color: var(--color-fontcolor);
-    }
-
-    .boat-details__mode {
-        font-size: 0.65rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--color-accent);
-    }
-
-    .dark .boat-details__mode {
-        color: var(--color-accent-2);
-    }
-
     .boat-details__stat {
         display: flex;
         flex-direction: column;
         gap: 0.1rem;
+    }
+
+    /* Name and Type span both columns of the 2-col stats grid. The name
+       value uses the heading font and a larger size to act as the card
+       title within the stats grid. */
+    .boat-details__stat--full {
+        grid-column: 1 / -1;
+    }
+
+    .boat-details__stat--full .boat-details__stat-value {
+        font-family: var(--font-heading);
+        font-size: 0.95rem;
+        font-weight: 800;
     }
 
     .boat-details__stat-label {

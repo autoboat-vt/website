@@ -1,4 +1,4 @@
-import { Anchor, Battery, Compass, Gauge, MapPin, Navigation, Wind } from "lucide-react";
+import { Anchor, Battery, Compass, Gauge, MapPin, Navigation, Ship, Wind } from "lucide-react";
 import type { BoatWithPosition } from "../lib/telemetry";
 import { boatModeLabel, formatKnots, formatLastSeen, headingToCompass } from "../lib/telemetry";
 
@@ -27,12 +27,9 @@ export default function BoatDetails({ boats }: BoatDetailsProps) {
                     const mode = boatModeLabel(status);
                     return (
                         <li key={instance.instance_id} className="boat-details__card">
-                            <header className="boat-details__header">
-                                <h4 className="boat-details__name m-0">{name}</h4>
-                                {mode && <span className="boat-details__mode">{mode}</span>}
-                            </header>
-
                             <dl className="boat-details__stats m-0 grid grid-cols-2 gap-x-3 gap-y-2">
+                                <Stat icon={<Ship size={13} />} label="Name" value={name} fullWidth />
+                                {mode && <Stat icon={<Anchor size={13} />} label="Type" value={mode} fullWidth />}
                                 <Stat icon={<Gauge size={13} />} label="Speed" value={formatKnots(status?.speed)} />
                                 <Stat
                                     icon={<Compass size={13} />}
@@ -91,11 +88,13 @@ interface StatProps {
     icon: React.ReactNode;
     label: string;
     value: string;
+    /** Span both columns of the stats grid (for the name/type fields). */
+    fullWidth?: boolean;
 }
 
-function Stat({ icon, label, value }: StatProps) {
+function Stat({ icon, label, value, fullWidth }: StatProps) {
     return (
-        <div className="boat-details__stat">
+        <div className={`boat-details__stat${fullWidth ? " boat-details__stat--full" : ""}`}>
             <dt className="boat-details__stat-label">
                 <span className="boat-details__stat-icon" aria-hidden="true">
                     {icon}
