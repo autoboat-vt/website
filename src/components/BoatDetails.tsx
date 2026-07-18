@@ -10,10 +10,10 @@ interface BoatDetailsProps {
 /**
  * A compact stat tile rendered below the map for each reporting boat.
  *
- * The map popup (see BoatMarker.tsx) shows the same fields on click; this
- * component mirrors them as always-visible cards so you can read telemetry
- * without interacting with the marker. Fields that the boat hasn't reported
- * are omitted rather than rendered as "—", to keep the grid tidy.
+ * The boat marker itself is icon-only (no click popup); this component
+ * shows the same telemetry fields as always-visible cards so you can read
+ * them without interacting with the marker. Fields that the boat hasn't
+ * reported are omitted rather than rendered as "—", to keep the grid tidy.
  */
 export default function BoatDetails({ boats }: BoatDetailsProps) {
     if (boats.length === 0) return null;

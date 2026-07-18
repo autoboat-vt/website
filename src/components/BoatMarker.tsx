@@ -1,9 +1,8 @@
 import L from "leaflet";
 import "leaflet-rotatedmarker";
 import { useMemo } from "react";
-import { Marker, Popup } from "react-leaflet";
+import { Marker } from "react-leaflet";
 import type { BoatWithPosition } from "../lib/telemetry";
-import { boatModeLabel, formatKnots, formatLastSeen, headingToCompass } from "../lib/telemetry";
 
 interface BoatMarkerProps {
     boat: BoatWithPosition;
@@ -17,7 +16,6 @@ const BOAT_ICON = L.icon({
     iconUrl: "/images/boat-icon.png",
     iconSize: [BOAT_ICON_SIZE, BOAT_ICON_SIZE],
     iconAnchor: [BOAT_ICON_SIZE / 2, BOAT_ICON_SIZE / 2],
-    popupAnchor: [0, -BOAT_ICON_SIZE / 2],
 });
 
 /**
@@ -28,7 +26,7 @@ const BOAT_ICON = L.icon({
  * to make heading 0° = north).
  */
 export default function BoatMarker({ boat }: BoatMarkerProps) {
-    const { position, status, instance, lastUpdated } = boat;
+    const { position, status } = boat;
 
     const heading = status?.heading;
     const icon = useMemo(() => BOAT_ICON, []);
@@ -38,63 +36,16 @@ export default function BoatMarker({ boat }: BoatMarkerProps) {
 
     if (!position) return null;
 
-    const name = instance.instance_identifier || `Boat #${instance.instance_id}`;
-    const mode = boatModeLabel(status);
-
+    // The detailed telemetry card below the map (BoatDetails) shows the
+    // same fields as always-visible tiles, so the marker itself has no
+    // click popup — keeps the map uncluttered and avoids re-rendering the
+    // popup content on every poll.
     return (
         <Marker
             position={[position.lat, position.lng]}
             icon={icon}
             rotationAngle={rotationAngle}
             rotationOrigin="center"
-        >
-            <Popup>
-                <div className="boat-popup">
-                    <h3 className="boat-popup__title">{name}</h3>
-                    {mode && <p className="boat-popup__mode">{mode}</p>}
-                    <dl className="boat-popup__stats">
-                        <div>
-                            <dt>Speed</dt>
-                            <dd>{formatKnots(status?.speed)}</dd>
-                        </div>
-                        <div>
-                            <dt>Heading</dt>
-                            <dd>{headingToCompass(heading)}</dd>
-                        </div>
-                        {typeof status?.current_waypoint_index === "number" && (
-                            <div>
-                                <dt>Waypoint</dt>
-                                <dd>#{status.current_waypoint_index}</dd>
-                            </div>
-                        )}
-                        {typeof status?.distance_to_next_waypoint === "number" && (
-                            <div>
-                                <dt>To next WP</dt>
-                                <dd>{status.distance_to_next_waypoint.toFixed(0)} m</dd>
-                            </div>
-                        )}
-                        {typeof status?.voltage_to_vesc === "number" && (
-                            <div>
-                                <dt>Battery</dt>
-                                <dd>{status.voltage_to_vesc.toFixed(1)} V</dd>
-                            </div>
-                        )}
-                        {typeof status?.apparent_wind_speed === "number" && (
-                            <div>
-                                <dt>App. wind</dt>
-                                <dd>{status.apparent_wind_speed.toFixed(1)} m/s</dd>
-                            </div>
-                        )}
-                    </dl>
-                    <p className="boat-popup__last-seen">
-                        <span className="boat-popup__dot" aria-hidden="true" />
-                        Updated {formatLastSeen(lastUpdated)}
-                    </p>
-                    <p className="boat-popup__coords">
-                        {position.lat.toFixed(5)}, {position.lng.toFixed(5)}
-                    </p>
-                </div>
-            </Popup>
-        </Marker>
+        />
     );
 }

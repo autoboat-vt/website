@@ -162,7 +162,7 @@ export default function LiveMap() {
         '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>';
 
     return (
-        <section className="section mx-auto grid max-w-275 gap-6 px-4 py-10">
+        <section className="section mx-auto grid max-w-275 gap-6 px-4 py-10 lg:max-w-350">
             <Card>
                 <span className="kicker">Live Telemetry</span>
                 <h3>Boat Tracker</h3>
@@ -183,7 +183,7 @@ export default function LiveMap() {
                     <span className="live-map__status text-sm text-fontcolor/70">
                         {loading && boats.length === 0 ? (
                             <>
-                                <Loader2 size={14} className="inline animate-spin" /> Connecting…
+                                <Loader2 size={14} className="inline animate-spin" /> Connecting...
                             </>
                         ) : error ? (
                             <>
@@ -229,7 +229,7 @@ export default function LiveMap() {
                 </div>
             </Card>
 
-            {error && (
+            {error && boats.length === 0 && (
                 <Card className="live-map__error-card">
                     <div className="flex items-start gap-3">
                         <AlertCircle size={24} className="mt-1 shrink-0 text-accent dark:text-accent-2" />
@@ -255,8 +255,32 @@ export default function LiveMap() {
                 </Card>
             )}
 
-            {!error && (
+            {/* Keep the map mounted across transient poll errors so a single
+                failed fetch doesn't tear down and rebuild the whole map
+                (re-fetching tiles, losing pan/zoom state). The map is shown
+                whenever there's no error OR we already have boat data to
+                display (stale-but-visible). Only the initial-load failure
+                (error + no boats) hides the map in favor of the error card. */}
+            {(!error || boats.length > 0) && (
                 <Card className="live-map__card">
+                    {error && boats.length > 0 && (
+                        <div
+                            className="live-map__stale-banner mb-3 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent dark:border-accent-2/30 dark:bg-accent-2/10 dark:text-accent-2"
+                            role="status"
+                        >
+                            <AlertCircle size={14} className="shrink-0" />
+                            <span>
+                                Connection lost — showing last known positions.{" "}
+                                <button
+                                    type="button"
+                                    onClick={handleRetry}
+                                    className="font-semibold no-underline hover:opacity-80"
+                                >
+                                    Retry now
+                                </button>
+                            </span>
+                        </div>
+                    )}
                     <section className="live-map" aria-label="Live boat positions map">
                         <MapContainer
                             center={DEFAULT_CENTER}
@@ -293,7 +317,7 @@ export default function LiveMap() {
                 </Card>
             )}
 
-            {!error && boatsWithPosition.length > 0 && (
+            {boatsWithPosition.length > 0 && (
                 <Card className="live-map__details-card">
                     <h4 className="m-0 mb-4 text-lg font-bold">Boat telemetry</h4>
                     <BoatDetails boats={boatsWithPosition} />
@@ -313,7 +337,7 @@ export default function LiveMap() {
                 </Card>
             )}
 
-            {!error && boatsWithoutPosition.length > 0 && (
+            {boatsWithoutPosition.length > 0 && (
                 <Card>
                     <h4 className="m-0 mb-3 text-lg font-bold">Registered but no GPS fix</h4>
                     <ul className="m-0 grid gap-2 p-0 list-none sm:grid-cols-2">

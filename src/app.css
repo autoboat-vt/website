@@ -842,13 +842,43 @@
 
     /* --- Live map page (Leaflet) ---
        Leaflet needs an explicit height on its container or it renders at 0px.
-       The map fills a Card; on narrow viewports it shrinks to a usable min. */
+       The map fills a Card; on narrow viewports it shrinks to a usable min.
+       On wide/tall screens it grows to use the available space. */
     .live-map {
         height: 60vh;
         min-height: 360px;
         width: 100%;
         border-radius: 12px;
         overflow: hidden;
+    }
+
+    @media (min-width: 1025px) {
+        .live-map {
+            height: 70vh;
+        }
+    }
+
+    /* On tall viewports, cap the map height so it doesn't exceed the
+       viewport — keeps the toolbar and telemetry cards visible without
+       scrolling. */
+    @media (min-width: 1025px) and (min-height: 900px) {
+        .live-map {
+            height: 75vh;
+        }
+    }
+
+    /* The map card breaks out of the default 1100px card width on wide
+       screens so the map can stretch. Padding is reduced so the map fills
+       more of the card. */
+    .live-map__card {
+        width: min(1400px, 94%);
+        padding: 0.75rem;
+    }
+
+    @media (max-width: 768px) {
+        .live-map__card {
+            padding: 0.5rem;
+        }
     }
 
     .live-map__leaflet {
@@ -878,81 +908,6 @@
         filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
     }
 
-    /* Popup content: tighten Leaflet's defaults to match the site type scale. */
-    .leaflet-popup-content {
-        margin: 0.75rem 0.9rem;
-    }
-
-    .boat-popup {
-        min-width: 180px;
-        font-family: var(--font-sans);
-    }
-
-    .boat-popup__title {
-        margin: 0 0 0.15rem;
-        font-family: var(--font-heading);
-        font-size: 1rem;
-        font-weight: 800;
-        color: #1f1e1d;
-    }
-
-    .boat-popup__mode {
-        margin: 0 0 0.5rem;
-        font-size: 0.7rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--color-accent);
-    }
-
-    .boat-popup__stats {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.4rem 0.75rem;
-        margin: 0 0 0.5rem;
-    }
-
-    .boat-popup__stats dt {
-        font-size: 0.65rem;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: #6b6b6b;
-    }
-
-    .boat-popup__stats dd {
-        margin: 0;
-        font-family: var(--font-mono);
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: #1f1e1d;
-    }
-
-    .boat-popup__last-seen {
-        display: flex;
-        align-items: center;
-        gap: 0.35rem;
-        margin: 0 0 0.15rem;
-        font-size: 0.7rem;
-        color: #6b6b6b;
-    }
-
-    .boat-popup__dot {
-        display: inline-block;
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: #22c55e;
-        animation: statusPulse 2.4s ease-in-out infinite;
-    }
-
-    .boat-popup__coords {
-        margin: 0;
-        font-family: var(--font-mono);
-        font-size: 0.65rem;
-        color: #9a9a9a;
-    }
-
     /* Status pill in the toolbar: green dot when boats are reporting. */
     .live-map__status {
         display: inline-flex;
@@ -972,14 +927,6 @@
     .live-map__dot.is-live {
         background: #22c55e;
         animation: statusPulse 2.4s ease-in-out infinite;
-    }
-
-    /* Dark-mode popup text: Leaflet popups have a white background by
-       default; we keep that (good contrast on dark tiles) but tone the
-       secondary text down a touch. */
-    .dark .boat-popup__stats dt,
-    .dark .boat-popup__last-seen {
-        color: #6b6b6b;
     }
 
     /* Waypoint route + markers.
