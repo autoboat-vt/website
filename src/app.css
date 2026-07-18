@@ -373,34 +373,38 @@
         bottom: calc(100% + 10px);
         left: 50%;
         transform: translateX(-50%) translateY(10px);
-        width: 220px;
+        width: 180px;
         background: rgba(31, 30, 29, 0.95);
         color: #f0eee6;
-        padding: 0.75rem 1rem;
-        border-radius: 8px;
+        padding: 0.5rem 0.7rem;
+        border-radius: 6px;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
         opacity: 0;
         pointer-events: none;
         transition:
             opacity 250ms ease,
             transform 250ms ease;
-        font-size: 0.78rem;
-        line-height: 1.4;
+        font-size: 0.68rem;
+        line-height: 1.35;
         text-align: left;
         z-index: 100;
     }
 
-    .hotspot__tooltip h4 {
-        margin: 0 0 0.25rem;
+    .hotspot__tooltip h4,
+    .card .hotspot__tooltip h4 {
+        margin: 0 0 0.15rem;
         font-family: var(--font-heading);
-        font-size: 0.85rem;
+        font-size: 11px;
         font-weight: 700;
+        line-height: 1.3;
         color: #ffffff;
     }
 
-    .hotspot__tooltip p {
+    .hotspot__tooltip p,
+    .card .hotspot__tooltip p {
         margin: 0;
-        font-size: 0.72rem;
+        font-size: 10px;
+        line-height: 1.35;
         color: #d8d4c8;
     }
 
