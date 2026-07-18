@@ -7,24 +7,46 @@
             name="description"
             content="AutoBoat at Virginia Tech designs and builds autonomous sailboats and electric motorboats for robotics competitions. Join our team!"
         >
+
+        <!-- Theme: mobile browser UI bar color (light + dark variants) -->
+        <meta name="theme-color" content="#f0eee6" media="(prefers-color-scheme: light)">
+        <meta name="theme-color" content="#1f1e1d" media="(prefers-color-scheme: dark)">
+
+        <!-- Favicon -->
         <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
+
+        <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link
             href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap"
             rel="stylesheet"
         >
+
+        <!-- Social: Open Graph -->
+        <meta property="og:type" content="website">
+        <meta property="og:title" content="AutoBoat | Virginia Tech">
+        <meta
+            property="og:description"
+            content="AutoBoat at Virginia Tech designs and builds autonomous sailboats and electric motorboats for robotics competitions. Join our team!"
+        >
+        <meta property="og:image" content="/images/favicon.ico">
+
         <title>AutoBoat | Virginia Tech</title>
     </head>
     <body>
         <script>
             // Apply theme before first paint to avoid FOUC.
+            // Also sets color-scheme so native UI (scrollbars, form controls)
+            // matches the theme immediately, before CSS loads.
             // Order: saved preference > system preference > light.
             (() => {
-                var stored = localStorage.getItem("autoboat-theme");
-                var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-                var dark = stored ? stored === "dark" : prefersDark;
-                if (dark) document.documentElement.classList.add("dark");
+                const stored = localStorage.getItem("autoboat-theme");
+                const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+                const dark = stored ? stored === "dark" : prefersDark;
+                const root = document.documentElement;
+                root.style.colorScheme = dark ? "dark" : "light";
+                if (dark) root.classList.add("dark");
             })();
         </script>
         <div id="root"></div>

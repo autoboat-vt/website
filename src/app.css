@@ -16,8 +16,14 @@
     --color-fontcolor: #1f1e1d;
     --color-hovercolor: #3a3836;
 
+    /* Virginia Tech brand accents — official primary palette (brand.vt.edu/identity/color) */
+    /* Chicago Maroon #861F41, Burnt Orange #E5751F */
+    --color-accent: #861f41;
+    --color-accent-2: #e5751f;
+
     --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Arial, Helvetica, sans-serif;
     --font-heading: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
     --nav-height: 72px;
 }
@@ -27,6 +33,10 @@
     --color-bgcolor: #1f1e1d;
     --color-fontcolor: #f0eee6;
     --color-hovercolor: #d8d4c8;
+    /* Brand guidelines permit shading but not tinting of maroon/orange, */
+    /* so we use the same official values in dark mode. */
+    --color-accent: #861f41;
+    --color-accent-2: #e5751f;
     --nav-height: 72px;
 }
 
@@ -74,6 +84,18 @@
         background: radial-gradient(circle at 50% 0%, #2f2d2b 0%, #161514 100%) no-repeat fixed;
     }
 
+    /* Keep native UI (scrollbar, form controls, autofill) in sync with the
+       theme toggle instead of the OS-level prefers-color-scheme. The browser
+       renders native widgets in the matching scheme automatically — no custom
+       ::-webkit-scrollbar rules needed. */
+    :root {
+        color-scheme: light;
+    }
+
+    .dark {
+        color-scheme: dark;
+    }
+
     h1,
     h2,
     h3 {
@@ -96,6 +118,10 @@
     a {
         color: var(--color-fontcolor);
         text-decoration: underline;
+        text-decoration-color: var(--color-accent);
+        text-underline-offset: 3px;
+        text-decoration-thickness: 1px;
+        cursor: pointer;
     }
 
     h1 a {
@@ -104,6 +130,17 @@
 
     a:hover {
         color: var(--color-hovercolor);
+        text-decoration-color: var(--color-accent-2);
+    }
+
+    button,
+    [role="button"] {
+        cursor: pointer;
+    }
+
+    button:disabled,
+    [aria-disabled="true"] {
+        cursor: not-allowed;
     }
 
     a:focus {
@@ -164,8 +201,33 @@
         left: 0;
         right: 0;
         z-index: 1000;
+        /* Opaque (not glassmorphic) so the logo and wordmark render on the
+           same background on every page — otherwise the translucent header
+           picks up the hero image on the Home page but the page bg elsewhere,
+           making the brand look inconsistent. */
         background: rgb(240, 238, 230);
         border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    /* Accent hairline at the bottom of the header — a 1px gradient strip
+       that wipes in from the left on page load. */
+    header::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -1px;
+        height: 1px;
+        background: linear-gradient(
+            90deg,
+            transparent 0%,
+            var(--color-accent) 30%,
+            var(--color-accent-2) 70%,
+            transparent 100%
+        );
+        transform: scaleX(0);
+        transform-origin: left center;
+        animation: headerAccentWipe 700ms cubic-bezier(0.4, 0, 0.1, 1) 150ms forwards;
     }
 
     .dark header {
@@ -186,6 +248,29 @@
             transition: none !important;
             /* biome-ignore lint/complexity/noImportantStyles: required to override component-layer animations for accessibility */
             animation: none !important;
+        }
+
+        /* The hotspot pulse is functional (signals an interactive control),
+           not decorative — keep it for reduced-motion users, but slow it down.
+           Must come after the rule above and use !important to override it. */
+        .hotspot__pin {
+            /* biome-ignore lint/complexity/noImportantStyles: required to override the animation: none rule above for the functional hotspot pulse */
+            animation: hotspotPulse 6s infinite !important;
+        }
+
+        /* Brand logo hover spin: short, user-initiated, and non-essential.
+           Allowed under reduced-motion as a brief decorative affordance. */
+        .nav__logo:hover img,
+        .nav__logo:focus-visible img {
+            /* biome-ignore lint/complexity/noImportantStyles: brief user-initiated decorative spin, allowed under reduced motion */
+            animation: logoSpin 600ms cubic-bezier(0.5, 0, 0.1, 1) !important;
+        }
+
+        /* Header accent hairline: show instantly (no wipe animation)
+           so the line is still visible under reduced-motion. */
+        header::after {
+            /* biome-ignore lint/complexity/noImportantStyles: override the scaleX(0) initial state killed by animation: none above */
+            transform: scaleX(1) !important;
         }
     }
 }
@@ -220,24 +305,44 @@
     }
 }
 
-@keyframes pulseGlow {
-    0%,
-    100% {
-        opacity: 1;
+@keyframes hotspotPulse {
+    0% {
+        box-shadow:
+            0 0 0 1px rgba(255, 255, 255, 0.9),
+            0 0 0 0 rgba(255, 255, 255, 0.7),
+            0 1px 4px rgba(0, 0, 0, 0.4);
     }
-    50% {
-        opacity: 0.6;
+    70% {
+        box-shadow:
+            0 0 0 1px rgba(255, 255, 255, 0.9),
+            0 0 0 14px rgba(255, 255, 255, 0),
+            0 1px 4px rgba(0, 0, 0, 0.4);
+    }
+    100% {
+        box-shadow:
+            0 0 0 1px rgba(255, 255, 255, 0.9),
+            0 0 0 14px rgba(255, 255, 255, 0),
+            0 1px 4px rgba(0, 0, 0, 0.4);
     }
 }
 
-@keyframes hotspotPulse {
-    0% {
-        transform: scale(0.6);
-        opacity: 0.8;
+/* Header accent hairline wipe-in on page load. */
+@keyframes headerAccentWipe {
+    to {
+        transform: scaleX(1);
     }
+}
+
+/* Soft pulse for status dots ("Active" / "In Development"). */
+@keyframes statusPulse {
+    0%,
     100% {
-        transform: scale(1.4);
-        opacity: 0;
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.55;
+        transform: scale(0.85);
     }
 }
 
@@ -255,6 +360,7 @@
         min-height: 80vh;
         width: 100%;
         overflow: hidden;
+        background-color: #1f1e1d;
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
@@ -270,6 +376,11 @@
 
     .hero--one {
         background-image: url("/images/gallery/14.webp");
+        /* Fill the entire viewport (account for fixed header height). */
+        min-height: calc(100vh - var(--nav-height));
+        /* Firefox leaves a sub-pixel gap at the left edge with cover sizing.
+           Nudge the background 1px past each edge to close the hairline. */
+        background-size: calc(100% + 2px) calc(100% + 2px);
     }
 
     .hero__title {
@@ -334,40 +445,41 @@
         z-index: 10;
         transform: translate(-50%, -50%);
         cursor: pointer;
+        /* Button reset (hotspot is a <button> for keyboard access) */
+        padding: 0;
+        border: none;
+        background: transparent;
+        font: inherit;
+        color: inherit;
     }
 
-    .hotspot:hover {
+    .hotspot:hover,
+    .hotspot:focus-visible {
         z-index: 20;
     }
 
-    .hotspot__pin {
-        width: 18px;
-        height: 18px;
-        border-radius: 50%;
-        background-color: var(--color-fontcolor);
-        border: 2px solid var(--color-bgcolor);
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
-        position: relative;
-        transition: transform 200ms ease;
+    .hotspot:focus-visible {
+        outline: none;
     }
 
-    .hotspot__pin::after {
-        content: "";
-        position: absolute;
-        inset: -6px;
+    .hotspot__pin {
+        display: block;
+        width: 10px;
+        height: 10px;
         border-radius: 50%;
-        border: 2px solid var(--color-fontcolor);
-        opacity: 0;
+        background-color: #000000;
+        box-shadow:
+            0 0 0 1px rgba(255, 255, 255, 0.9),
+            0 1px 4px rgba(0, 0, 0, 0.4);
+        position: relative;
+        transition: transform 200ms ease;
         animation: hotspotPulse 2s infinite;
     }
 
-    .hotspot:hover .hotspot__pin {
-        transform: scale(1.3);
-    }
-
-    .hotspot:hover .hotspot__pin::after {
+    .hotspot:hover .hotspot__pin,
+    .hotspot:focus-visible .hotspot__pin {
+        transform: scale(1.4);
         animation: none;
-        opacity: 0;
     }
 
     .hotspot__tooltip {
@@ -410,7 +522,8 @@
         color: #d8d4c8;
     }
 
-    .hotspot:hover .hotspot__tooltip {
+    .hotspot:hover .hotspot__tooltip,
+    .hotspot:focus-visible .hotspot__tooltip {
         opacity: 1;
         pointer-events: auto;
         transform: translate(-50%, -20%) scale(1);
@@ -423,7 +536,8 @@
         transform: translate(-50%, 20%) scale(0.9);
     }
 
-    .hotspot--top:hover .hotspot__tooltip {
+    .hotspot--top:hover .hotspot__tooltip,
+    .hotspot--top:focus-visible .hotspot__tooltip {
         transform: translate(-50%, 20%) scale(1);
     }
 
@@ -444,6 +558,57 @@
     .image-modal.is-open {
         opacity: 1;
         pointer-events: auto;
+    }
+
+    /* Vessel image modal panel: keeps aspect ratio + max sizing */
+    .vessel-image-modal__panel {
+        position: relative;
+        width: min(900px, 90vw);
+        max-height: 85vh;
+    }
+    .vessel-image-modal__panel .fleet-image-container {
+        max-height: 85vh;
+    }
+
+    /* Larger hotspot tooltips in the expanded vessel modal — only when
+       there's enough viewport room. Scales pin, width, and text up so
+       the tooltips stay legible against the bigger image. */
+    @media (min-width: 600px) {
+        .vessel-image-modal__panel .hotspot__pin {
+            width: 14px;
+            height: 14px;
+        }
+        .vessel-image-modal__panel .hotspot__tooltip {
+            width: 260px;
+            padding: 0.75rem 1rem;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+        .vessel-image-modal__panel .hotspot__tooltip h4 {
+            font-size: 16px;
+            margin-bottom: 0.25rem;
+        }
+        .vessel-image-modal__panel .hotspot__tooltip p {
+            font-size: 14px;
+            line-height: 1.45;
+        }
+    }
+
+    /* --- Brand logo: spin on hover --- */
+    @keyframes logoSpin {
+        from {
+            transform: rotate(0deg);
+        }
+        to {
+            transform: rotate(360deg);
+        }
+    }
+    .nav__logo img {
+        will-change: transform;
+    }
+    .nav__logo:hover img,
+    .nav__logo:focus-visible img {
+        animation: logoSpin 600ms cubic-bezier(0.5, 0, 0.1, 1);
     }
 
     /*
@@ -557,8 +722,121 @@
         background-color: #a855f7;
     }
 
-    /* --- Fleet badge "todo" pulse animation --- */
-    .fleet-card__badge--todo {
-        animation: pulseGlow 2s infinite;
+    /* --- Subteam card accent borders (left border colored by subteam) ---
+       Compound selector (.card.subteam-card--X) raises specificity above
+       Tailwind's border-black/6 so !important isn't needed. --- */
+    .card.subteam-card--software {
+        border-left-color: #3b82f6;
+    }
+
+    .card.subteam-card--electronics {
+        border-left-color: #eab308;
+    }
+
+    .card.subteam-card--mechanical {
+        border-left-color: #ef4444;
+    }
+
+    .card.subteam-card--business {
+        border-left-color: #a855f7;
+    }
+
+    /* Home page subteam badges also use the left-border accent. They're
+       .subteam-badge (not .card), so a separate rule is needed. */
+    .subteam-badge.subteam-card--software {
+        border-left: 3px solid #3b82f6;
+    }
+
+    .subteam-badge.subteam-card--electronics {
+        border-left: 3px solid #eab308;
+    }
+
+    .subteam-badge.subteam-card--mechanical {
+        border-left: 3px solid #ef4444;
+    }
+
+    .subteam-badge.subteam-card--business {
+        border-left: 3px solid #a855f7;
+    }
+
+    /* --- Section kicker label: small uppercase tracked label that sits
+        above a heading to anchor a section. Uses the VT accent gradient as
+        the text fill so it reads as a brand element, not body copy. --- */
+    .kicker {
+        display: inline-block;
+        font-family: var(--font-heading);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        margin-bottom: 0.4rem;
+        background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        line-height: 1;
+    }
+
+    /* --- Wave divider: a subtle maritime motif used between major
+        sections. Rendered as a background-image data URI so it can be
+        applied via a utility class without a React component. The wave
+        is filled with the accent gradient via mask-composite. --- */
+    .wave-divider {
+        position: relative;
+        height: 40px;
+        width: 100%;
+        margin-top: -1px;
+        background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
+        -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 40' preserveAspectRatio='none'><path d='M0 20 C 150 0, 350 0, 500 20 S 850 40, 1000 20 S 1150 0, 1200 20 L 1200 40 L 0 40 Z' fill='black'/></svg>");
+        mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 40' preserveAspectRatio='none'><path d='M0 20 C 150 0, 350 0, 500 20 S 850 40, 1000 20 S 1150 0, 1200 20 L 1200 40 L 0 40 Z' fill='black'/></svg>");
+        -webkit-mask-size: 100% 100%;
+        mask-size: 100% 100%;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+    }
+
+    /* --- Blueprint grid: faint engineering-grid background for sections
+        that should feel technical (Fleet specs, Sponsors tiers). --- */
+    .blueprint-grid {
+        background-image:
+            linear-gradient(rgba(134, 31, 65, 0.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(134, 31, 65, 0.04) 1px, transparent 1px);
+        background-size: 24px 24px;
+        background-position: -1px -1px;
+    }
+
+    .dark .blueprint-grid {
+        background-image:
+            linear-gradient(rgba(229, 117, 31, 0.05) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(229, 117, 31, 0.05) 1px, transparent 1px);
+    }
+
+    /* --- Data callout: monospace, accent-tinted label/value pairs for
+        vessel specs and other numeric data on Fleet. --- */
+    .data-callout__label {
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-accent);
+        display: block;
+        margin-bottom: 0.15rem;
+    }
+
+    .dark .data-callout__label {
+        color: var(--color-accent-2);
+    }
+
+    .data-callout__value {
+        font-family: var(--font-mono);
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--color-fontcolor);
+        display: block;
+    }
+
+    /* --- Fleet status dot: pulses to indicate live/active state. --- */
+    .fleet-status-dot {
+        animation: statusPulse 2.4s ease-in-out infinite;
     }
 }

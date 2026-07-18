@@ -14,8 +14,9 @@ This website is built with **React** + **TypeScript** and **Vite**, using `react
     -   `pages/`: One component per route (`Home`, `OurTeam`, `Fleet`, `HowToJoin`, `Sponsors`, `Gallery`)
 -   `public/`: Static assets served as-is
     -   `images/`: All site images (gallery, team, favicon, etc.)
--   `tsconfig.json` / `tsconfig.node.json`: TypeScript configuration
 -   `vite.config.ts`: Vite configuration
+-   `biome.json`: Biome configuration (linting + formatting)
+-   `jest.config.js`: Jest configuration (unit testing)
 -   `package.json`: Dependencies and scripts
 
 ## Routes
@@ -34,24 +35,40 @@ This website is built with **React** + **TypeScript** and **Vite**, using `react
 Requires Node.js 18+.
 
 ```bash
-npm install      # install dependencies (first time only)
-npm run dev      # start the Vite dev server at http://localhost:3000
+bun install      # install dependencies (first time only)
+bun run dev      # start the Vite dev server at http://localhost:3000
 ```
 
 The dev server supports hot module replacement (HMR) — edits to components
 appear instantly in the browser.
 
-## Type Checking
+## Linting & Formatting
+
+Biome handles linting and formatting. It is configured in `biome.json`.
 
 ```bash
-npm run typecheck  # run `tsc` in noEmit mode to type-check the project
+bun run lint     # lint the project (read-only)
+bun run format   # format files in place
+bun run check    # lint + format check (read-only)
+bun run check:write  # lint + format, applying fixes in place
+```
+
+## Testing
+
+Jest runs unit tests defined in `src/test/**/*.{test,spec}.{ts,tsx}`. The
+environment is `jsdom` with `@testing-library/react` and
+`@testing-library/jest-dom` available.
+
+```bash
+bun run test          # run tests once
+bun run test:watch    # watch mode
 ```
 
 ## Building for Production
 
 ```bash
-npm run build    # type-checks with `tsc` then outputs static files to dist/
-npm run preview  # preview the production build locally
+bun run build    # outputs static files to dist/
+bun run preview  # preview the production build locally
 ```
 
 The `dist/` folder contains the deployable static site.

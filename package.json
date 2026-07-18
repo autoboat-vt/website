@@ -3,27 +3,45 @@
     "private": true,
     "version": "1.0.0",
     "type": "module",
-    "description": "Website for Virginia Tech's AutoBoat team, rebuilt with React + Vite.",
+    "description": "Website for the AutoBoat project at Virginia Tech",
     "scripts": {
         "dev": "vite",
-        "build": "tsc -b && vite build && node scripts/spa-fallback.mjs",
+        "build": "vite build && node scripts/spa-fallback.mjs",
         "preview": "vite preview",
-        "typecheck": "tsc --noEmit -p tsconfig.json"
+        "test": "jest",
+        "test:watch": "jest --watch",
+        "lint": "biome lint --config-path=./biome.json .",
+        "format": "biome format --config-path=./biome.json --write .",
+        "check": "biome check --config-path=./biome.json .",
+        "check:write": "biome check --config-path=./biome.json --write ."
     },
     "dependencies": {
-        "lucide-react": "^1.25.0",
-        "react": "^18.3.1",
-        "react-dom": "^18.3.1",
-        "react-router-dom": "^6.26.2"
+        "lucide-react": "latest",
+        "react": "latest",
+        "react-dom": "latest",
+        "react-icons": "latest",
+        "react-router-dom": "latest"
     },
     "devDependencies": {
-        "@tailwindcss/vite": "^4.3.3",
-        "@types/node": "^26.1.1",
-        "@types/react": "^18.3.11",
-        "@types/react-dom": "^18.3.0",
-        "@vitejs/plugin-react": "^4.3.1",
-        "tailwindcss": "^4.3.3",
-        "typescript": "^5.6.2",
-        "vite": "^5.4.8"
+        "@biomejs/biome": "latest",
+        "@swc/core": "latest",
+        "@swc/jest": "latest",
+        "@tailwindcss/vite": "latest",
+        "@testing-library/jest-dom": "latest",
+        "@testing-library/react": "latest",
+        "@types/jest": "latest",
+        "@types/node": "latest",
+        "@types/react": "latest",
+        "@types/react-dom": "latest",
+        "@vitejs/plugin-react": "latest",
+        "jest": "latest",
+        "jest-environment-jsdom": "latest",
+        "tailwindcss": "latest",
+        "typescript": "latest",
+        "vite": "latest"
+    },
+    "optionalDependencies": {
+        "@types/bun": "latest",
+        "bun": "latest"
     }
 }

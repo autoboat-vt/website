@@ -14,7 +14,7 @@ const NAV_LINKS: NavLinkItem[] = [
     { to: "/ourteam", label: "Meet the Team" },
     { to: "/fleet", label: "Our Fleet" },
     { to: "/how-to-join", label: "How To Join" },
-    { to: "/sponsors", label: "Sponsors" }
+    { to: "/sponsors", label: "Sponsors" },
 ];
 
 export default function Header() {
@@ -22,7 +22,6 @@ export default function Header() {
     const [animating, setAnimating] = useState(false);
     const { theme, toggleTheme } = useTheme();
 
-    // Close menu on route change
     const closeMenu = () => {
         if (animating) return;
         setAnimating(true);
@@ -37,7 +36,6 @@ export default function Header() {
         setTimeout(() => setAnimating(false), 300);
     };
 
-    // Lock body scroll when menu open on mobile
     useEffect(() => {
         document.body.style.overflow = open ? "hidden" : "";
         return () => {
@@ -52,16 +50,21 @@ export default function Header() {
                 id="site-nav"
             >
                 <div className="nav__brand flex min-w-0 items-center justify-self-start gap-2">
-                    <Link to="/" aria-label="AutoBoat Home" className="inline-block h-8 w-8" onClick={closeMenu}>
+                    <Link
+                        to="/"
+                        aria-label="AutoBoat Home"
+                        className="nav__logo inline-block h-8 w-8"
+                        onClick={closeMenu}
+                    >
                         <img
-                            className="h-8 w-8 object-contain"
+                            className="block h-8 w-8 rounded-md bg-white object-contain p-0.5"
                             src="/images/favicon.ico"
                             alt=""
                             aria-hidden="true"
                             width="32"
                             height="32"
-                            // fetchPriority is a React 19 feature; use loading="eager" for now
                             loading="eager"
+                            fetchPriority="high"
                             decoding="sync"
                         />
                     </Link>
@@ -87,7 +90,7 @@ export default function Header() {
                             className={({ isActive }) =>
                                 `nav__link rounded-lg px-4 py-2 font-heading font-bold no-underline transition-[background-color,color] duration-200 ease-out hover:bg-black/5 dark:hover:bg-white/10 max-[620px]:px-1.5 max-[620px]:py-1 max-[620px]:text-sm${
                                     isActive
-                                        ? " is-active bg-[linear-gradient(135deg,#373533_0%,#171615_100%)] text-bgcolor dark:bg-[linear-gradient(135deg,#ffffff_0%,#e2ded5_100%)]"
+                                        ? " is-active bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-2)_100%)] text-white"
                                         : " text-fontcolor"
                                 }`
                             }
@@ -106,13 +109,17 @@ export default function Header() {
                         title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
                         onClick={toggleTheme}
                     >
-                        {theme === "dark" ? <Sun size={20} strokeWidth={2.25} /> : <Moon size={20} strokeWidth={2.25} />}
+                        {theme === "dark" ? (
+                            <Sun size={20} strokeWidth={2.25} />
+                        ) : (
+                            <Moon size={20} strokeWidth={2.25} />
+                        )}
                     </button>
 
                     <button
                         className={`nav__toggle hidden rounded-lg border-none px-1 leading-none transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current max-[750px]:flex max-[750px]:items-center max-[750px]:gap-1.5${
                             open
-                                ? " bg-[linear-gradient(135deg,#373533_0%,#171615_100%)] text-bgcolor dark:bg-[linear-gradient(135deg,#ffffff_0%,#e2ded5_100%)]"
+                                ? " bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-2)_100%)] text-bgcolor"
                                 : " bg-transparent text-fontcolor hover:text-hovercolor"
                         }`}
                         type="button"

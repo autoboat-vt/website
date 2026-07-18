@@ -8,9 +8,6 @@ interface CardProps {
     [key: string]: unknown;
 }
 
-/**
- * Generic card container matching the original `.card` styling.
- */
 export default function Card({ as: Tag = "section", className = "", children, id, ...rest }: CardProps) {
     return (
         <Tag

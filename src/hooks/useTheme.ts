@@ -16,11 +16,6 @@ function getInitialTheme(): Theme {
     return "light";
 }
 
-/**
- * Toggles the `.dark` class on <html> and persists the choice to localStorage.
- * The initial class is set before first paint by the inline script in index.html
- * to avoid FOUC; this hook just keeps React state in sync with the DOM.
- */
 export function useTheme() {
     const [theme, setTheme] = useState<Theme>(getInitialTheme);
 

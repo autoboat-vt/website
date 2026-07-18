@@ -19,14 +19,8 @@ interface Subteam extends SubteamNavItem {
     description: string;
     images: GalleryImage[];
     githubLink?: boolean;
+    techStack: string[];
 }
-
-const SUBTEAM_NAV: SubteamNavItem[] = [
-    { id: "software", label: "Software", dot: "software" },
-    { id: "electronics", label: "Electronics", dot: "electronics" },
-    { id: "vehicle-dynamics", label: "Vehicle Dynamics", dot: "mechanical" },
-    { id: "business", label: "Business", dot: "business" }
-];
 
 const SUBTEAMS: Subteam[] = [
     {
@@ -35,14 +29,15 @@ const SUBTEAMS: Subteam[] = [
         dot: "software",
         title: "Software",
         description:
-            "The Software Subteam develops the autonomous navigation systems, computer vision algorithms, and control software that enable our boats to sail and navigate independently. We work with Python, C++, ROS (Robot Operating System), Gazebo, YOLO, and Docker to create an intelligent autopilot software package. We also develop custom groundstation software to control and monitor our boats from the shore, and we maintain and work on the codebase for our website. We are looking for competent full stack software engineers who are interested in working on autonomous systems! If you would like to check out some of our code, most of it is open source! and is available on our GitHub.",
+            "The Software Subteam develops the autonomous navigation systems, computer vision algorithms, and control software that enable our boats to sail and navigate independently. We work with Python, C++, ROS (Robot Operating System), Gazebo, YOLO, and Docker to create an intelligent autopilot software package. We also develop custom groundstation software to control and monitor our boats from the shore, and we maintain and work on the codebase for our website. We are looking for competent full-stack software engineers who are interested in working on autonomous systems! If you would like to check out some of our code, most of it is open source and is available on our GitHub.",
         images: [
             { src: "/images/our_team_images/software/computer_vision1.webp", alt: "Computer Vision System" },
             { src: "/images/our_team_images/software/groundstation.webp", alt: "Ground Station Software" },
             { src: "/images/our_team_images/software/simulation.webp", alt: "Simulation Environment" },
-            { src: "/images/our_team_images/electronics/electronics2.webp", alt: "Electronics 2" }
+            { src: "/images/our_team_images/electronics/electronics2.webp", alt: "Electronics 2" },
         ],
-        githubLink: true
+        githubLink: true,
+        techStack: ["Python", "C++", "ROS", "Gazebo", "YOLO", "Docker"],
     },
     {
         id: "electronics",
@@ -50,14 +45,15 @@ const SUBTEAMS: Subteam[] = [
         dot: "electronics",
         title: "Electronics",
         description:
-            "The Electronics Subteam develops the infrastructure to bridge the barrier between software algorithms and the real-world contraints of our boats. We design and manufacture custom PCBs, collect data from sensors and actuators, and develop low-level firmware to interface with motors, pumps, and other electromechanical systems. Our workflow includes PCB design in KiCAD, electronics simulations in LTSpice, embedded programming in C++, and prototype development using tools like oscilloscopes and logic analyzers. We are building the nervous system of the boat, its veins and tendons. If you're into electronics, embedded systems, or just like to solder, we will happily welcome you to our team!",
+            "The Electronics Subteam develops the infrastructure to bridge the barrier between software algorithms and the real-world constraints of our boats. We design and manufacture custom PCBs, collect data from sensors and actuators, and develop low-level firmware to interface with motors, pumps, and other electromechanical systems. Our workflow includes PCB design in KiCAD, electronics simulations in LTSpice, embedded programming in C++, and prototype development using tools like oscilloscopes and logic analyzers. We are building the nervous system of the boat, its veins and tendons. If you're into electronics, embedded systems, or just like to solder, we will happily welcome you to our team!",
         images: [
             { src: "/images/our_team_images/electronics/electronics1.webp", alt: "Electronics 1" },
             { src: "/images/our_team_images/electronics/electronics3.webp", alt: "Electronics 3" },
             { src: "/images/our_team_images/electronics/electronics4.webp", alt: "Electronics 4" },
             { src: "/images/our_team_images/electronics/electronics5.webp", alt: "Electronics 5" },
-            { src: "/images/our_team_images/electronics/electronics6.webp", alt: "Electronics 6" }
-        ]
+            { src: "/images/our_team_images/electronics/electronics6.webp", alt: "Electronics 6" },
+        ],
+        techStack: ["KiCAD", "LTSpice", "C++", "Embedded", "PCB Design"],
     },
     {
         id: "vehicle-dynamics",
@@ -74,8 +70,9 @@ const SUBTEAMS: Subteam[] = [
             { src: "/images/our_team_images/mechanical/mech2.webp", alt: "Mechanical design testing" },
             { src: "/images/our_team_images/sail/sail1.webp", alt: "Sail construction and rigging" },
             { src: "/images/our_team_images/navarch/boat2.webp", alt: "Vessel Hull 2" },
-            { src: "/images/our_team_images/mechanical/mech3.webp", alt: "Mechanical assembly work" }
-        ]
+            { src: "/images/our_team_images/mechanical/mech3.webp", alt: "Mechanical assembly work" },
+        ],
+        techStack: ["Orca3D", "Fusion 360", "SailCad", "FEA", "Fiberglass", "3D Printing", "CNC"],
     },
     {
         id: "business",
@@ -84,8 +81,9 @@ const SUBTEAMS: Subteam[] = [
         title: "Business",
         description:
             "The Business subteam handles team outreach, sponsorship acquisition, budget management, and public relations. This team maintains relationships with sponsors, creates promotional materials, and manage team finances.",
-        images: []
-    }
+        images: [],
+        techStack: ["Sponsorship", "Budgeting", "PR", "Marketing"],
+    },
 ];
 
 interface DescriptionProps {
@@ -93,7 +91,6 @@ interface DescriptionProps {
     githubLink?: boolean;
 }
 
-// Renders description text with an inline GitHub link when applicable
 function Description({ text, githubLink }: DescriptionProps) {
     if (!githubLink) return <p className="subteam-description">{text}</p>;
 
@@ -111,8 +108,6 @@ function Description({ text, githubLink }: DescriptionProps) {
 
 export default function OurTeam() {
     const [modalImage, setModalImage] = useState<GalleryImage | null>(null);
-
-    // Apply the page-ourteam class to <body> for scoped gallery styles
     useEffect(() => {
         document.body.classList.add("page-ourteam");
         return () => document.body.classList.remove("page-ourteam");
@@ -120,41 +115,47 @@ export default function OurTeam() {
 
     return (
         <div className="page-ourteam">
-            <section className="section mx-auto grid max-w-275 gap-8 px-4 py-16" id="toc">
-                <Card>
-                    <h3>Subteams</h3>
-                    <nav className="subteam-grid my-6 grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
-                        {SUBTEAM_NAV.map((s) => (
-                            <a
-                                key={s.id}
-                                href={`#${s.id}`}
-                                className="subteam-badge flex items-center gap-3 rounded-lg border border-black/5 bg-black/3 px-4 py-3 text-base font-semibold text-fontcolor no-underline transition-[background,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-black/10 hover:bg-black/6 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-fontcolor dark:border-white/5 dark:bg-white/3 dark:hover:border-white/10 dark:hover:bg-white/6"
-                            >
-                                <span
-                                    className={`subteam-badge__dot subteam-badge__dot--${s.dot} h-2.5 w-2.5 rounded-full`}
-                                ></span>
-                                {s.label}
-                            </a>
-                        ))}
-                    </nav>
-                </Card>
-            </section>
-
-            <div id="subteams-section">
-                {SUBTEAMS.map((subteam) => (
-                    <Card key={subteam.id} id={subteam.id}>
-                        <h3 className="subteam-title m-0 mb-4 text-left font-heading text-[clamp(22px,3vw,36px)] font-extrabold">
-                            {subteam.title}
-                        </h3>
-                        <Description text={subteam.description} githubLink={subteam.githubLink} />
-                        {subteam.images.length > 0 && (
-                            <Gallery
-                                images={subteam.images}
-                                ariaLabel={`${subteam.title} gallery`}
-                                onImageClick={(img) => setModalImage(img)}
-                            />
-                        )}
-                    </Card>
+            <div id="subteams-section" className="section mx-auto grid max-w-275 gap-4 px-4 pt-10 pb-12">
+                {SUBTEAMS.map((subteam, i) => (
+                    <div key={subteam.id} className="contents">
+                        <div
+                            id={subteam.id}
+                            className={`fleet-section-title mx-auto flex w-[min(1100px,90%)] flex-col items-center gap-3${i > 0 ? " mt-10" : ""}`}
+                        >
+                            <div className="flex w-full items-center gap-4">
+                                <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+                                <h2 className="m-0! font-heading text-[clamp(20px,3vw,32px)] font-extrabold">
+                                    <span
+                                        className={`subteam-badge__dot subteam-badge__dot--${subteam.dot} mr-3 inline-block h-3 w-3 rounded-full align-middle`}
+                                    ></span>
+                                    {subteam.title}
+                                </h2>
+                                <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+                            </div>
+                        </div>
+                        <Card className={`subteam-card subteam-card--${subteam.dot} my-2! border-l-4! p-8!`}>
+                            <Description text={subteam.description} githubLink={subteam.githubLink} />
+                            {subteam.techStack.length > 0 && (
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                    {subteam.techStack.map((tech) => (
+                                        <span
+                                            key={tech}
+                                            className="rounded-full border border-black/8 bg-black/5 px-3 py-1 font-mono text-[0.75rem] font-medium text-fontcolor/80 dark:border-white/10 dark:bg-white/10 dark:text-fontcolor/80"
+                                        >
+                                            {tech}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                            {subteam.images.length > 0 && (
+                                <Gallery
+                                    images={subteam.images}
+                                    ariaLabel={`${subteam.title} gallery`}
+                                    onImageClick={(img) => setModalImage(img)}
+                                />
+                            )}
+                        </Card>
+                    </div>
                 ))}
             </div>
 

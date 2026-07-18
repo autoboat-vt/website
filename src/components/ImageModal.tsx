@@ -6,14 +6,6 @@ interface ImageModalProps {
     onClose: () => void;
 }
 
-/**
- * Lightbox modal for image previews. Mirrors the original `.image-modal`
- * behavior: click an image to open, click backdrop / close button / Escape to close.
- *
- * The `is-open` class is toggled (rather than always applied) so the opacity
- * transition actually plays on close. A short delay before unmount lets the
- * fade-out finish.
- */
 export default function ImageModal({ src, alt, onClose }: ImageModalProps) {
     const closeBtnRef = useRef<HTMLButtonElement>(null);
     const lastActiveRef = useRef<HTMLElement | null>(null);

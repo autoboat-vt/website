@@ -9,14 +9,12 @@ interface GalleryProps {
     ariaLabel?: string;
 }
 
-/**
- * Container for gallery grids. Clicking an image opens the lightbox modal
- * when `onImageClick` is provided. Clickable images are rendered as buttons
- * for keyboard accessibility.
- */
 export default function Gallery({ images, onImageClick, ariaLabel = "Gallery" }: GalleryProps) {
     return (
-        <section className="gallery mt-6 grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3" aria-label={ariaLabel}>
+        <section
+            className="gallery mt-6 grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3"
+            aria-label={ariaLabel}
+        >
             {images.map((img) => {
                 const clickable = !!onImageClick;
                 return clickable ? (
