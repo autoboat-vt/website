@@ -284,8 +284,8 @@ function VesselImageModal({ vessel, onClose }: { vessel: Vessel; onClose: () => 
 function FleetCard({ vessel, onImageClick }: { vessel: Vessel; onImageClick: () => void }) {
     const imageCol = (
         <div className="relative max-[900px]:order-1">
+            {/* biome-ignore lint/a11y/useSemanticElements: VesselImage contains hotspot <button> elements; a <button> cannot nest another <button>. */}
             <div
-                // biome-ignore lint/a11y/useSemanticElements: VesselImage contains hotspot <button> elements; a <button> cannot nest another <button>.
                 role="button"
                 tabIndex={0}
                 onClick={onImageClick}

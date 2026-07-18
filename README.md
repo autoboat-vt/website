@@ -1,143 +1,66 @@
-# Website for Virginia Tech's AutoBoat team
+# AutoBoat @ Virginia Tech — Website
 
-This website is built with **React** + **TypeScript** and **Vite**, using `react-router-dom` for client-side routing. All original HTML/CSS/JS has been ported into reusable, type-safe React components.
+React + TypeScript + Vite site for Virginia Tech's AutoBoat team, styled with Tailwind CSS v4 and routed with `react-router-dom`.
 
-## File Layout
+## Structure
 
--   `index.html`: Vite entry HTML (mounts the React app)
--   `src/`: React application source
-    -   `main.tsx`: App entry point (renders `<App />` into `#root`)
-    -   `App.tsx`: Route definitions and layout (Header / main / Footer)
-    -   `app.css`: Tailwind CSS entry point (theme tokens, base styles, and component-layer CSS for complex selectors like hero animations, hotspots, and the mobile nav dropdown)
-    -   `vite-env.d.ts`: Vite client type declarations
-    -   `components/`: Shared UI components (`Header`, `Footer`, `Card`, `Gallery`, `ImageModal`)
-    -   `pages/`: One component per route (`Home`, `OurTeam`, `Fleet`, `HowToJoin`, `Sponsors`, `Gallery`)
--   `public/`: Static assets served as-is
-    -   `images/`: All site images (gallery, team, favicon, etc.)
--   `vite.config.ts`: Vite configuration
--   `biome.json`: Biome configuration (linting + formatting)
--   `jest.config.js`: Jest configuration (unit testing)
--   `package.json`: Dependencies and scripts
+- `src/main.tsx` — app entry (renders `<App />` into `#root`)
+- `src/App.tsx` — routes and layout (Header / main / Footer)
+- `src/app.css` — Tailwind entry, theme tokens, component-layer CSS
+- `src/components/` — shared UI (`Header`, `Footer`, `Card`, `Gallery`, `ImageModal`)
+- `src/pages/` — one component per route (`Home`, `OurTeam`, `Fleet`, `HowToJoin`, `Sponsors`, `Gallery`)
+- `public/images/` — site images
+- `scripts/deploy.sh` — manual deploy to VT GitLab (see below)
 
 ## Routes
 
-| Path          | Page         |
-| ------------- | ------------ |
-| `/`           | About (Home) |
-| `/ourteam`    | Meet the Team |
-| `/fleet`      | Our Fleet    |
-| `/how-to-join`| How To Join  |
-| `/sponsors`   | Sponsors     |
-| `/gallery`    | Gallery      |
+| Path           | Page          |
+| -------------- | ------------- |
+| `/`            | About (Home)  |
+| `/ourteam`     | Meet the Team |
+| `/fleet`       | Our Fleet     |
+| `/how-to-join` | How To Join   |
+| `/sponsors`    | Sponsors      |
+| `/gallery`     | Gallery       |
 
-## Running for Development
+## Commands
 
-Requires Node.js 18+.
-
-```bash
-bun install      # install dependencies (first time only)
-bun run dev      # start the Vite dev server at http://localhost:3000
-```
-
-The dev server supports hot module replacement (HMR) — edits to components
-appear instantly in the browser.
-
-## Linting & Formatting
-
-Biome handles linting and formatting. It is configured in `biome.json`.
+Requires Node.js 18+. Bun is the default runner; npm works too.
 
 ```bash
-bun run lint     # lint the project (read-only)
-bun run format   # format files in place
-bun run check    # lint + format check (read-only)
-bun run check:write  # lint + format, applying fixes in place
+bun install            # install deps
+bun run dev            # dev server at http://localhost:3000
+bun run build          # production build → dist/
+bun run preview        # preview the build
+bun run lint           # biome lint
+bun run test           # jest unit tests
+bun run test:watch     # jest watch mode
 ```
 
-## Testing
+## Deploying
 
-Jest runs unit tests defined in `src/test/**/*.{test,spec}.{ts,tsx}`. The
-environment is `jsdom` with `@testing-library/react` and
-`@testing-library/jest-dom` available.
+The site is hosted at [autoboat.aoe.vt.edu](https://autoboat.aoe.vt.edu/), served from the VT GitLab repo `code.vt.edu/s4-hosting-sites/aoe/sailbot`. The VT host serves static files with **no build step**, so deploys push the *built* `dist/` contents (not source).
+
+Source-of-truth `main` lives on GitHub (`autoboat-vt/website`). Each deploy fast-forwards a commit containing only built files onto VT GitLab's `main` — no force-push.
+
+One-time setup (contact the Software Officer for access):
 
 ```bash
-bun run test          # run tests once
-bun run test:watch    # watch mode
+git remote add aoe_sites ssh://git@code.vt.edu/s4-hosting-sites/aoe/sailbot
 ```
 
-## Building for Production
+Deploy from a local checkout:
 
 ```bash
-bun run build    # outputs static files to dist/
-bun run preview  # preview the production build locally
+./scripts/deploy.sh              # build + deploy
+./scripts/deploy.sh --skip-build # deploy an existing dist/
 ```
 
-The `dist/` folder contains the deployable static site.
+The script builds, fetches `aoe_sites/main`, replaces the worktree contents with `dist/`, commits, and fast-forward pushes.
 
-## Deploying the Website
+> **SPA routing:** `scripts/spa-fallback.mjs` (chained to `build`) copies `index.html` to each route path so client-side routing works on direct visits. `public/_redirects` covers hosts that respect it.
 
-The website is hosted via Virginia Tech's site hosting platform at
-[autoboat.aoe.vt.edu](https://autoboat.aoe.vt.edu/). The VT host serves static
-files from the root of a GitLab repo (`code.vt.edu/s4-hosting-sites/aoe/sailbot`)
-with **no build step**, so the repo's root must contain the *built* files from
-`dist/`, not the React source.
+## CI
 
-The source-of-truth `main` branch lives on **GitHub**
-(`github.com/autoboat-vt/website`). The `main` branch on the **VT GitLab** is
-the deploy target: each deploy adds a commit on top of `main` whose tree
-contains only built files (source is removed from the index, but history is
-preserved). This means every push is a **fast-forward** — no force-push
-required, and `main` can stay protected.
+`.github/workflows/build.yml` runs on push to `main` and on PRs — installs deps, builds, uploads `dist/` as an artifact. Deploys to VT GitLab are manual (see above). `.github/workflows/manual.yml` auto-converts new PNG/JPG images under `images/` to WebP on push.
 
-### One-time setup
-
-1. Add the VT remote (contact the Software Officer for access):
-
-   ```bash
-   git remote add aoe_sites ssh://git@code.vt.edu/s4-hosting-sites/aoe/sailbot
-   ```
-
-### Deploying
-
-**Manual (local script):** Deploys are run manually from a local checkout:
-
-```bash
-./scripts/deploy.sh
-```
-
-This runs `bun run build`, fetches the latest `aoe_sites/main`, creates a
-worktree based on it, replaces all contents with the built `dist/` files
-(`index.html`, `assets/`, `images/`, `_redirects`), commits, and pushes as a
-fast-forward to `aoe_sites/main` (no force-push). The source repo (`origin` on
-GitHub) is untouched.
-
-To deploy an existing `dist/` without rebuilding:
-
-```bash
-./scripts/deploy.sh --skip-build
-```
-
-> **Note:** Because this is a single-page app (SPA), the hosting platform
-> must redirect all routes to `index.html` so client-side routing works on
-> direct URL visits. A `public/_redirects` file is included for hosts that
-> respect it (e.g. Netlify-style). If Virginia Tech's host uses `.htaccess`
-> or similar, add an equivalent rewrite rule.
-
-## Continuous Integration
-
-A GitHub Actions workflow (`.github/workflows/build.yml`) runs on every push
-to `main` and on pull requests. It uses [Bun](https://bun.sh/) to install
-dependencies, type-check, and build the site, then uploads `dist/` as a build
-artifact. Deploys to the VT GitLab are run manually via `scripts/deploy.sh`
-(see **Deploying** above).
-
-While npm is the default for local development, Bun is fully compatible and
-can be used as a faster drop-in replacement:
-
-```bash
-bun install      # install dependencies
-bun run dev      # start the dev server
-bun run build    # type-check and build for production
-```
-
-A separate workflow (`.github/workflows/manual.yml`) automatically converts
-new PNG/JPG images under `images/` to WebP format in place on push.
