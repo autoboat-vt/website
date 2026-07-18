@@ -39,36 +39,33 @@ function collectPositions(boats: BoatWithPosition[]): Array<[number, number]> {
     return positions;
 }
 
-/** Computes the centroid (mean lat/lng) of a list of positions. */
-function centroidOf(positions: Array<[number, number]>): [number, number] | null {
+/**
+ * Builds a Leaflet LatLngBounds that encloses all boat positions and
+ * waypoints. Returns null if there are no positions to bound.
+ */
+function boundsOf(boats: BoatWithPosition[]): L.LatLngBounds | null {
+    const positions = collectPositions(boats);
     if (positions.length === 0) return null;
-    let latSum = 0;
-    let lngSum = 0;
-    for (const [lat, lng] of positions) {
-        latSum += lat ?? 0;
-        lngSum += lng ?? 0;
-    }
-    return [latSum / positions.length, lngSum / positions.length];
+    const bounds = L.latLngBounds(positions.map(([lat, lng]) => L.latLng(lat, lng)));
+    return bounds;
 }
 
 /**
- * Initial centering: on first data arrival, pans the map so the boats are
- * in view. The map starts at DEFAULT_CENTER ([0,0]) which is usually far
- * from the actual boats — without this one-time pan the user would see an
- * empty ocean until they click "Recenter". Fires exactly once (guarded by
- * a ref) so it never overrides the user's subsequent pan/zoom.
+ * Initial centering: on first data arrival, fits the map view to show all
+ * boats and waypoints. The map starts at DEFAULT_CENTER ([0,0]) which is
+ * usually far from the actual boats — without this one-time fit the user
+ * would see an empty ocean until they click "Recenter". Fires exactly once
+ * (guarded by a ref) so it never overrides the user's subsequent pan/zoom.
  */
 function CenterOnFirstData({ boats }: { boats: BoatWithPosition[] }) {
     const map = useMap();
     const didInitialCenter = useRef(false);
     useEffect(() => {
         if (didInitialCenter.current) return;
-        const positions = collectPositions(boats);
-        if (positions.length === 0) return;
-        const centroid = centroidOf(positions);
-        if (!centroid) return;
+        const bounds = boundsOf(boats);
+        if (!bounds) return;
         didInitialCenter.current = true;
-        map.panTo(centroid, { animate: false });
+        map.fitBounds(bounds, { animate: false, padding: [40, 40] });
     }, [boats, map]);
     return null;
 }
@@ -80,21 +77,18 @@ function CenterOnFirstData({ boats }: { boats: BoatWithPosition[] }) {
  *
  * Only fires on an explicit user action (the Recenter button) — polling
  * new data does NOT trigger a recenter, so the user's pan/zoom is preserved
- * across updates. The zoom level is also preserved: we pan to the centroid
- * of the boats/waypoints without changing zoom, so a recenter never zooms
- * the user in or out unexpectedly.
+ * across updates. Uses fitBounds (not panTo) so the view adjusts both
+ * center and zoom to bring every boat and waypoint into view — a plain
+ * panTo to the centroid would leave the boat off-center whenever waypoints
+ * pull the average away from the boat's actual position.
  */
 function RecenterOnTrigger({ boats, fitTrigger }: { boats: BoatWithPosition[]; fitTrigger: number }) {
     const map = useMap();
     useEffect(() => {
         if (fitTrigger === 0) return;
-        const positions = collectPositions(boats);
-        if (positions.length === 0) return;
-        const centroid = centroidOf(positions);
-        if (!centroid) return;
-        // Pan to the centroid, keeping the current zoom level so the user's
-        // view isn't disrupted.
-        map.panTo(centroid, { animate: true });
+        const bounds = boundsOf(boats);
+        if (!bounds) return;
+        map.fitBounds(bounds, { animate: true, padding: [40, 40] });
     }, [fitTrigger, boats, map]);
     return null;
 }
