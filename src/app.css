@@ -1115,13 +1115,9 @@
     .live-map__panels {
         display: grid;
         gap: 0.85rem;
-        grid-template-columns: 1fr;
-    }
-
-    @media (min-width: 560px) {
-        .live-map__panels {
-            grid-template-columns: 1fr 1fr;
-        }
+        /* auto-fit fills the row: 1 panel → full width, 2+ panels → share.
+           minmax keeps each panel at least 280px before wrapping. */
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     }
 
     .boat-panel {
