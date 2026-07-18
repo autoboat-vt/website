@@ -61,14 +61,16 @@ The `dist/` folder contains the deployable static site.
 
 The website is hosted via Virginia Tech's site hosting platform at
 [autoboat.aoe.vt.edu](https://autoboat.aoe.vt.edu/). The VT host serves static
-files from a GitLab repo (`code.vt.edu/s4-hosting-sites/aoe/sailbot`) with
-**no build step**, so the repo's root must contain the *built* files from
+files from the root of a GitLab repo (`code.vt.edu/s4-hosting-sites/aoe/sailbot`)
+with **no build step**, so the repo's root must contain the *built* files from
 `dist/`, not the React source.
 
-The `main` branch on the VT GitLab is protected against force-push, so we
-can't replace it directly. Instead, the deploy script pushes the contents of
-`dist/` to a dedicated `deploy` branch as an orphan commit (no source history),
-and the VT GitLab project is configured to serve the `deploy` branch.
+The source-of-truth `main` branch lives on **GitHub**
+(`github.com/autoboat-vt/website`). The `main` branch on the **VT GitLab** is
+the deploy target: each deploy adds a commit on top of `main` whose tree
+contains only built files (source is removed from the index, but history is
+preserved). This means every push is a **fast-forward** — no force-push
+required, and `main` can stay protected.
 
 ### One-time setup
 
@@ -78,22 +80,17 @@ and the VT GitLab project is configured to serve the `deploy` branch.
    git remote add aoe_sites ssh://git@code.vt.edu/s4-hosting-sites/aoe/sailbot
    ```
 
-2. In the VT GitLab project UI, set the default/served branch to `deploy`:
-   **Settings → Repository → Default branch → `deploy`**
-
-   (The `deploy` branch is created automatically by the script on first run.)
+2. If you develop on GitHub, set up a mirror so source pushes to `main` flow
+   through to the VT GitLab and trigger CI:
+   **Settings → Repository → Mirror repository** → pull from
+   `github.com/autoboat-vt/website`.
 
 ### Deploying
 
 **Automated (GitLab CI):** The `.gitlab-ci.yml` pipeline runs on every push to
-`main` on the VT GitLab project. It builds the site and deploys the built
-files to the `deploy` branch automatically. You can also trigger it manually
-from the GitLab UI (CI/CD → Pipelines → Run pipeline).
-
-If you develop on GitHub, set up a mirror so source pushes to `main` flow
-through to the VT GitLab:
-**Settings → Repository → Mirror repository** → pull from
-`github.com/autoboat-vt/website`.
+`main` on the VT GitLab project. It builds the site and pushes the built files
+as a regular commit on top of `main` (fast-forward, no force-push). You can
+also trigger it manually from the GitLab UI (CI/CD → Pipelines → Run pipeline).
 
 **Manual (local script):** For debug or one-off deploys:
 
@@ -101,9 +98,10 @@ through to the VT GitLab:
 ./scripts/deploy.sh
 ```
 
-This runs `bun run build`, creates an orphan branch containing only the
-contents of `dist/` (`index.html`, `assets/`, `images/`, `_redirects`), and
-force-pushes it to `aoe_sites/deploy`. The source repo (`origin` on GitHub)
+This runs `bun run build`, fetches the latest `aoe_sites/main`, creates a
+worktree based on it, replaces all contents with the built `dist/` files
+(`index.html`, `assets/`, `images/`, `_redirects`), commits, and pushes as a
+fast-forward to `aoe_sites/main`. The source repo (`origin` on GitHub)
 is untouched.
 
 To deploy an existing `dist/` without rebuilding:
