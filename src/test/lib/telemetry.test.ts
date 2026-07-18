@@ -4,8 +4,8 @@ import {
     fetchBoatStatusIfNew,
     fetchFleetState,
     fetchWaypoints,
-    formatKnots,
     formatLastSeen,
+    formatSpeed,
     headingToCompass,
     positionFromStatus,
     TELEMETRY_URL,
@@ -332,14 +332,14 @@ describe("telemetry client", () => {
         });
     });
 
-    describe("formatKnots", () => {
+    describe("formatSpeed", () => {
         it("returns — for missing/invalid speed", () => {
-            expect(formatKnots(undefined)).toBe("—");
-            expect(formatKnots(NaN)).toBe("—");
+            expect(formatSpeed(undefined)).toBe("—");
+            expect(formatSpeed(NaN)).toBe("—");
         });
-        it("converts m/s to knots (1 m/s ≈ 1.944 kn)", () => {
-            expect(formatKnots(1)).toBe("1.9 kn");
-            expect(formatKnots(0)).toBe("0.0 kn");
+        it("formats m/s directly", () => {
+            expect(formatSpeed(1)).toBe("1.0 m/s");
+            expect(formatSpeed(0)).toBe("0.0 m/s");
         });
     });
 

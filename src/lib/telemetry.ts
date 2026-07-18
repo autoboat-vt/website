@@ -345,10 +345,10 @@ export function headingToCompass(degrees?: number): string {
     return `${dir} (${degrees.toFixed(0)}°)`;
 }
 
-/** Format a speed in m/s as knots, or "—" if missing. */
-export function formatKnots(speedMs?: number): string {
+/** Format a speed in m/s, or "—" if missing. */
+export function formatSpeed(speedMs?: number): string {
     if (typeof speedMs !== "number" || !Number.isFinite(speedMs)) return "—";
-    return `${(speedMs * 1.94384).toFixed(1)} kn`;
+    return `${speedMs.toFixed(1)} m/s`;
 }
 
 /** Format a Unix epoch ms as a relative "x seconds ago" string. */

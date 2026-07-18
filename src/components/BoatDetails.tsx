@@ -1,6 +1,6 @@
 import { Anchor, Battery, Compass, Gauge, MapPin, Navigation, Ship, Wind } from "lucide-react";
 import type { BoatWithPosition } from "../lib/telemetry";
-import { boatModeLabel, formatKnots, formatLastSeen, headingToCompass } from "../lib/telemetry";
+import { boatModeLabel, formatLastSeen, formatSpeed, headingToCompass } from "../lib/telemetry";
 
 interface BoatDetailsProps {
     /** A single boat with a valid GPS position. */
@@ -27,7 +27,7 @@ export default function BoatDetails({ boat }: BoatDetailsProps) {
             <dl className="boat-details__stats m-0 grid grid-cols-2 gap-x-3 gap-y-2">
                 <Stat icon={<Ship size={13} />} label="Name" value={name} fullWidth />
                 {mode && <Stat icon={<Anchor size={13} />} label="Type" value={mode} fullWidth />}
-                <Stat icon={<Gauge size={13} />} label="Speed" value={formatKnots(status?.speed)} />
+                <Stat icon={<Gauge size={13} />} label="Speed" value={formatSpeed(status?.speed)} />
                 <Stat icon={<Compass size={13} />} label="Heading" value={headingToCompass(status?.heading)} />
                 {typeof status?.current_waypoint_index === "number" && (
                     <Stat
