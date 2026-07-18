@@ -145,15 +145,63 @@ const VESSELS: Vessel[] = [
 ];
 
 function Hotspot({ hotspot }: { hotspot: Hotspot }) {
+    const btnRef = useRef<HTMLButtonElement>(null);
+    const tooltipRef = useRef<HTMLSpanElement>(null);
+
+    // Shift the tooltip so it stays within the image container instead of
+    // overflowing when a pin sits near an edge. Measured on hover/focus using
+    // pre-transform layout sizes (offsetWidth/Height) so the scale(0.9) rest
+    // state doesn't skew the calculation. Sets CSS vars imperatively to avoid
+    // a one-frame flash before a React state update would land.
+    const measure = () => {
+        const btn = btnRef.current;
+        const tip = tooltipRef.current;
+        if (!btn || !tip) return;
+        const container = btn.closest(".fleet-image-container");
+        if (!container) return;
+        const cRect = container.getBoundingClientRect();
+        const bRect = btn.getBoundingClientRect();
+        // The button has transform: translate(-50%, -50%), so its rect center
+        // is the pin center.
+        const pinX = bRect.left + bRect.width / 2 - cRect.left;
+        const pinY = bRect.top + bRect.height / 2 - cRect.top;
+        const tipW = tip.offsetWidth;
+        const tipH = tip.offsetHeight;
+        const margin = 8;
+
+        let x = 0;
+        const leftEdge = pinX - tipW / 2;
+        const rightEdge = pinX + tipW / 2;
+        if (leftEdge < margin) x = margin - leftEdge;
+        else if (rightEdge > cRect.width - margin) x = cRect.width - margin - rightEdge;
+
+        let y = 0;
+        if (hotspot.topTooltip) {
+            // --top variant: tooltip extends downward from the pin.
+            const bottomEdge = pinY + 1.2 * tipH;
+            if (bottomEdge > cRect.height - margin) y = cRect.height - margin - bottomEdge;
+        } else {
+            // Default: tooltip extends upward from the pin.
+            const topEdge = pinY - 1.2 * tipH;
+            if (topEdge < margin) y = margin - topEdge;
+        }
+
+        tip.style.setProperty("--tooltip-shift-x", `${x}px`);
+        tip.style.setProperty("--tooltip-shift-y", `${y}px`);
+    };
+
     return (
         <button
+            ref={btnRef}
             type="button"
             className={`hotspot${hotspot.topTooltip ? " hotspot--top" : ""}`}
             style={{ top: hotspot.top, left: hotspot.left }}
+            onMouseEnter={measure}
+            onFocus={measure}
             aria-label={`${hotspot.title}: ${hotspot.text}`}
         >
             <span className="hotspot__pin" aria-hidden="true"></span>
-            <span className="hotspot__tooltip" role="tooltip">
+            <span ref={tooltipRef} className="hotspot__tooltip" role="tooltip">
                 <h4>{hotspot.title}</h4>
                 <p>{hotspot.text}</p>
             </span>

@@ -486,7 +486,8 @@
         position: absolute;
         bottom: 50%;
         left: 50%;
-        transform: translate(-50%, -20%) scale(0.9);
+        transform: translate(calc(-50% + var(--tooltip-shift-x, 0px)), calc(-20% + var(--tooltip-shift-y, 0px)))
+            scale(0.9);
         width: 180px;
         background: rgba(31, 30, 29, 0.95);
         color: #f0eee6;
@@ -526,19 +527,21 @@
     .hotspot:focus-visible .hotspot__tooltip {
         opacity: 1;
         pointer-events: auto;
-        transform: translate(-50%, -20%) scale(1);
+        transform: translate(calc(-50% + var(--tooltip-shift-x, 0px)), calc(-20% + var(--tooltip-shift-y, 0px)))
+            scale(1);
     }
 
     /* Variant: tooltip extends downward (for top-anchored hotspots) */
     .hotspot--top .hotspot__tooltip {
         bottom: auto;
         top: 50%;
-        transform: translate(-50%, 20%) scale(0.9);
+        transform: translate(calc(-50% + var(--tooltip-shift-x, 0px)), calc(20% + var(--tooltip-shift-y, 0px)))
+            scale(0.9);
     }
 
     .hotspot--top:hover .hotspot__tooltip,
     .hotspot--top:focus-visible .hotspot__tooltip {
-        transform: translate(-50%, 20%) scale(1);
+        transform: translate(calc(-50% + var(--tooltip-shift-x, 0px)), calc(20% + var(--tooltip-shift-y, 0px))) scale(1);
     }
 
     /* --- Image modal open/close transition --- */
