@@ -3,9 +3,8 @@ import { AlertCircle, Crosshair, Loader2, RefreshCw, Sailboat } from "lucide-rea
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import BoatDetails from "../components/BoatDetails";
 import BoatMarker from "../components/BoatMarker";
-import BoatTrends from "../components/BoatTrends";
+import BoatPanel from "../components/BoatPanel";
 import Card from "../components/Card";
 import Waypoints from "../components/Waypoints";
 import { useBoatHistory } from "../hooks/useBoatHistory";
@@ -354,8 +353,11 @@ export default function LiveMap() {
                     {boatsWithPosition.length > 0 && (
                         <Card className="live-map__details-card">
                             <h4 className="m-0 mb-4 text-lg font-bold">Boat telemetry</h4>
-                            <BoatDetails boats={boatsWithPosition} />
-                            <BoatTrends boats={boatsWithPosition} history={boatHistory} />
+                            <div className="live-map__panels">
+                                {boatsWithPosition.map((boat) => (
+                                    <BoatPanel key={boat.instance.instance_id} boat={boat} history={boatHistory} />
+                                ))}
+                            </div>
                         </Card>
                     )}
                 </div>

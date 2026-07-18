@@ -1027,38 +1027,16 @@
        Always-visible tiles so you can read telemetry without clicking a
        marker. */
     /* In the side-by-side layout (wide screens), the right column is narrower
-       so the boat cards stack in a single column instead of 2-3 across, and
-       the stats within each card stack vertically instead of cramming into
-       2 narrow columns. The !important is required because BoatDetails
-       applies lg:grid-cols-3 / grid-cols-2 utility classes (in the
-       `utilities` layer, which beats non-important `components`-layer
-       rules) — per the cascade-layers spec, !important in an earlier
-       layer (components) beats non-important in a later layer. */
+       so the stats within each panel stack vertically instead of cramming
+       into 2 narrow columns. The !important is required because BoatDetails
+       applies grid-cols-2 utility classes (in the `utilities` layer, which
+       beats non-important `components`-layer rules) — per the cascade-layers
+       spec, !important in an earlier layer (components) beats non-important
+       in a later layer. */
     @media (min-width: 1025px) {
-        .live-map__details-card .boat-details__list {
-            grid-template-columns: 1fr !important;
-        }
         .live-map__details-card .boat-details__stats {
             grid-template-columns: 1fr !important;
         }
-    }
-
-    .boat-details__card {
-        display: flex;
-        flex-direction: column;
-        gap: 0.6rem;
-        padding: 0.85rem 1rem;
-        border-radius: 0.75rem;
-        border: 1px solid rgba(0, 0, 0, 0.08);
-        background: rgba(255, 255, 255, 0.55);
-        transition:
-            border-color 200ms ease,
-            background 200ms ease;
-    }
-
-    .dark .boat-details__card {
-        border-color: rgba(255, 255, 255, 0.1);
-        background: rgba(255, 255, 255, 0.04);
     }
 
     .boat-details__stat {
@@ -1130,85 +1108,117 @@
         opacity: 0.8;
     }
 
-    /* ---- Per-boat trends tabs + plots (BoatTrends / TrendPlot) ---- */
-    /* Sits below the stat cards in the details panel. One tab per boat;
-       each tab shows speed + distance-to-next-WP line plots over 5 min. */
+    /* ---- Per-boat panel: one card per boat with Current/History tabs ---- */
+    /* Each BoatPanel is a box with a header (boat name + mode), a 2-tab
+       switcher (Current stats | History plots), and the active tab body. */
 
-    .boat-trends {
-        margin-top: 1.25rem;
-        border-top: 1px solid rgba(0, 0, 0, 0.08);
-        padding-top: 1rem;
+    .live-map__panels {
+        display: grid;
+        gap: 0.85rem;
+        grid-template-columns: 1fr;
     }
 
-    .dark .boat-trends {
-        border-top-color: rgba(255, 255, 255, 0.1);
+    @media (min-width: 560px) {
+        .live-map__panels {
+            grid-template-columns: 1fr 1fr;
+        }
     }
 
-    .boat-trends__title {
-        margin: 0 0 0.6rem;
+    .boat-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        padding: 0.85rem 1rem;
+        border-radius: 0.75rem;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        background: rgba(255, 255, 255, 0.55);
+        transition:
+            border-color 200ms ease,
+            background 200ms ease;
+    }
+
+    .dark .boat-panel {
+        border-color: rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.04);
+    }
+
+    .boat-panel__header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .boat-panel__title {
+        margin: 0;
         font-family: var(--font-heading);
-        font-size: 0.7rem;
+        font-size: 0.95rem;
+        font-weight: 800;
+        color: var(--color-fontcolor);
+    }
+
+    .boat-panel__mode {
+        font-size: 0.62rem;
         font-weight: 700;
-        letter-spacing: 0.06em;
+        letter-spacing: 0.04em;
         text-transform: uppercase;
         color: var(--color-fontcolor);
-        opacity: 0.55;
+        opacity: 0.6;
     }
 
-    .boat-trends__tabs {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.35rem;
-        margin-bottom: 0.75rem;
-    }
-
-    .boat-trends__tab {
+    .boat-panel__tabs {
         display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        padding: 0.3rem 0.65rem;
-        border-radius: 999px;
-        border: 1px solid rgba(0, 0, 0, 0.1);
-        background: rgba(255, 255, 255, 0.5);
+        gap: 0.2rem;
+        padding: 0.2rem;
+        border-radius: 0.5rem;
+        background: rgba(0, 0, 0, 0.05);
+        align-self: flex-start;
+    }
+
+    .dark .boat-panel__tabs {
+        background: rgba(255, 255, 255, 0.06);
+    }
+
+    .boat-panel__tab {
+        padding: 0.25rem 0.75rem;
+        border-radius: 0.35rem;
+        border: none;
+        background: transparent;
         font-size: 0.72rem;
         font-weight: 600;
         color: var(--color-fontcolor);
+        opacity: 0.6;
         cursor: pointer;
         transition:
             background-color 150ms ease,
-            border-color 150ms ease;
+            opacity 150ms ease;
     }
 
-    .boat-trends__tab:hover {
-        background: rgba(255, 255, 255, 0.8);
+    .boat-panel__tab:hover {
+        opacity: 0.9;
     }
 
-    .boat-trends__tab.is-active {
-        border-color: var(--color-accent);
+    .boat-panel__tab.is-active {
         background: var(--color-accent);
         color: #fff;
+        opacity: 1;
     }
 
-    .dark .boat-trends__tab {
-        border-color: rgba(255, 255, 255, 0.12);
-        background: rgba(255, 255, 255, 0.05);
-    }
-
-    .dark .boat-trends__tab:hover {
-        background: rgba(255, 255, 255, 0.1);
-    }
-
-    .dark .boat-trends__tab.is-active {
-        border-color: var(--color-accent-2);
+    .dark .boat-panel__tab.is-active {
         background: var(--color-accent-2);
         color: #1f1e1d;
     }
 
-    .boat-trends__tab-mode {
-        font-size: 0.62rem;
-        opacity: 0.7;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
+    .boat-panel__body {
+        min-height: 0;
+    }
+
+    /* ---- Trends plots (inside the History tab) ---- */
+
+    .boat-trends {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
     }
 
     .boat-trends__plots {
@@ -1223,9 +1233,12 @@
         }
     }
 
-    .boat-trends__hint {
-        margin: 0.6rem 0 0;
+    /* Specificity bump: .card p (0,1,1) in components layer beats a single
+       class (0,1,0), so qualify with the parent to win within the same layer. */
+    .boat-trends .boat-trends__hint {
+        margin: 0;
         font-size: 0.62rem;
+        line-height: 1.4;
         color: var(--color-fontcolor);
         opacity: 0.5;
     }
