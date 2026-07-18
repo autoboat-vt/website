@@ -59,27 +59,60 @@ The `dist/` folder contains the deployable static site.
 
 ## Deploying the Website
 
-The website is hosted via Virginia Tech's site hosting platform. Build the
-site first, then deploy the contents of `dist/`.
+The website is hosted via Virginia Tech's site hosting platform at
+[autoboat.aoe.vt.edu](https://autoboat.aoe.vt.edu/). The VT host serves static
+files from a GitLab repo (`code.vt.edu/s4-hosting-sites/aoe/sailbot`) with
+**no build step**, so the repo's root must contain the *built* files from
+`dist/`, not the React source.
+
+The `main` branch on the VT GitLab is protected against force-push, so we
+can't replace it directly. Instead, the deploy script pushes the contents of
+`dist/` to a dedicated `deploy` branch as an orphan commit (no source history),
+and the VT GitLab project is configured to serve the `deploy` branch.
+
+### One-time setup
+
+1. Add the VT remote (contact the Software Officer for access):
+
+   ```bash
+   git remote add aoe_sites ssh://git@code.vt.edu/s4-hosting-sites/aoe/sailbot
+   ```
+
+2. In the VT GitLab project UI, set the default/served branch to `deploy`:
+   **Settings → Repository → Default branch → `deploy`**
+
+   (The `deploy` branch is created automatically by the script on first run.)
+
+### Deploying
+
+**Automated (GitLab CI):** The `.gitlab-ci.yml` pipeline runs on every push to
+`main` on the VT GitLab project. It builds the site and deploys the built
+files to the `deploy` branch automatically. You can also trigger it manually
+from the GitLab UI (CI/CD → Pipelines → Run pipeline).
+
+If you develop on GitHub, set up a mirror so source pushes to `main` flow
+through to the VT GitLab:
+**Settings → Repository → Mirror repository** → pull from
+`github.com/autoboat-vt/website`.
+
+**Manual (local script):** For debug or one-off deploys:
 
 ```bash
-npm run build
+./scripts/deploy.sh
 ```
 
-To set up the remote (run once — contact the Software Officer for access):
+This runs `bun run build`, creates an orphan branch containing only the
+contents of `dist/` (`index.html`, `assets/`, `images/`, `_redirects`), and
+force-pushes it to `aoe_sites/deploy`. The source repo (`origin` on GitHub)
+is untouched.
+
+To deploy an existing `dist/` without rebuilding:
 
 ```bash
-git remote add aoe_sites https://code.vt.edu/s4-hosting-sites/aoe/sailbot
+./scripts/deploy.sh --skip-build
 ```
 
-To deploy:
-
-```bash
-git push origin main
-git push aoe_sites main
-```
-
-> **Note:** Because this is now a single-page app (SPA), the hosting platform
+> **Note:** Because this is a single-page app (SPA), the hosting platform
 > must redirect all routes to `index.html` so client-side routing works on
 > direct URL visits. A `public/_redirects` file is included for hosts that
 > respect it (e.g. Netlify-style). If Virginia Tech's host uses `.htaccess`

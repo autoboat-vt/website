@@ -1,0 +1,87 @@
+# GitLab CI: build the site and deploy the built files to the `deploy` branch.
+#
+# The VT host (autoboat.aoe.vt.edu) serves the `deploy` branch of this repo
+# (code.vt.edu/s4-hosting-sites/aoe/sailbot) as static content — it does NOT
+# run a build step. So this pipeline builds the React app and pushes the
+# contents of dist/ as an orphan commit to the `deploy` branch.
+#
+# Prerequisites:
+#   1. Source must be pushed to the `main` branch on this VT GitLab project.
+#      (If you develop on GitHub, set up a mirror: Settings → Repository →
+#      Mirror repository, pulling from github.com/autoboat-vt/website.)
+#   2. The `deploy` branch must not be protected (only `main` is).
+#   3. The VT GitLab project must be configured to serve the `deploy` branch:
+#      Settings → Repository → Default branch → deploy
+#
+# This replaces the local `./scripts/deploy.sh` for routine automated deploys.
+# The script is still useful for manual or debug deploys.
+
+stages:
+  - build
+  - deploy
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "web" # manual trigger from GitLab UI
+
+variables:
+  GIT_DEPTH: 1 # shallow clone — orphan deploy doesn't need source history
+
+# ---------------------------------------------------------------------------
+# Build: install deps, typecheck, build the static site
+# ---------------------------------------------------------------------------
+build:
+  stage: build
+  image: oven/bun:latest
+  interruptible: true
+  cache:
+    key:
+      files:
+        - bun.lock
+    paths:
+      - node_modules/
+  script:
+    - bun --version
+    - bun install --frozen-lockfile
+    - bun run typecheck
+    - bun run build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 day
+
+# ---------------------------------------------------------------------------
+# Deploy: push dist/ contents as an orphan commit to the `deploy` branch
+# ---------------------------------------------------------------------------
+deploy:
+  stage: deploy
+  image: alpine:latest
+  needs:
+    - build
+  before_script:
+    - apk add --no-cache git
+    - git config --global user.email "gitlab-ci@autoboat.vt.edu"
+    - git config --global user.name "GitLab CI"
+    - git remote set-url origin "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+  script:
+    # Build an orphan commit containing only the contents of dist/ and push
+    # it to the `deploy` branch. We work in a separate directory to keep the
+    # source tree (already cloned by GitLab) untouched.
+    - export WORKDIR="$(mktemp -d)"
+    - git worktree add --detach "$WORKDIR"
+    - cd "$WORKDIR"
+    - git checkout --orphan deploy-orphan
+    - git rm -rf . 2>/dev/null || true
+    - cp -r "${CI_PROJECT_DIR}/dist/." .
+    - git add -A
+    - |
+      git commit -m "Deploy: built from ${CI_COMMIT_SHORT_SHA}" \
+        -m "Source commit: ${CI_COMMIT_SHA}" \
+        -m "Pipeline: ${CI_PIPELINE_URL}"
+    - git push --force origin deploy-orphan:deploy
+    - cd "${CI_PROJECT_DIR}"
+    - git worktree remove --force "$WORKDIR"
+  environment:
+    name: production
+    url: https://autoboat.aoe.vt.edu/
