@@ -1,9 +1,7 @@
-name: Build
+name: Build and Deploy
 
 on:
   push:
-    branches: [main]
-  pull_request:
     branches: [main]
   workflow_dispatch:
 
@@ -15,13 +13,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so the deploy worktree can fast-forward
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -47,3 +47,36 @@ jobs:
           path: dist
           retention-days: 14
           if-no-files-found: error
+
+      # Only deploy when the secret is configured. Pull requests from forks
+      # won't have it, and the deploy only makes sense for main anyway.
+      - name: Configure SSH for VT GitLab
+        if: github.ref == 'refs/heads/main' && vars.AOE_DEPLOY_ENABLED == 'true'
+        env:
+          AOE_SITES_SSH_KEY: ${{ secrets.AOE_SITES_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$AOE_SITES_SSH_KEY" > ~/.ssh/aoe_sites_key
+          chmod 600 ~/.ssh/aoe_sites_key
+          ssh-keyscan -H code.vt.edu >> ~/.ssh/known_hosts
+          # Use a scoped SSH host alias so the aoe_sites remote can use a normal
+          # ssh:// URL while still picking up the dedicated key.
+          {
+            echo "Host code.vt.edu"
+            echo "  HostName code.vt.edu"
+            echo "  User git"
+            echo "  IdentityFile ~/.ssh/aoe_sites_key"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking accept-new"
+          } >> ~/.ssh/config
+
+      - name: Deploy to VT GitLab (autoboat.aoe.vt.edu)
+        if: github.ref == 'refs/heads/main' && vars.AOE_DEPLOY_ENABLED == 'true'
+        env:
+          AOE_REMOTE: aoe_sites
+          AOE_BRANCH: main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add aoe_sites ssh://git@code.vt.edu/s4-hosting-sites/aoe/sailbot
+          ./scripts/deploy.sh --skip-build

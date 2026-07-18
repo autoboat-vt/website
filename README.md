@@ -14,7 +14,6 @@ This website is built with **React** + **TypeScript** and **Vite**, using `react
     -   `pages/`: One component per route (`Home`, `OurTeam`, `Fleet`, `HowToJoin`, `Sponsors`, `Gallery`)
 -   `public/`: Static assets served as-is
     -   `images/`: All site images (gallery, team, favicon, etc.)
--   `archive/original-site/`: The original raw HTML/CSS site, kept for reference
 -   `tsconfig.json` / `tsconfig.node.json`: TypeScript configuration
 -   `vite.config.ts`: Vite configuration
 -   `package.json`: Dependencies and scripts
@@ -80,17 +79,24 @@ required, and `main` can stay protected.
    git remote add aoe_sites ssh://git@code.vt.edu/s4-hosting-sites/aoe/sailbot
    ```
 
-2. If you develop on GitHub, set up a mirror so source pushes to `main` flow
-   through to the VT GitLab and trigger CI:
-   **Settings → Repository → Mirror repository** → pull from
-   `github.com/autoboat-vt/website`.
+2. For automated deploys from GitHub Actions, add the following repository
+   secrets/variables (GitHub repo **Settings → Secrets and variables → Actions**):
+
+   - **Secret `AOE_SITES_SSH_KEY`** — private SSH key authorized to push to
+     `code.vt.edu/s4-hosting-sites/aoe/sailbot`. Generate one with
+     `ssh-keygen -t ed25519 -f aoe_sites_deploy` and add the public key to a
+     VT GitLab deploy key for the `sailbot` project.
+   - **Variable `AOE_DEPLOY_ENABLED`** — set to `true` to enable the deploy
+     step. Without this, the workflow only builds and uploads the artifact.
+     (Lets forks and PRs run the build without attempting to deploy.)
 
 ### Deploying
 
-**Automated (GitLab CI):** The `.gitlab-ci.yml` pipeline runs on every push to
-`main` on the VT GitLab project. It builds the site and pushes the built files
-as a regular commit on top of `main` (fast-forward, no force-push). You can
-also trigger it manually from the GitLab UI (CI/CD → Pipelines → Run pipeline).
+**Automated (GitHub Actions):** The `.github/workflows/build.yml` workflow
+runs on every push to `main`. It builds the site and, when
+`AOE_DEPLOY_ENABLED=true`, runs `scripts/deploy.sh --skip-build` to push the
+built files as a fast-forward commit on top of `aoe_sites/main` (no force-push).
+You can also trigger it manually from the GitHub Actions UI (**Run workflow**).
 
 **Manual (local script):** For debug or one-off deploys:
 
@@ -119,9 +125,11 @@ To deploy an existing `dist/` without rebuilding:
 ## Continuous Integration
 
 A GitHub Actions workflow (`.github/workflows/build.yml`) runs on every push
-to `main` and on pull requests. It uses [Bun](https://bun.sh/) to install
-dependencies, type-check, and build the site, then uploads `dist/` as a build
-artifact.
+to `main`. It uses [Bun](https://bun.sh/) to install dependencies, type-check,
+and build the site, then uploads `dist/` as a build artifact. When the
+`AOE_SITES_SSH_KEY` secret and `AOE_DEPLOY_ENABLED=true` variable are
+configured, it also deploys the build to the VT GitLab (see **Deploying**
+above).
 
 While npm is the default for local development, Bun is fully compatible and
 can be used as a faster drop-in replacement:

@@ -164,14 +164,12 @@
         left: 0;
         right: 0;
         z-index: 1000;
-        background: rgba(240, 238, 230, 0.8);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
+        background: rgb(240, 238, 230);
         border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     }
 
     .dark header {
-        background: rgba(31, 30, 29, 0.8);
+        background: rgb(31, 30, 29);
         border-bottom-color: rgba(255, 255, 255, 0.1);
     }
 
