@@ -40,7 +40,7 @@ export default function Footer() {
                 aria-hidden="true"
                 className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent_0%,var(--color-accent)_30%,var(--color-accent-2)_70%,transparent_100%)]"
             />
-            <div className="mx-auto max-w-275 px-4 py-6 min-[900px]:max-w-[1200px] min-[900px]:py-4">
+            <div className="mx-auto max-w-275 px-4 py-6 min-[900px]:max-w-300 min-[900px]:py-4">
                 <div className="flex flex-col items-center gap-4 min-[900px]:flex-row min-[900px]:items-center min-[900px]:justify-between min-[900px]:gap-6">
                     {/* Brand + tagline */}
                     <div className="flex flex-col items-center gap-2 text-center min-[900px]:items-start min-[900px]:text-left">
