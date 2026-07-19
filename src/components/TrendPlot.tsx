@@ -147,12 +147,7 @@ export default function TrendPlot({
                         <text x={PAD.left - 6} y={PAD.top + 4} className="trend-plot__axis" textAnchor="end">
                             {fmt(yMax)}
                         </text>
-                        <text
-                            x={PAD.left - 6}
-                            y={PAD.top + PLOT_H + 4}
-                            className="trend-plot__axis"
-                            textAnchor="end"
-                        >
+                        <text x={PAD.left - 6} y={PAD.top + PLOT_H + 4} className="trend-plot__axis" textAnchor="end">
                             {fmt(yMin)}
                         </text>
                     </>
@@ -175,11 +170,7 @@ export default function TrendPlot({
                         {points.length > 0 && lastVal !== null && (
                             <circle
                                 cx={PAD.left + PLOT_W}
-                                cy={
-                                    PAD.top +
-                                    PLOT_H -
-                                    ((lastVal - yMin) / (yMax - yMin)) * PLOT_H
-                                }
+                                cy={PAD.top + PLOT_H - ((lastVal - yMin) / (yMax - yMin)) * PLOT_H}
                                 r={3}
                                 fill={color}
                             />

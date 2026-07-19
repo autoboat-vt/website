@@ -32,7 +32,7 @@ set -euo pipefail
 
 REMOTE="${AOE_REMOTE:-aoe_sites}"
 REMOTE_BRANCH="${AOE_BRANCH:-main}"
-WORKTREE_DIR="$(mktemp -d -t autoboat-deploy)"
+WORKTREE_DIR="$(mktemp -d -t autoboat-deploy.XXXXXX)"
 
 cleanup() {
     local exit_code=$?
@@ -74,8 +74,8 @@ fi
 
 # --- Step 2: Build ----------------------------------------------------------
 if [[ "${1:-}" != "--skip-build" ]]; then
-    echo "==> Building site (bun run build)"
-    bun run build
+    echo "==> Building site (npm run build)"
+    npm run build
 fi
 
 if [[ ! -d dist ]]; then
