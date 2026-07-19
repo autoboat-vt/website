@@ -372,16 +372,18 @@ export default function LiveMap() {
 
             {/* Map + telemetry side-by-side on wide screens (map left,
                 telemetry right); stacked on narrow viewports. Wrapped together
-                so the grid owns both children — the map stays mounted across
-                transient poll errors (see comment below). */}
-            {(!error || boats.length > 0) && (
+                so the grid owns both children.
+
+                The map is only rendered when there's a selected boat to draw —
+                hiding it entirely (rather than showing an empty ocean at 0,0)
+                when no boats are registered, none are reporting, or the initial
+                load failed. The map stays mounted across transient poll errors
+                as long as we still have a previously-fetched boat to display
+                (stale-but-visible), so a single failed fetch doesn't tear down
+                and rebuild the whole map (re-fetching tiles, losing pan/zoom
+                state). */}
+            {selectedBoat && (
                 <div className="live-map__layout">
-                    {/* Keep the map mounted across transient poll errors so a single
-                        failed fetch doesn't tear down and rebuild the whole map
-                        (re-fetching tiles, losing pan/zoom state). The map is shown
-                        whenever there's no error OR we already have boat data to
-                        display (stale-but-visible). Only the initial-load failure
-                        (error + no boats) hides the map in favor of the error card. */}
                     <Card className="live-map__card">
                         {error && boats.length > 0 && (
                             <div
@@ -450,7 +452,7 @@ export default function LiveMap() {
                 </div>
             )}
 
-            {!error && boats.length === 0 && !loading && (
+            {!selectedBoat && !error && boats.length === 0 && !loading && (
                 <Card>
                     <div className="flex flex-col items-center gap-3 py-8 text-center">
                         <Sailboat size={48} className="text-fontcolor/30" />

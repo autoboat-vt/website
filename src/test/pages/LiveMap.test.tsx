@@ -128,6 +128,8 @@ describe("LiveMap page", () => {
         global.fetch = jest.fn(() => new Promise<MockResponse>(() => {})) as unknown as typeof fetch;
         renderLiveMap();
         expect(screen.getByText(/Connecting/i)).toBeInTheDocument();
+        // No boat to draw yet → map is hidden, not showing an empty ocean.
+        expect(screen.queryByTestId("map-container")).not.toBeInTheDocument();
     });
 
     it("renders a single boat marker after a successful poll (auto-pick)", async () => {
@@ -308,6 +310,8 @@ describe("LiveMap page", () => {
 
         expect(screen.getByText(/No boats registered/i)).toBeInTheDocument();
         expect(screen.queryByTestId("boat-marker")).not.toBeInTheDocument();
+        // No boats → map is hidden entirely.
+        expect(screen.queryByTestId("map-container")).not.toBeInTheDocument();
     });
 
     it("lists boats that are registered but have no GPS fix", async () => {
@@ -332,6 +336,8 @@ describe("LiveMap page", () => {
         }
         // No marker for the GPS-less boat.
         expect(screen.queryByTestId("boat-marker")).not.toBeInTheDocument();
+        // No boat with a position to draw → map is hidden.
+        expect(screen.queryByTestId("map-container")).not.toBeInTheDocument();
     });
 
     it("re-polls on the configured interval", async () => {
