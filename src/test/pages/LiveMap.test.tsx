@@ -1,5 +1,5 @@
 import { afterEach, beforeEach } from "@jest/globals";
-import { act, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 /**
@@ -130,7 +130,7 @@ describe("LiveMap page", () => {
         expect(screen.getByText(/Connecting/i)).toBeInTheDocument();
     });
 
-    it("renders boat markers after a successful poll", async () => {
+    it("renders a single boat marker after a successful poll (auto-pick)", async () => {
         // fetchFleetState does: GET instances, then per instance GET /boat_status/get/<id>
         // and GET /waypoints/get/<id> (fired in parallel via Promise.allSettled).
         // So the first 5 fetches are: instances, status 1, waypoints 1, status 2, waypoints 2.
@@ -147,15 +147,48 @@ describe("LiveMap page", () => {
             await flushMicrotasks();
         });
 
+        // Only ONE marker is rendered at a time. Both boats report in the same
+        // poll (equal lastUpdated), so the auto-pick tiebreaker picks the
+        // lowest instance_id — theseus (id 1).
         const markers = screen.getAllByTestId("boat-marker");
-        expect(markers).toHaveLength(2);
+        expect(markers).toHaveLength(1);
         expect(markers[0]).toHaveAttribute("data-boat-id", "1");
-        expect(markers[1]).toHaveAttribute("data-boat-id", "2");
-        // Status line reports how many boats are reporting.
+        // Status line still reports the total fleet count.
         expect(screen.getByText(/2 of 2 boats reporting/i)).toBeInTheDocument();
+        // The boat selector lists both boats.
+        const select = screen.getByRole("combobox", { name: /Boat to display/i });
+        expect(select).toBeInTheDocument();
+        const options = within(select as HTMLElement).getAllByRole("option");
+        expect(options).toHaveLength(3); // "Auto" + theseus + persephone
     });
 
-    it("renders a telemetry card below the map for each reporting boat", async () => {
+    it("switches the displayed boat when the selector changes", async () => {
+        mockFetchSequence([
+            { body: instances },
+            { body: statusTheseus },
+            { body: [] },
+            { body: statusPersephone },
+            { body: [] },
+        ]);
+        renderLiveMap();
+
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        // Initially: theseus (auto-picked, lowest id on the tie).
+        expect(screen.getByTestId("boat-marker")).toHaveAttribute("data-boat-id", "1");
+
+        // Switch to persephone via the dropdown.
+        const select = screen.getByRole("combobox", { name: /Boat to display/i });
+        await act(async () => {
+            fireEvent.change(select, { target: { value: "2" } });
+        });
+
+        expect(screen.getByTestId("boat-marker")).toHaveAttribute("data-boat-id", "2");
+    });
+
+    it("renders the selected boat's telemetry card below the map", async () => {
         mockFetchSequence([
             { body: instances },
             { body: statusTheseus },
@@ -176,9 +209,10 @@ describe("LiveMap page", () => {
 
         if (detailsSection) {
             const withinDetails = within(detailsSection as HTMLElement);
-            // Both boat names appear in the details section.
+            // Only the auto-picked boat (theseus, lowest id on the tie)
+            // appears in the telemetry panel — not persephone.
             expect(withinDetails.getByText("theseus")).toBeInTheDocument();
-            expect(withinDetails.getByText("persephone")).toBeInTheDocument();
+            expect(withinDetails.queryByText("persephone")).not.toBeInTheDocument();
             // Speed (from statusTheseus.speed = 2.5 m/s) appears.
             expect(withinDetails.getByText(/2\.500 m\/s/)).toBeInTheDocument();
         }

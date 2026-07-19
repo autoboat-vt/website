@@ -1009,6 +1009,14 @@
         gap: 0.4rem;
     }
 
+    /* Boat selector dropdown: styled to match the toolbar buttons.
+       Inherits the card's text color; the select arrow is left to the UA
+       so it stays legible in both light and dark modes. */
+    .live-map__select {
+        cursor: pointer;
+        appearance: auto;
+    }
+
     .live-map__dot {
         display: inline-block;
         width: 8px;

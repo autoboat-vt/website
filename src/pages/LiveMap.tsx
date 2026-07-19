@@ -52,49 +52,58 @@ function boundsOf(boats: BoatWithPosition[]): L.LatLngBounds | null {
 }
 
 /**
- * Initial centering: on first data arrival, fits the map view to show all
- * boats and waypoints. The map starts at DEFAULT_CENTER ([0,0]) which is
- * usually far from the actual boats — without this one-time fit the user
- * would see an empty ocean until they click "Recenter". Fires exactly once
- * (guarded by a ref) so it never overrides the user's subsequent pan/zoom.
+ * Initial centering: on first data arrival, fits the map view to show the
+ * selected boat and its waypoints. The map starts at DEFAULT_CENTER ([0,0])
+ * which is usually far from the actual boats — without this one-time fit the
+ * user would see an empty ocean until they click "Recenter". Fires exactly
+ * once (guarded by a ref) so it never overrides the user's subsequent pan/zoom.
  */
-function CenterOnFirstData({ boats }: { boats: BoatWithPosition[] }) {
+function CenterOnFirstData({ selectedBoat }: { selectedBoat: BoatWithPosition | null }) {
     const map = useMap();
     const didInitialCenter = useRef(false);
     useEffect(() => {
         if (didInitialCenter.current) return;
-        const bounds = boundsOf(boats);
+        if (!selectedBoat) return;
+        const bounds = boundsOf([selectedBoat]);
         if (!bounds) return;
         didInitialCenter.current = true;
         map.fitBounds(bounds, { animate: false, padding: [40, 40] });
-    }, [boats, map]);
+    }, [selectedBoat, map]);
     return null;
 }
 
 /**
  * Recenter helper: a child of <MapContainer> that imperatively re-centers
- * the map on the boats when `fitTrigger` changes. Lives inside the
+ * the map on the selected boat when `fitTrigger` changes. Lives inside the
  * MapContainer so it can grab the map instance via useMap().
  *
  * Only fires on an explicit user action (the Recenter button) — polling
  * new data does NOT trigger a recenter, so the user's pan/zoom is preserved
  * across updates. Uses fitBounds (not panTo) so the view adjusts both
- * center and zoom to bring every boat and waypoint into view — a plain
+ * center and zoom to bring the boat and its waypoints into view — a plain
  * panTo to the centroid would leave the boat off-center whenever waypoints
  * pull the average away from the boat's actual position.
  *
- * The latest `boats` is kept in a ref so the effect's dependency array is
- * just `[fitTrigger]` — without this, every 3s poll (which updates `boats`)
- * would re-run the effect and re-fit the bounds, disrupting the user's
- * zoom/pan each time new data arrives.
+ * The latest `selectedBoat` is kept in a ref so the effect's dependency
+ * array is just `[fitTrigger]` — without this, every 3s poll (which may
+ * update the selected boat's data) would re-run the effect and re-fit the
+ * bounds, disrupting the user's zoom/pan each time new data arrives.
  */
-function RecenterOnTrigger({ boats, fitTrigger }: { boats: BoatWithPosition[]; fitTrigger: number }) {
+function RecenterOnTrigger({
+    selectedBoat,
+    fitTrigger,
+}: {
+    selectedBoat: BoatWithPosition | null;
+    fitTrigger: number;
+}) {
     const map = useMap();
-    const boatsRef = useRef(boats);
-    boatsRef.current = boats;
+    const boatRef = useRef(selectedBoat);
+    boatRef.current = selectedBoat;
     useEffect(() => {
         if (fitTrigger === 0) return;
-        const bounds = boundsOf(boatsRef.current);
+        const boat = boatRef.current;
+        if (!boat) return;
+        const bounds = boundsOf([boat]);
         if (!bounds) return;
         map.fitBounds(bounds, { animate: true, padding: [40, 40] });
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -124,6 +133,14 @@ export default function LiveMap() {
     const [error, setError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<number | null>(null);
     const [fitTrigger, setFitTrigger] = useState(0);
+
+    /**
+     * The instance_id of the boat to display on the map, or null for
+     * "auto" mode (pick the most recently reporting boat). The user can
+     * switch via the dropdown in the toolbar; only one boat is drawn at a
+     * time (marker + waypoints + telemetry panel).
+     */
+    const [selectedBoatId, setSelectedBoatId] = useState<number | null>(null);
 
     // Abort controller for in-flight polls; cancelled on unmount or when a
     // newer poll starts. Keeps state clean across rapid re-renders.
@@ -179,6 +196,53 @@ export default function LiveMap() {
 
     const boatsWithPosition = useMemo(() => boats.filter((b) => b.position), [boats]);
     const boatsWithoutPosition = useMemo(() => boats.filter((b) => !b.position), [boats]);
+
+    /**
+     * The most-recently-reporting boat (highest `lastUpdated`). Ties broken
+     * by instance_id for determinism. Used as the "auto" selection when the
+     * user hasn't explicitly picked a boat, and as the fallback when the
+     * selected boat stops reporting.
+     */
+    const mostRecentBoat = useMemo(() => {
+        if (boatsWithPosition.length === 0) return null;
+        return boatsWithPosition.reduce<BoatWithPosition | null>((best, b) => {
+            if (!best) return b;
+            const bestT = best.lastUpdated ?? -1;
+            const bT = b.lastUpdated ?? -1;
+            if (bT > bestT) return b;
+            if (bT === bestT && b.instance.instance_id < best.instance.instance_id) return b;
+            return best;
+        }, null);
+    }, [boatsWithPosition]);
+
+    /**
+     * Keep `selectedBoatId` valid: if it's null (auto) or points to a boat
+     * that no longer has a position, fall back to the most-recent boat.
+     * Runs whenever the fleet changes so the user always sees *some* boat
+     * without having to re-pick. We intentionally don't override an
+     * explicit selection that's still valid — only stale/null ones.
+     */
+    useEffect(() => {
+        const selectedStillValid =
+            selectedBoatId !== null && boatsWithPosition.some((b) => b.instance.instance_id === selectedBoatId);
+        if (selectedStillValid) return;
+        const fallback = mostRecentBoat?.instance.instance_id ?? null;
+        if (fallback !== selectedBoatId) setSelectedBoatId(fallback);
+    }, [selectedBoatId, boatsWithPosition, mostRecentBoat]);
+
+    /**
+     * The single boat to render on the map + telemetry panel. Resolved
+     * from `selectedBoatId` with a defensive fallback to `mostRecentBoat`
+     * for the brief render between a poll update and the effect above
+     * re-syncing the selection.
+     */
+    const selectedBoat = useMemo<BoatWithPosition | null>(() => {
+        if (selectedBoatId !== null) {
+            const found = boatsWithPosition.find((b) => b.instance.instance_id === selectedBoatId);
+            if (found) return found;
+        }
+        return mostRecentBoat;
+    }, [selectedBoatId, boatsWithPosition, mostRecentBoat]);
 
     // Accumulate per-boat speed/distance samples for the trend plots.
     // Session-scoped (server has no history endpoint); resets on reload.
@@ -240,6 +304,29 @@ export default function LiveMap() {
                             </>
                         )}
                     </span>
+                    {boatsWithPosition.length > 0 && (
+                        <label className="live-map__select-wrap inline-flex items-center gap-1.5 text-sm text-fontcolor/70">
+                            <span className="sr-only">Boat to display</span>
+                            <select
+                                className="live-map__select rounded-lg border border-black/10 bg-white/60 px-2 py-1.5 text-sm font-semibold text-fontcolor transition-colors hover:bg-white dark:border-white/15 dark:bg-white/5 dark:hover:bg-white/10"
+                                value={selectedBoatId ?? ""}
+                                onChange={(e) =>
+                                    setSelectedBoatId(e.target.value === "" ? null : Number(e.target.value))
+                                }
+                            >
+                                <option value="">Auto (most recent)</option>
+                                {boatsWithPosition.map((b) => {
+                                    const id = b.instance.instance_id;
+                                    const name = b.instance.instance_identifier || `Boat #${id}`;
+                                    return (
+                                        <option key={id} value={id}>
+                                            {name}
+                                        </option>
+                                    );
+                                })}
+                            </select>
+                        </label>
+                    )}
                     <button
                         type="button"
                         onClick={handleRecenter}
@@ -331,32 +418,32 @@ export default function LiveMap() {
                                     zoomOffset={-1}
                                     crossOrigin
                                 />
-                                {boatsWithPosition.map((boat) =>
-                                    boat.waypoints && boat.waypoints.length > 0 ? (
-                                        <Waypoints
-                                            key={`wp-${boat.instance.instance_id}`}
-                                            waypoints={boat.waypoints}
-                                            currentIndex={boat.status?.current_waypoint_index}
-                                        />
-                                    ) : null,
+                                {selectedBoat?.waypoints && selectedBoat.waypoints.length > 0 && (
+                                    <Waypoints
+                                        key={`wp-${selectedBoat.instance.instance_id}`}
+                                        waypoints={selectedBoat.waypoints}
+                                        currentIndex={selectedBoat.status?.current_waypoint_index}
+                                    />
                                 )}
-                                {boatsWithPosition.map((boat) => (
-                                    <BoatMarker key={boat.instance.instance_id} boat={boat} />
-                                ))}
-                                <CenterOnFirstData boats={boats} />
-                                <RecenterOnTrigger boats={boats} fitTrigger={fitTrigger} />
+                                {selectedBoat && (
+                                    <BoatMarker key={selectedBoat.instance.instance_id} boat={selectedBoat} />
+                                )}
+                                <CenterOnFirstData selectedBoat={selectedBoat} />
+                                <RecenterOnTrigger selectedBoat={selectedBoat} fitTrigger={fitTrigger} />
                                 <ScaleControl />
                             </MapContainer>
                         </section>
                     </Card>
 
-                    {boatsWithPosition.length > 0 && (
+                    {selectedBoat && (
                         <Card className="live-map__details-card">
                             <h4 className="m-0 mb-4 text-lg font-bold">Boat telemetry</h4>
                             <div className="live-map__panels">
-                                {boatsWithPosition.map((boat) => (
-                                    <BoatPanel key={boat.instance.instance_id} boat={boat} history={boatHistory} />
-                                ))}
+                                <BoatPanel
+                                    key={selectedBoat.instance.instance_id}
+                                    boat={selectedBoat}
+                                    history={boatHistory}
+                                />
                             </div>
                         </Card>
                     )}
