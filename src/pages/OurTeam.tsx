@@ -37,7 +37,7 @@ const SUBTEAMS: Subteam[] = [
             { src: "/images/our_team_images/electronics/electronics2.webp", alt: "Electronics 2" },
         ],
         githubLink: true,
-        techStack: ["Python", "C++", "ROS", "Gazebo", "YOLO", "Docker"],
+        techStack: ["Python", "C++", "ROS", "Gazebo", "YOLO", "Docker", "Computer Vision", "Linux", "GitHub Actions"],
     },
     {
         id: "electronics",
