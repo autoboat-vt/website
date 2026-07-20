@@ -1,6 +1,6 @@
 import L from "leaflet";
 import "leaflet-rotatedmarker";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Marker } from "react-leaflet";
 import type { BoatWithPosition } from "../lib/telemetry";
 
@@ -27,12 +27,27 @@ const BOAT_ICON = L.icon({
  */
 export default function BoatMarker({ boat }: BoatMarkerProps) {
     const { position, status } = boat;
+    const markerRef = useRef<L.Marker>(null);
 
     const heading = status?.heading;
     const icon = useMemo(() => BOAT_ICON, []);
     // Heading is measured counterclockwise from true east. Since the base icon
     // points east at 0°, we rotate by -heading to align with Leaflet's clockwise rotation.
     const rotationAngle = typeof heading === "number" && Number.isFinite(heading) ? -heading : 0;
+
+    // React-Leaflet's Marker wrapper does not automatically update custom options like
+    // rotationAngle when they change after mount. We must update the Leaflet Marker
+    // instance imperatively when rotationAngle changes.
+    useEffect(() => {
+        const marker = markerRef.current;
+        if (marker) {
+            // @ts-expect-error - leaflet-rotatedmarker adds setRotationAngle to L.Marker
+            if (typeof marker.setRotationAngle === "function") {
+                // @ts-expect-error
+                marker.setRotationAngle(rotationAngle);
+            }
+        }
+    }, [rotationAngle]);
 
     if (!position) return null;
 
@@ -42,6 +57,7 @@ export default function BoatMarker({ boat }: BoatMarkerProps) {
     // popup content on every poll.
     return (
         <Marker
+            ref={markerRef}
             position={[position.lat, position.lng]}
             icon={icon}
             rotationAngle={rotationAngle}
