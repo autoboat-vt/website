@@ -32,8 +32,8 @@ export default function BoatMarker({ boat }: BoatMarkerProps) {
     const heading = status?.heading;
     const icon = useMemo(() => BOAT_ICON, []);
     // Heading is measured counterclockwise from true east. Since the base icon
-    // points east at 0°, we rotate by -heading to align with Leaflet's clockwise rotation.
-    const rotationAngle = typeof heading === "number" && Number.isFinite(heading) ? -heading : 0;
+    // points north at 0° (12 o'clock), we rotate by 90 - heading to align it.
+    const rotationAngle = typeof heading === "number" && Number.isFinite(heading) ? 90 - heading : 0;
 
     // React-Leaflet's Marker wrapper does not automatically update custom options like
     // rotationAngle when they change after mount. We must update the Leaflet Marker
