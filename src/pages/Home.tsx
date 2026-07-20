@@ -23,12 +23,12 @@ export default function Home() {
                     <h1>AutoBoat @ Virginia Tech</h1>
                     <p className="hero__subtitle">Autonomous Electric Motorboats and Sailboats</p>
                 </div>
-                <div className="hero__scroll" aria-hidden="true">
+                <a href="#about" className="hero__scroll" aria-label="Scroll to about section">
                     <span className="hero__scroll-arrow"></span>
-                </div>
+                </a>
             </section>
 
-            <section className="section mx-auto grid max-w-275 gap-4 px-4 py-16">
+            <section id="about" className="section mx-auto grid max-w-275 gap-4 px-4 py-16">
                 <Card>
                     <h3>About</h3>
                     <p>
