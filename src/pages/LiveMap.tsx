@@ -327,18 +327,10 @@ export default function LiveMap() {
                             </select>
                         </label>
                     )}
-                    <button
-                        type="button"
-                        onClick={handleRecenter}
-                        className="live-map__btn inline-flex items-center gap-1.5 rounded-lg border border-black/10 bg-white/60 px-3 py-1.5 text-sm font-semibold text-fontcolor no-underline transition-colors hover:bg-white dark:border-white/15 dark:bg-white/5 dark:hover:bg-white/10"
-                    >
+                    <button type="button" onClick={handleRecenter} className="btn btn--primary btn--sm">
                         <Crosshair size={14} /> Recenter
                     </button>
-                    <button
-                        type="button"
-                        onClick={handleRetry}
-                        className="live-map__btn inline-flex items-center gap-1.5 rounded-lg border border-black/10 bg-white/60 px-3 py-1.5 text-sm font-semibold text-fontcolor no-underline transition-colors hover:bg-white dark:border-white/15 dark:bg-white/5 dark:hover:bg-white/10"
-                    >
+                    <button type="button" onClick={handleRetry} className="btn btn--primary btn--sm">
                         <RefreshCw size={14} /> Refresh now
                     </button>
                 </div>
@@ -358,11 +350,7 @@ export default function LiveMap() {
                                 If this persists, the server may be offline, or CORS may not be configured to allow
                                 requests from this site.
                             </p>
-                            <button
-                                type="button"
-                                onClick={handleRetry}
-                                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white no-underline transition-colors hover:bg-accent/90 dark:bg-accent dark:hover:bg-accent/90"
-                            >
+                            <button type="button" onClick={handleRetry} className="mt-3 btn btn--solid btn--sm">
                                 <RefreshCw size={14} /> Try again
                             </button>
                         </div>

@@ -123,17 +123,14 @@ export default function Sponsors() {
                         href="https://giving.adv.vt.edu/gift?fund=821082&amt=25&frequency=onetime&desc=AutoBoat%20Design%20Team"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="btn inline-flex items-center justify-center gap-2 rounded-lg border border-black/10 bg-white px-6 py-3 text-base font-semibold text-fontcolor no-underline transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-black/3 hover:border-black/20 hover:shadow-[0_4px_12px_rgba(0,0,0,0.05)] active:translate-y-0 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10 dark:hover:border-white/20 dark:hover:shadow-[0_4px_12px_rgba(255,255,255,0.05)]"
+                        className="btn btn--primary"
                     >
                         <Heart size={18} className="btn__icon" />
                         Make a Gift / Donate
                         <ArrowRight size={18} className="btn__icon" />
                         <span className="sr-only"> (opens in a new tab)</span>
                     </a>
-                    <a
-                        href="mailto:autoboat@vt.edu"
-                        className="btn inline-flex items-center justify-center gap-2 rounded-lg border border-accent bg-transparent px-6 py-3 text-base font-semibold text-fontcolor no-underline transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-accent hover:text-white hover:shadow-[0_4px_12px_rgba(134,31,65,0.15)] active:translate-y-0"
-                    >
+                    <a href="mailto:autoboat@vt.edu" className="btn btn--outline">
                         <Mail size={18} className="btn__icon" />
                         Contact Us
                     </a>
