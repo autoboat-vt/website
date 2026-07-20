@@ -389,9 +389,7 @@
         background-image: url("/images/gallery/14.webp");
         /* Fill the entire viewport (account for fixed header height). */
         min-height: calc(100vh - var(--nav-height));
-        /* Firefox leaves a sub-pixel gap at the left edge with cover sizing.
-           Nudge the background 1px past each edge to close the hairline. */
-        background-size: calc(100% + 2px) calc(100% + 2px);
+        background-size: cover;
     }
 
     .hero__title {
