@@ -53,7 +53,7 @@ const SUBTEAMS: Subteam[] = [
             { src: "/images/our_team_images/electronics/electronics5.webp", alt: "Electronics 5" },
             { src: "/images/our_team_images/electronics/electronics6.webp", alt: "Electronics 6" },
         ],
-        techStack: ["KiCAD", "LTSpice", "C++", "Embedded", "PCB Design"],
+        techStack: ["KiCAD", "LTSpice", "C++", "Embedded Systems", "PCB Design"],
     },
     {
         id: "vehicle-dynamics",
