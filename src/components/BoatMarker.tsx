@@ -13,7 +13,7 @@ interface BoatMarkerProps {
 // at the site root.
 const BOAT_ICON_SIZE = 50;
 const BOAT_ICON = L.icon({
-    iconUrl: "/images/boat-icon.png",
+    iconUrl: "/images/boat-icon.webp",
     iconSize: [BOAT_ICON_SIZE, BOAT_ICON_SIZE],
     iconAnchor: [BOAT_ICON_SIZE / 2, BOAT_ICON_SIZE / 2],
 });
