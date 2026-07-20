@@ -1325,66 +1325,51 @@
             background-color 200ms,
             border-color 200ms,
             transform 200ms,
-            box-shadow 200ms;
+            color 200ms;
         cursor: pointer;
-        padding: 0.75rem 1.5rem;
-        font-size: 1rem;
+        padding: 0.5rem 1.25rem;
+        font-size: 0.95rem;
         line-height: 1.5;
-        border: 1px solid transparent;
-        background-color: transparent;
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        background-color: rgba(0, 0, 0, 0.03);
         color: var(--color-fontcolor);
     }
     .btn:hover {
-        transform: translateY(-2px);
+        transform: translateY(-1px);
+        border-color: var(--color-fontcolor);
+        background-color: var(--color-fontcolor);
+        color: var(--color-bgcolor);
     }
     .btn:active {
         transform: translateY(0);
     }
 
-    .btn--primary {
-        border-color: rgba(0, 0, 0, 0.1);
-        background-color: #fff;
+    .dark .btn {
+        border-color: rgba(255, 255, 255, 0.06);
+        background-color: rgba(255, 255, 255, 0.03);
         color: var(--color-fontcolor);
     }
-    .btn--primary:hover {
-        background-color: rgba(0, 0, 0, 0.03);
-        border-color: rgba(0, 0, 0, 0.2);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    .dark .btn:hover {
+        border-color: var(--color-fontcolor);
+        background-color: var(--color-fontcolor);
+        color: var(--color-bgcolor);
     }
-    .dark .btn--primary {
-        border-color: rgba(255, 255, 255, 0.1);
-        background-color: rgba(255, 255, 255, 0.05);
-        color: #fff;
-    }
-    .dark .btn--primary:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        border-color: rgba(255, 255, 255, 0.2);
-        box-shadow: 0 4px 12px rgba(255, 255, 255, 0.05);
+
+    .btn--primary {
+        /* Standardized to match base button styling */
     }
 
     .btn--outline {
-        border-color: var(--color-accent);
-        background-color: transparent;
-        color: var(--color-fontcolor);
-    }
-    .btn--outline:hover {
-        background-color: var(--color-accent);
-        color: #fff;
-        box-shadow: 0 4px 12px rgba(134, 31, 65, 0.15);
+        /* Standardized to match base button styling */
     }
 
     .btn--solid {
-        background-color: var(--color-accent);
-        color: #fff;
-    }
-    .btn--solid:hover {
-        background-color: color-mix(in srgb, var(--color-accent) 90%, black);
-        box-shadow: 0 4px 12px rgba(134, 31, 65, 0.15);
+        /* Standardized to match base button styling */
     }
 
     .btn--sm {
-        padding: 0.375rem 0.75rem;
-        font-size: 0.875rem;
+        padding: 0.375rem 0.875rem;
+        font-size: 0.9rem;
         gap: 0.375rem;
     }
 }
