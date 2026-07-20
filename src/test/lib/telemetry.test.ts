@@ -321,14 +321,14 @@ describe("telemetry client", () => {
             expect(headingToCompass(NaN)).toBe("—");
         });
         it("maps cardinal directions", () => {
-            expect(headingToCompass(0)).toMatch(/^N /);
-            expect(headingToCompass(90)).toMatch(/^E /);
-            expect(headingToCompass(180)).toMatch(/^S /);
-            expect(headingToCompass(270)).toMatch(/^W /);
+            expect(headingToCompass(0)).toMatch(/^E /);
+            expect(headingToCompass(90)).toMatch(/^N /);
+            expect(headingToCompass(180)).toMatch(/^W /);
+            expect(headingToCompass(270)).toMatch(/^S /);
             expect(headingToCompass(225)).toMatch(/^SW /);
         });
         it("wraps negative headings", () => {
-            expect(headingToCompass(-90)).toMatch(/^W /);
+            expect(headingToCompass(-90)).toMatch(/^S /);
         });
     });
 

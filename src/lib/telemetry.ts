@@ -339,10 +339,20 @@ export async function fetchFleetState(opts?: FetchOptions): Promise<BoatWithPosi
 /** Format a heading in degrees as a compass direction, e.g. 0→N, 225→SW. */
 export function headingToCompass(degrees?: number): string {
     if (typeof degrees !== "number" || !Number.isFinite(degrees)) return "—";
+
+    // Normalize counterclockwise-from-East heading to [0, 360)
+    const normalized = ((degrees % 360) + 360) % 360;
+
+    // Convert CCW-from-East to standard navigation heading (CW from North)
+    // navHeading = 90 - degrees
+    const navHeading = (90 - degrees) % 360;
+    const normalizedNav = (navHeading + 360) % 360;
+
     const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
-    const idx = Math.round((((degrees % 360) + 360) % 360) / 45) % 8;
+    const idx = Math.round(normalizedNav / 45) % 8;
     const dir = dirs[idx] ?? "?";
-    return `${dir} (${degrees.toFixed(3)}°)`;
+
+    return `${dir} (${normalized.toFixed(3)}°)`;
 }
 
 /** Format a speed in m/s, or "—" if missing. */
