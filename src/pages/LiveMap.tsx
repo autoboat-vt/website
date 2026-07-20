@@ -347,7 +347,7 @@ export default function LiveMap() {
             {error && boats.length === 0 && (
                 <Card className="live-map__error-card">
                     <div className="flex items-start gap-3">
-                        <AlertCircle size={24} className="mt-1 shrink-0 text-accent dark:text-accent-2" />
+                        <AlertCircle size={24} className="mt-1 shrink-0 text-accent" />
                         <div>
                             <h4 className="m-0 text-xl font-bold">Can&apos;t reach the telemetry server</h4>
                             <p className="mt-1 text-sm text-fontcolor/70">{error}</p>
@@ -361,7 +361,7 @@ export default function LiveMap() {
                             <button
                                 type="button"
                                 onClick={handleRetry}
-                                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white no-underline transition-colors hover:bg-accent/90 dark:bg-accent-2 dark:hover:bg-accent-2/90"
+                                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white no-underline transition-colors hover:bg-accent/90 dark:bg-accent dark:hover:bg-accent/90"
                             >
                                 <RefreshCw size={14} /> Try again
                             </button>
@@ -387,7 +387,7 @@ export default function LiveMap() {
                     <Card className="live-map__card">
                         {error && boats.length > 0 && (
                             <div
-                                className="live-map__stale-banner mb-3 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent dark:border-accent-2/30 dark:bg-accent-2/10 dark:text-accent-2"
+                                className="live-map__stale-banner mb-3 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent dark:border-accent/30 dark:bg-accent/10 dark:text-accent"
                                 role="status"
                             >
                                 <AlertCircle size={14} className="shrink-0" />

@@ -90,9 +90,7 @@ export default function Header() {
                             end={link.end}
                             className={({ isActive }) =>
                                 `nav__link rounded-lg px-4 py-2 font-heading font-bold no-underline transition-[background-color,color] duration-200 ease-out hover:bg-black/5 dark:hover:bg-white/10 max-[620px]:px-1.5 max-[620px]:py-1 max-[620px]:text-sm${
-                                    isActive
-                                        ? " is-active bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-2)_100%)] text-white"
-                                        : " text-fontcolor"
+                                    isActive ? " is-active bg-accent text-white" : " text-fontcolor"
                                 }`
                             }
                             onClick={closeMenu}
@@ -119,9 +117,7 @@ export default function Header() {
 
                     <button
                         className={`nav__toggle hidden rounded-lg border-none px-1 leading-none transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current max-[750px]:flex max-[750px]:items-center max-[750px]:gap-1.5${
-                            open
-                                ? " bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-2)_100%)] text-bgcolor"
-                                : " bg-transparent text-fontcolor hover:text-hovercolor"
+                            open ? " bg-accent text-white" : " bg-transparent text-fontcolor hover:text-hovercolor"
                         }`}
                         type="button"
                         aria-label="Toggle menu"

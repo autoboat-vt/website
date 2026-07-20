@@ -235,13 +235,7 @@
         right: 0;
         bottom: -1px;
         height: 1px;
-        background: linear-gradient(
-            90deg,
-            transparent 0%,
-            var(--color-accent) 30%,
-            var(--color-accent-2) 70%,
-            transparent 100%
-        );
+        background: linear-gradient(90deg, transparent 0%, var(--color-accent) 50%, transparent 100%);
         transform: scaleX(0);
         transform-origin: left center;
         animation: headerAccentWipe 700ms cubic-bezier(0.4, 0, 0.1, 1) 150ms forwards;
@@ -790,10 +784,7 @@
         letter-spacing: 0.14em;
         text-transform: uppercase;
         margin-bottom: 0.4rem;
-        background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
+        color: var(--color-accent);
         line-height: 1;
     }
 
@@ -806,7 +797,7 @@
         height: 40px;
         width: 100%;
         margin-top: -1px;
-        background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
+        background: var(--color-accent);
         -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 40' preserveAspectRatio='none'><path d='M0 20 C 150 0, 350 0, 500 20 S 850 40, 1000 20 S 1150 0, 1200 20 L 1200 40 L 0 40 Z' fill='black'/></svg>");
         mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 40' preserveAspectRatio='none'><path d='M0 20 C 150 0, 350 0, 500 20 S 850 40, 1000 20 S 1150 0, 1200 20 L 1200 40 L 0 40 Z' fill='black'/></svg>");
         -webkit-mask-size: 100% 100%;
@@ -827,8 +818,8 @@
 
     .dark .blueprint-grid {
         background-image:
-            linear-gradient(rgba(229, 117, 31, 0.05) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(229, 117, 31, 0.05) 1px, transparent 1px);
+            linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
     }
 
     /* --- Data callout: monospace, accent-tinted label/value pairs for
@@ -844,7 +835,8 @@
     }
 
     .dark .data-callout__label {
-        color: var(--color-accent-2);
+        color: var(--color-fontcolor);
+        opacity: 0.6;
     }
 
     .data-callout__value {
@@ -1232,8 +1224,8 @@
     }
 
     .dark .boat-panel__tab.is-active {
-        background: var(--color-accent-2);
-        color: #1f1e1d;
+        background: var(--color-accent);
+        color: #fff;
     }
 
     .boat-panel__body {
