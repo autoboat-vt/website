@@ -115,8 +115,13 @@ export default function Sponsors() {
                 </p>
                 <p className="mb-6">
                     To discuss sponsorship opportunities, reach out to us at{" "}
-                    <a href="mailto:autoboat@vt.edu">autoboat@vt.edu</a>. If you'd like to make a direct donation, you
-                    can do so via Virginia Tech's giving portal below.
+                    <a
+                        href="mailto:autoboat@vt.edu"
+                        className="text-fontcolor dark:text-white underline decoration-current"
+                    >
+                        autoboat@vt.edu
+                    </a>
+                    . If you'd like to make a direct donation, you can do so via Virginia Tech's giving portal below.
                 </p>
                 <div className="cta-actions mt-6 flex flex-wrap gap-4">
                     <a
