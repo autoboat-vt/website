@@ -30,9 +30,9 @@ export default function BoatMarker({ boat }: BoatMarkerProps) {
 
     const heading = status?.heading;
     const icon = useMemo(() => BOAT_ICON, []);
-    // ground_station convention: icon points east at 0°, so rotate by 90 - heading
-    // to align heading 0° with north.
-    const rotationAngle = typeof heading === "number" && Number.isFinite(heading) ? 90 - heading : 0;
+    // Heading is measured counterclockwise from true east. Since the base icon
+    // points east at 0°, we rotate by -heading to align with Leaflet's clockwise rotation.
+    const rotationAngle = typeof heading === "number" && Number.isFinite(heading) ? -heading : 0;
 
     if (!position) return null;
 
