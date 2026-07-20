@@ -1355,18 +1355,6 @@
         color: var(--color-bgcolor);
     }
 
-    .btn--primary {
-        /* Standardized to match base button styling */
-    }
-
-    .btn--outline {
-        /* Standardized to match base button styling */
-    }
-
-    .btn--solid {
-        /* Standardized to match base button styling */
-    }
-
     .btn--sm {
         padding: 0.375rem 0.875rem;
         font-size: 0.9rem;
