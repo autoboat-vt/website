@@ -226,21 +226,6 @@
         border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     }
 
-    /* Accent hairline at the bottom of the header — a 1px gradient strip
-       that wipes in from the left on page load. */
-    header::after {
-        content: "";
-        position: absolute;
-        left: 0;
-        right: 0;
-        bottom: -1px;
-        height: 1px;
-        background: linear-gradient(90deg, transparent 0%, var(--color-accent) 50%, transparent 100%);
-        transform: scaleX(0);
-        transform-origin: left center;
-        animation: headerAccentWipe 700ms cubic-bezier(0.4, 0, 0.1, 1) 150ms forwards;
-    }
-
     .dark header {
         background: rgb(31, 30, 29);
         border-bottom-color: rgba(255, 255, 255, 0.1);
