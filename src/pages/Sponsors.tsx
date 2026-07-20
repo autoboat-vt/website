@@ -19,22 +19,22 @@ const SPONSORS: Sponsor[] = [
 
 function SponsorCard({ sponsor }: { sponsor: Sponsor }) {
     return (
-        <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-black/6 bg-white/45 text-left backdrop-blur-md transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-1 hover:shadow-[0_25px_50px_-15px_rgba(134,31,65,0.18)] hover:border-accent/30 dark:border-white/8 dark:bg-[rgba(30,29,28,0.5)] dark:hover:shadow-[0_25px_50px_-15px_rgba(229,117,31,0.25)] dark:hover:border-accent-2/30">
+        <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-black/6 bg-white/45 text-left backdrop-blur-md transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-1 hover:shadow-[0_25px_50px_-15px_rgba(134,31,65,0.12)] hover:border-accent/20 dark:border-white/8 dark:bg-[rgba(30,29,28,0.5)] dark:hover:shadow-[0_25px_50px_-15px_rgba(255,255,255,0.05)] dark:hover:border-white/10">
             {/* Accent glow that appears on hover */}
             <div
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
                 style={{
-                    background: "radial-gradient(circle at 50% 0%, rgba(229,117,31,0.08) 0%, transparent 70%)",
+                    background: "radial-gradient(circle at 50% 0%, rgba(255,255,255,0.1) 0%, transparent 70%)",
                 }}
             />
             {/* Top accent band */}
-            <div className="relative flex h-36 items-center justify-center overflow-hidden bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-2)_100%)]">
+            <div className="relative flex h-36 items-center justify-center overflow-hidden border-b border-black/5 bg-white dark:border-white/5 dark:bg-[rgba(255,255,255,0.03)]">
                 <div
-                    className="absolute inset-0 opacity-30"
+                    className="absolute inset-0 opacity-10"
                     style={{
                         backgroundImage:
-                            "radial-gradient(circle at 25% 25%, rgba(255,255,255,0.3) 0%, transparent 50%), radial-gradient(circle at 75% 75%, rgba(255,255,255,0.15) 0%, transparent 50%)",
+                            "radial-gradient(circle at 25% 25%, rgba(0,0,0,0.05) 0%, transparent 50%), radial-gradient(circle at 75% 75%, rgba(0,0,0,0.02) 0%, transparent 50%)",
                     }}
                     aria-hidden="true"
                 />
@@ -43,13 +43,13 @@ function SponsorCard({ sponsor }: { sponsor: Sponsor }) {
                         src={sponsor.logo}
                         alt={`${sponsor.name} logo`}
                         loading="lazy"
-                        className="relative max-h-20 max-w-[75%] object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.15)]"
+                        className="relative max-h-20 max-w-[75%] object-contain"
                     />
                 ) : (
                     <Landmark
                         size={48}
                         strokeWidth={1.5}
-                        className="relative text-white/90 drop-shadow-[0_2px_8px_rgba(0,0,0,0.2)]"
+                        className="relative text-accent/80 dark:text-fontcolor/60"
                         aria-hidden="true"
                     />
                 )}
@@ -123,7 +123,7 @@ export default function Sponsors() {
                         href="https://giving.adv.vt.edu/gift?fund=821082&amt=25&frequency=onetime&desc=AutoBoat%20Design%20Team"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="btn inline-flex items-center justify-center gap-2 rounded-lg border-none bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-2)_100%)] px-6 py-3 text-base font-semibold text-white no-underline transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(134,31,65,0.3)] active:translate-y-0"
+                        className="btn inline-flex items-center justify-center gap-2 rounded-lg border border-black/10 bg-white px-6 py-3 text-base font-semibold text-fontcolor no-underline transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-black/3 hover:border-black/20 hover:shadow-[0_4px_12px_rgba(0,0,0,0.05)] active:translate-y-0 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10 dark:hover:border-white/20 dark:hover:shadow-[0_4px_12px_rgba(255,255,255,0.05)]"
                     >
                         <Heart size={18} className="btn__icon" />
                         Make a Gift / Donate

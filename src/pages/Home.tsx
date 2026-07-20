@@ -28,7 +28,7 @@ export default function Home() {
                 </div>
             </section>
 
-            <section className="section mx-auto grid max-w-275 gap-8 px-4 py-16">
+            <section className="section mx-auto grid max-w-275 gap-4 px-4 py-16">
                 <Card>
                     <h3>About</h3>
                     <p>
@@ -89,7 +89,7 @@ export default function Home() {
                             href="https://giving.adv.vt.edu/gift?fund=821082&amt=25&frequency=onetime&desc=AutoBoat%20Design%20Team"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="btn inline-flex items-center justify-center gap-2 rounded-lg border-none bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-2)_100%)] px-6 py-3 text-base font-semibold text-white no-underline transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(134,31,65,0.3)] active:translate-y-0"
+                            className="btn inline-flex items-center justify-center gap-2 rounded-lg border border-black/10 bg-white px-6 py-3 text-base font-semibold text-fontcolor no-underline transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-black/3 hover:border-black/20 hover:shadow-[0_4px_12px_rgba(0,0,0,0.05)] active:translate-y-0 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10 dark:hover:border-white/20 dark:hover:shadow-[0_4px_12px_rgba(255,255,255,0.05)]"
                         >
                             Make a Gift / Donate
                             <ArrowRight size={18} className="btn__icon" />
