@@ -375,6 +375,7 @@
         /* Fill the entire viewport (account for fixed header height). */
         min-height: calc(100vh - var(--nav-height));
         background-size: cover;
+        background-position: 75% center;
     }
 
     .hero__title {
