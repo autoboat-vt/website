@@ -98,7 +98,12 @@ function Description({ text, githubLink }: DescriptionProps) {
     return (
         <p className="subteam-description">
             {parts[0]}
-            <a href="https://github.com/autoboat-vt" target="_blank" rel="noopener noreferrer">
+            <a
+                href="https://github.com/autoboat-vt"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-fontcolor dark:text-white underline decoration-current"
+            >
                 GitHub<span className="sr-only"> (opens in a new tab)</span>
             </a>
             {parts.length > 1 ? `.${parts.slice(1).join("")}` : ""}

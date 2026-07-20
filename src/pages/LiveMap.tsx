@@ -276,7 +276,7 @@ export default function LiveMap() {
                         href="https://github.com/autoboat-vt/telemetry_server"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-accent underline"
+                        className="text-fontcolor dark:text-white underline decoration-current"
                     >
                         telemetry server
                     </a>
