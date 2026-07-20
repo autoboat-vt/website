@@ -347,8 +347,7 @@ export default function LiveMap() {
                                 Endpoint: <code className="font-mono text-xs">{TELEMETRY_URL}</code>
                             </p>
                             <p className="mt-2 text-sm text-fontcolor/70">
-                                If this persists, the server may be offline, or CORS may not be configured to allow
-                                requests from this site.
+                                If this persists, the server may be offline, or CORS may not be configured to allow requests from this site.
                             </p>
                             <button type="button" onClick={handleRetry} className="mt-3 btn btn--solid btn--sm">
                                 <RefreshCw size={14} /> Try again
@@ -446,8 +445,7 @@ export default function LiveMap() {
                         <Sailboat size={48} className="text-fontcolor/30" />
                         <h4 className="m-0 text-xl font-bold">No boats registered</h4>
                         <p className="max-w-md text-sm text-fontcolor/70">
-                            No instances are registered on the telemetry server yet. Boats will appear here
-                            automatically once they start reporting.
+                            No instances are registered on the telemetry server yet. Boats will appear here automatically once they start reporting.
                         </p>
                     </div>
                 </Card>

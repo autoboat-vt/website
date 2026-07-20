@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&display=swap");
 @import "tailwindcss";
 
 /*
@@ -11,20 +12,38 @@
  */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Virginia Tech official brand colors — single source of truth.
+ * Values from brand.vt.edu/identity/color (see src/lib/vtColors.ts for full reference).
+*/
+:root {
+    --vt-maroon: #861f41; /* Chicago Maroon — use rgb(from var(--vt-maroon) r g b / a) for alpha variants */
+    --vt-burntOrange: #e5751f; /* Burnt Orange */
+    --vt-hokieStone: #75787b;
+    --vt-white: #ffffff;
+    --vt-impactOrange: #ca4f00; /* Use for digital text instead of burnt orange (WCAG AA) */
+}
+
 @theme {
     --color-bgcolor: #f0eee6;
     --color-fontcolor: #1f1e1d;
     --color-hovercolor: #3a3836;
 
-    /* Virginia Tech brand accents — official primary palette (brand.vt.edu/identity/color) */
-    /* Chicago Maroon #861F41, Burnt Orange #E5751F */
-    --color-accent: #861f41;
-    --color-accent-2: #e5751f;
+    /* VT brand accents — alias the official --vt-* variables defined above. */
+    --color-accent: var(--vt-maroon);
+    --color-accent-2: var(--vt-burntOrange);
 
-    --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Arial, Helvetica, sans-serif;
-    --font-heading: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+    /*
+     * Font configuration — single source of truth.
+     * To change the site font, edit ONLY these two lines:
+     *   1. The @import URL at the very top of this file (loads the font files)
+     *   2. --font-app below (the CSS font-family name)
+     * --font-sans, --font-heading, and --font-mono all derive from these.
+     */
+    --font-app: "Ubuntu";
+    --font-sans: var(--font-app), system-ui, -apple-system, "Segoe UI", Arial, Helvetica, sans-serif;
+    --font-heading: var(--font-app), system-ui, -apple-system, sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-
     --nav-height: 72px;
 }
 
@@ -33,10 +52,9 @@
     --color-bgcolor: #1f1e1d;
     --color-fontcolor: #f0eee6;
     --color-hovercolor: #d8d4c8;
-    /* Brand guidelines permit shading but not tinting of maroon/orange, */
-    /* so we use the same official values in dark mode. */
-    --color-accent: #861f41;
-    --color-accent-2: #e5751f;
+    /* Brand accents unchanged in dark mode — --color-accent/2 alias the
+     * --vt-* variables on :root, which don't change (brand guidelines permit
+     * shading but not tinting of maroon/orange). */
     --nav-height: 72px;
 }
 
@@ -613,9 +631,12 @@
      * Mobile nav dropdown: kept as component CSS because the max-height
      * transition + compound `.nav--open .nav__links` selector + multiple
      * simultaneous transitions are impractical to express as utilities.
-     * Only active at max-width: 750px (hamburger breakpoint).
+     * Active below 500px — at that point even the smallest practical button
+     * size no longer fits all 6 links, so we fall back to the hamburger.
+     * Between 500px and 1199px the desktop layout is used with progressively
+     * smaller button padding/text (see Header.tsx responsive classes).
      */
-    @media (max-width: 750px) {
+    @media (max-width: 499px) {
         .nav__links {
             position: fixed;
             left: 0;
@@ -721,22 +742,29 @@
     }
 
     /* --- Subteam card accent borders (left border colored by subteam) ---
-       Compound selector (.card.subteam-card--X) raises specificity above
-       Tailwind's border-black/6 so !important isn't needed. --- */
+       The !important is required because the Card component applies
+       `dark:border-white/10` (a `utilities`-layer rule) which would
+       otherwise override the accent color in dark mode. Per the cascade-
+       layers spec, !important in an earlier layer (components) beats non-
+       important in a later layer (utilities). --- */
     .card.subteam-card--software {
-        border-left-color: #3b82f6;
+        /* biome-ignore lint/complexity/noImportantStyles: see comment above — beats dark:border-white/10 utility in the later utilities layer. */
+        border-left-color: #3b82f6 !important;
     }
 
     .card.subteam-card--electronics {
-        border-left-color: #eab308;
+        /* biome-ignore lint/complexity/noImportantStyles: see comment above — beats dark:border-white/10 utility in the later utilities layer. */
+        border-left-color: #eab308 !important;
     }
 
     .card.subteam-card--mechanical {
-        border-left-color: #ef4444;
+        /* biome-ignore lint/complexity/noImportantStyles: see comment above — beats dark:border-white/10 utility in the later utilities layer. */
+        border-left-color: #ef4444 !important;
     }
 
     .card.subteam-card--business {
-        border-left-color: #a855f7;
+        /* biome-ignore lint/complexity/noImportantStyles: see comment above — beats dark:border-white/10 utility in the later utilities layer. */
+        border-left-color: #a855f7 !important;
     }
 
     /* Home page subteam badges also use the left-border accent. They're
@@ -772,6 +800,14 @@
         line-height: 1;
     }
 
+    /* In dark mode, the official Chicago Maroon (#861F41) text on a dark
+       background appears perceptually darker than the same color used as
+       a solid block (e.g. nav buttons). Brighten the kicker so it reads
+       with the same visual intensity as the nav button's maroon. */
+    .dark .kicker {
+        color: #b8345c;
+    }
+
     /* --- Wave divider: a subtle maritime motif used between major
         sections. Rendered as a background-image data URI so it can be
         applied via a utility class without a React component. The wave
@@ -794,8 +830,8 @@
         that should feel technical (Fleet specs, Sponsors tiers). --- */
     .blueprint-grid {
         background-image:
-            linear-gradient(rgba(134, 31, 65, 0.04) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(134, 31, 65, 0.04) 1px, transparent 1px);
+            linear-gradient(rgb(from var(--vt-maroon) r g b / 0.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgb(from var(--vt-maroon) r g b / 0.04) 1px, transparent 1px);
         background-size: 24px 24px;
         background-position: -1px -1px;
     }
@@ -1014,13 +1050,13 @@
        currently heading toward (matches boat_status.current_waypoint_index).
        Chicago Maroon / Burnt Orange are the official VT brand accents. */
     :root {
-        --live-map-route: #861f41;
+        --live-map-route: var(--vt-maroon);
         --live-map-waypoint: #5b6470;
-        --live-map-waypoint-active: #e5751f;
+        --live-map-waypoint-active: var(--vt-burntOrange);
     }
 
     .dark {
-        --live-map-route: #e5751f;
+        --live-map-route: var(--vt-burntOrange);
         --live-map-waypoint: #9ca3af;
         --live-map-waypoint-active: #f59e0b;
     }

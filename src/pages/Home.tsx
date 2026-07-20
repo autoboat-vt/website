@@ -1,6 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import Card from "../components/Card";
+import Hyperlink, { url } from "../components/Hyperlink";
 
 interface Subteam {
     id: string;
@@ -52,8 +53,12 @@ export default function Home() {
                 <Card>
                     <h3>Getting Involved</h3>
                     <p>
-                        The team is divided into four subteams. Click any subteam below to learn more about what we do
-                        and see our work:
+                        The team is divided into four subteams. To learn more about each subteam, click the links below
+                        to jump to their respective sections on the
+                        <Hyperlink href={url("/ourteam")} space="both">
+                            Meet the Team
+                        </Hyperlink>
+                        page.
                     </p>
                     <div className="subteam-grid my-6 grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
                         {SUBTEAMS.map((s) => (
@@ -73,6 +78,16 @@ export default function Home() {
                         We are always looking for new members to join the team throughout the year, so don't hesitate to
                         reach out! There is no experience required; we'll teach you everything you need to know.
                     </p>
+                    <div id="how-to-join-box" className="mt-4 flex flex-col items-center">
+                        <Hyperlink
+                            href={url(
+                                "https://docs.google.com/forms/d/e/1FAIpQLScViTYzAYHl671SGp_dmYO9MvrleM3VWAem8Ep7FROBCVOB9Q/viewform?usp=sharing&ouid=116978117130571796595",
+                            )}
+                            className="btn mt-2 w-fit text-2xl px-4 py-2 bg-accent text-white border-transparent hover:bg-accent-2 hover:text-white hover:border-transparent"
+                        >
+                            Join Now!
+                        </Hyperlink>
+                    </div>
                 </Card>
 
                 <Card>
@@ -84,20 +99,22 @@ export default function Home() {
                     <p className="mb-6">
                         If you are an individual looking to make a direct donation, please see the below link.
                     </p>
-                    <div className="cta-actions mt-6 flex flex-wrap gap-4">
-                        <a
-                            href="https://giving.adv.vt.edu/gift?fund=821082&amt=25&frequency=onetime&desc=AutoBoat%20Design%20Team"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn btn--primary"
+                    <div className="cta-actions mt-6 flex flex-wrap justify-center gap-4">
+                        <Hyperlink
+                            href={url(
+                                "https://giving.adv.vt.edu/gift?fund=821082&amt=25&frequency=onetime&desc=AutoBoat%20Design%20Team",
+                            )}
+                            className="btn bg-accent text-white border-transparent hover:bg-accent-2 hover:text-white hover:border-transparent"
                         >
                             Make a Gift / Donate
                             <ArrowRight size={18} className="btn__icon" />
-                            <span className="sr-only"> (opens in a new tab)</span>
-                        </a>
-                        <a href="mailto:autoboat@vt.edu" className="btn btn--outline">
+                        </Hyperlink>
+                        <Hyperlink
+                            href={url("mailto:autoboat@vt.edu")}
+                            className="btn bg-accent text-white border-transparent hover:bg-accent-2 hover:text-white hover:border-transparent"
+                        >
                             Email Sponsorship
-                        </a>
+                        </Hyperlink>
                     </div>
                 </Card>
             </section>

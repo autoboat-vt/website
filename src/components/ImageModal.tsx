@@ -3,10 +3,11 @@ import { type MouseEvent, useEffect, useRef, useState } from "react";
 interface ImageModalProps {
     src?: string;
     alt?: string;
+    caption?: string;
     onClose: () => void;
 }
 
-export default function ImageModal({ src, alt, onClose }: ImageModalProps) {
+export default function ImageModal({ src, alt, caption, onClose }: ImageModalProps) {
     const closeBtnRef = useRef<HTMLButtonElement>(null);
     const lastActiveRef = useRef<HTMLElement | null>(null);
     const [isOpen, setIsOpen] = useState(false);
@@ -73,6 +74,7 @@ export default function ImageModal({ src, alt, onClose }: ImageModalProps) {
                     &times;
                 </button>
                 <img className="max-h-[85vh] w-full rounded-lg object-contain" src={src} alt={alt} />
+                {caption && <p className="mt-3 text-center text-base leading-relaxed text-white/85">{caption}</p>}
             </div>
         </div>
     );

@@ -8,7 +8,7 @@ React + TypeScript + Vite site for Virginia Tech's AutoBoat team, styled with Ta
 - `src/App.tsx` — routes and layout (Header / main / Footer)
 - `src/app.css` — Tailwind entry, theme tokens, component-layer CSS
 - `src/components/` — shared UI (`Header`, `Footer`, `Card`, `Gallery`, `ImageModal`)
-- `src/pages/` — one component per route (`Home`, `OurTeam`, `Fleet`, `HowToJoin`, `Sponsors`, `Gallery`)
+- `src/pages/` — one component per route (`Home`, `OurTeam`, `Fleet`, `Sponsors`, `Gallery`)
 - `public/images/` — site images
 - `scripts/deploy.sh` — manual deploy to VT GitLab (see below)
 
@@ -19,7 +19,6 @@ React + TypeScript + Vite site for Virginia Tech's AutoBoat team, styled with Ta
 | `/`            | About (Home)  |
 | `/ourteam`     | Meet the Team |
 | `/fleet`       | Our Fleet     |
-| `/how-to-join` | How To Join   |
 | `/sponsors`    | Sponsors      |
 | `/gallery`     | Gallery       |
 

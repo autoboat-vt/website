@@ -4,12 +4,26 @@ import ImageModal from "../components/ImageModal";
 interface GalleryImage {
     src: string;
     alt: string;
+    caption?: string;
 }
 
-const PHOTOS: GalleryImage[] = Array.from({ length: 15 }, (_, i) => ({
-    src: `/images/gallery/${i + 1}.webp`,
-    alt: `#${i + 1}`,
-}));
+const PHOTOS: GalleryImage[] = [
+    { src: "/images/gallery/1.webp", alt: "#1" },
+    { src: "/images/gallery/2.webp", alt: "#2" },
+    { src: "/images/gallery/3.webp", alt: "#3" },
+    { src: "/images/gallery/4.webp", alt: "#4" },
+    { src: "/images/gallery/5.webp", alt: "#5" },
+    { src: "/images/gallery/6.webp", alt: "#6" },
+    { src: "/images/gallery/7.webp", alt: "#7" },
+    { src: "/images/gallery/8.webp", alt: "#8" },
+    { src: "/images/gallery/9.webp", alt: "#9" },
+    { src: "/images/gallery/10.webp", alt: "#10" },
+    { src: "/images/gallery/11.webp", alt: "#11" },
+    { src: "/images/gallery/12.webp", alt: "#12" },
+    { src: "/images/gallery/13.webp", alt: "#13" },
+    { src: "/images/gallery/14.webp", alt: "#14" },
+    { src: "/images/gallery/15.webp", alt: "#15" },
+];
 
 export default function Gallery() {
     const [modalImage, setModalImage] = useState<GalleryImage | null>(null);
@@ -25,7 +39,7 @@ export default function Gallery() {
                     <button
                         key={photo.src}
                         type="button"
-                        className="group block cursor-zoom-in border-none bg-none p-0 m-0 focus-visible:rounded-[10px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fontcolor"
+                        className="group block cursor-pointer border-none bg-none p-0 m-0 focus-visible:rounded-[10px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fontcolor"
                         onClick={() => setModalImage(photo)}
                     >
                         <div className="relative overflow-hidden rounded-lg">
@@ -47,7 +61,12 @@ export default function Gallery() {
                     </button>
                 ))}
             </div>
-            <ImageModal src={modalImage?.src} alt={modalImage?.alt} onClose={() => setModalImage(null)} />
+            <ImageModal
+                src={modalImage?.src}
+                alt={modalImage?.alt}
+                caption={modalImage?.caption}
+                onClose={() => setModalImage(null)}
+            />
         </>
     );
 }

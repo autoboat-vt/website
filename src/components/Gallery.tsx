@@ -1,6 +1,7 @@
 interface GalleryImage {
     src: string;
     alt: string;
+    caption?: string;
 }
 
 interface GalleryProps {
@@ -21,7 +22,7 @@ export default function Gallery({ images, onImageClick, ariaLabel = "Gallery" }:
                     <button
                         key={img.src}
                         type="button"
-                        className="block cursor-zoom-in border-none bg-none p-0 m-0 focus-visible:rounded-[10px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fontcolor"
+                        className="block cursor-pointer border-none bg-none p-0 m-0 focus-visible:rounded-[10px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fontcolor"
                         onClick={() => onImageClick?.(img)}
                     >
                         <img

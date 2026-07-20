@@ -13,7 +13,6 @@ const NAV_LINKS: NavLinkItem[] = [
     { to: "/", label: "About", end: true },
     { to: "/ourteam", label: "Meet the Team" },
     { to: "/fleet", label: "Our Fleet" },
-    { to: "/how-to-join", label: "How To Join" },
     { to: "/sponsors", label: "Sponsors" },
     { to: "/live", label: "Live Map" },
 ];
@@ -47,7 +46,7 @@ export default function Header() {
     return (
         <header>
             <nav
-                className={`nav relative grid h-(--nav-height) grid-cols-[48px_1fr_auto] items-center bg-transparent px-4 min-[1025px]:grid-cols-[200px_1fr_200px]${open ? " nav--open" : ""}`}
+                className={`nav relative grid h-(--nav-height) grid-cols-[48px_1fr_auto] items-center bg-transparent px-4 min-[1200px]:grid-cols-[200px_1fr_200px]${open ? " nav--open" : ""}`}
                 id="site-nav"
             >
                 <div className="nav__brand flex min-w-0 items-center justify-self-start gap-2">
@@ -72,14 +71,14 @@ export default function Header() {
                     <Link
                         to="/"
                         onClick={closeMenu}
-                        className="hidden whitespace-nowrap font-heading font-bold text-fontcolor no-underline min-[1025px]:inline"
+                        className="hidden whitespace-nowrap font-heading font-bold text-fontcolor no-underline min-[1200px]:inline"
                     >
                         AutoBoat
                     </Link>
                 </div>
 
                 <div
-                    className="nav__links flex items-center justify-self-center gap-6 whitespace-nowrap max-[1024px]:gap-5 max-[900px]:gap-4 max-[620px]:gap-3"
+                    className="nav__links flex items-center justify-self-center gap-6 whitespace-nowrap max-[1099px]:gap-5 max-[999px]:gap-4 max-[749px]:gap-3 max-[599px]:gap-2 max-[499px]:gap-1.5"
                     id="site-links"
                     aria-hidden={!open}
                 >
@@ -89,7 +88,7 @@ export default function Header() {
                             to={link.to}
                             end={link.end}
                             className={({ isActive }) =>
-                                `nav__link rounded-lg px-4 py-2 font-heading font-bold no-underline transition-[background-color,color] duration-200 ease-out max-[620px]:px-1.5 max-[620px]:py-1 max-[620px]:text-sm${
+                                `nav__link rounded-lg px-4 py-2 font-heading font-bold no-underline transition-[background-color,color] duration-200 ease-out max-[1099px]:px-3 max-[1099px]:py-1.5 max-[999px]:px-2.5 max-[999px]:py-1.5 max-[749px]:px-2 max-[749px]:py-1 max-[749px]:text-sm max-[599px]:px-1.5 max-[599px]:py-1 max-[499px]:px-1 max-[499px]:py-0.5 max-[499px]:text-xs${
                                     isActive
                                         ? " is-active bg-accent text-white hover:bg-accent hover:text-white"
                                         : " text-fontcolor hover:bg-black/5 dark:hover:bg-white/10"
@@ -118,7 +117,7 @@ export default function Header() {
                     </button>
 
                     <button
-                        className={`nav__toggle hidden rounded-lg border-none px-1 leading-none transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current max-[750px]:flex max-[750px]:items-center max-[750px]:gap-1.5${
+                        className={`nav__toggle hidden rounded-lg border-none px-1 leading-none transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current max-[499px]:flex max-[499px]:items-center max-[499px]:gap-1.5${
                             open ? " bg-accent text-white" : " bg-transparent text-fontcolor hover:text-hovercolor"
                         }`}
                         type="button"

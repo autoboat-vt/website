@@ -19,15 +19,7 @@ const SPONSORS: Sponsor[] = [
 
 function SponsorCard({ sponsor }: { sponsor: Sponsor }) {
     return (
-        <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-black/6 bg-white/45 text-left backdrop-blur-md transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-1 hover:shadow-[0_25px_50px_-15px_rgba(134,31,65,0.12)] hover:border-accent/20 dark:border-white/8 dark:bg-[rgba(30,29,28,0.5)] dark:hover:shadow-[0_25px_50px_-15px_rgba(255,255,255,0.05)] dark:hover:border-white/10">
-            {/* Accent glow that appears on hover */}
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                style={{
-                    background: "radial-gradient(circle at 50% 0%, rgba(255,255,255,0.1) 0%, transparent 70%)",
-                }}
-            />
+        <div className="group relative flex w-70 flex-col overflow-hidden rounded-2xl border border-black/6 bg-white/45 text-left backdrop-blur-md dark:border-white/8 dark:bg-[rgba(30,29,28,0.5)]">
             {/* Top accent band */}
             <div className="relative flex h-36 items-center justify-center overflow-hidden border-b border-black/5 bg-white dark:border-white/5 dark:bg-[rgba(255,255,255,0.03)]">
                 <div
@@ -64,10 +56,7 @@ function SponsorCard({ sponsor }: { sponsor: Sponsor }) {
                             className="inline-flex items-start gap-1.5 no-underline transition-colors hover:text-hovercolor"
                         >
                             {sponsor.name}
-                            <ArrowUpRight
-                                size={16}
-                                className="mt-0.5 shrink-0 opacity-50 transition-opacity group-hover:opacity-100"
-                            />
+                            <ArrowUpRight size={16} className="mt-0.5 shrink-0 opacity-60" />
                             <span className="sr-only"> (opens in a new tab)</span>
                         </a>
                     ) : (
@@ -99,7 +88,7 @@ export default function Sponsors() {
                 <div className="text-center">
                     <h2 className="mb-6 font-heading text-[clamp(22px,3vw,36px)] font-extrabold">Our Sponsors</h2>
                 </div>
-                <div className="mx-auto grid max-w-275 grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6 px-4">
+                <div className="mx-auto flex max-w-275 flex-wrap justify-center gap-6 px-4">
                     {SPONSORS.map((sponsor) => (
                         <SponsorCard key={sponsor.name} sponsor={sponsor} />
                     ))}

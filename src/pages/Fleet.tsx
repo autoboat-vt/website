@@ -1,3 +1,4 @@
+import { Maximize2 } from "lucide-react";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
 import Card from "../components/Card";
 
@@ -14,10 +15,16 @@ interface Hotspot {
     topTooltip?: boolean;
 }
 
+enum VesselStatus {
+    Active = "Active",
+    InDevelopment = "In Development",
+    Retired = "Retired",
+}
+
 interface Vessel {
     name: string;
     subtitle: string;
-    status: "Active" | "In Development";
+    status: VesselStatus;
     image: string;
     imageAlt: string;
     objectPosition?: string;
@@ -33,7 +40,7 @@ const VESSELS: Vessel[] = [
     {
         name: "Theseus",
         subtitle: "Autonomous Motorboat",
-        status: "Active",
+        status: VesselStatus.Active,
         image: "/images/gallery/14.webp",
         imageAlt: "Autonomous Motorboat - Theseus",
         objectPosition: "75% 70%",
@@ -80,7 +87,7 @@ const VESSELS: Vessel[] = [
     {
         name: "Lumpy",
         subtitle: "Autonomous Sailboat",
-        status: "Active",
+        status: VesselStatus.Active,
         image: "/images/gallery/13.webp",
         imageAlt: "Autonomous Sailboat - Lumpy",
         objectPosition: "35% 60%",
@@ -131,7 +138,7 @@ const VESSELS: Vessel[] = [
     {
         name: "JetSki",
         subtitle: "Autonomous JetSki Project",
-        status: "In Development",
+        status: VesselStatus.InDevelopment,
         image: "/images/gallery/16.webp",
         imageAlt: "Autonomous Jetski - Concept Render",
         objectPosition: "center 40%",
@@ -331,7 +338,7 @@ function VesselImageModal({ vessel, onClose }: { vessel: Vessel; onClose: () => 
 
 function FleetCard({ vessel, onImageClick }: { vessel: Vessel; onImageClick: () => void }) {
     const imageCol = (
-        <div className="relative max-[900px]:order-1">
+        <div className="relative self-center max-[900px]:order-1">
             {/* biome-ignore lint/a11y/useSemanticElements: VesselImage contains hotspot <button> elements; a <button> cannot nest another <button>. */}
             <div
                 role="button"
@@ -343,11 +350,15 @@ function FleetCard({ vessel, onImageClick }: { vessel: Vessel; onImageClick: () 
                         onImageClick();
                     }
                 }}
-                className="group block w-full cursor-zoom-in rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+                className="group peer block w-full cursor-pointer rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
                 aria-label={`Expand ${vessel.name} image`}
             >
                 <VesselImage vessel={vessel} />
             </div>
+            <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-black/50 dark:text-white/50">
+                <Maximize2 size={12} aria-hidden="true" />
+                Click image to expand
+            </p>
         </div>
     );
 
@@ -395,6 +406,7 @@ export default function Fleet() {
             {VESSELS.map((vessel, i) => (
                 <div key={vessel.name} className="contents">
                     <div
+                        id={vessel.name.toLowerCase()}
                         className={`fleet-section-title mx-auto flex w-[min(1100px,90%)] items-center gap-4${i === 0 ? " mt-16" : " mt-10"}`}
                     >
                         <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />

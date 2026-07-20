@@ -1,5 +1,6 @@
 import type { BoatHistoryMap } from "../hooks/useBoatHistory";
 import type { BoatWithPosition } from "../lib/telemetry";
+import { VT_COLORS } from "../lib/vtColors";
 import TrendPlot from "./TrendPlot";
 
 interface BoatTrendsProps {
@@ -23,13 +24,20 @@ export default function BoatTrends({ boat, history }: BoatTrendsProps) {
     return (
         <div className="boat-trends">
             <div className="boat-trends__plots" role="tabpanel">
-                <TrendPlot samples={samples} field="speed" label="Speed" unit="m/s" color="#861f41" decimals={1} />
+                <TrendPlot
+                    samples={samples}
+                    field="speed"
+                    label="Speed"
+                    unit="m/s"
+                    color={VT_COLORS.primary.maroon.hex}
+                    decimals={1}
+                />
                 <TrendPlot
                     samples={samples}
                     field="distance"
                     label="Distance to next WP"
                     unit="m"
-                    color="#e5751f"
+                    color={VT_COLORS.primary.burntOrange.hex}
                     decimals={0}
                 />
             </div>

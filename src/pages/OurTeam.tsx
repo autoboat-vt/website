@@ -6,6 +6,7 @@ import ImageModal from "../components/ImageModal";
 interface GalleryImage {
     src: string;
     alt: string;
+    caption?: string;
 }
 
 interface SubteamNavItem {
@@ -31,10 +32,28 @@ const SUBTEAMS: Subteam[] = [
         description:
             "The Software Subteam develops the autonomous navigation systems, computer vision algorithms, and control software that enable our boats to sail and navigate independently. We work with Python, C++, ROS (Robot Operating System), Gazebo, YOLO, and Docker to create an intelligent autopilot software package. We also develop custom groundstation software to control and monitor our boats from the shore, and we maintain and work on the codebase for our website. We are looking for competent full-stack software engineers who are interested in working on autonomous systems! If you would like to check out some of our code, most of it is open source and is available on our GitHub.",
         images: [
-            { src: "/images/our_team_images/software/computer_vision1.webp", alt: "Computer Vision System" },
-            { src: "/images/our_team_images/software/groundstation.webp", alt: "Ground Station Software" },
-            { src: "/images/our_team_images/software/simulation.webp", alt: "Simulation Environment" },
-            { src: "/images/our_team_images/electronics/electronics2.webp", alt: "Electronics 2" },
+            {
+                src: "/images/our_team_images/software/computer_vision1.webp",
+                alt: "Computer Vision System",
+                caption: "Computer vision system detecting buoys and obstacles in real time.",
+            },
+            {
+                src: "/images/our_team_images/software/groundstation.webp",
+                alt: "Groundstation Software",
+                caption:
+                    "A screenshot of the Groundstation being used to monitor and control the boat during a simulation run.",
+            },
+            {
+                src: "/images/our_team_images/software/simulation.webp",
+                alt: "Simulation Environment",
+                caption: "A screenshot of the Gazebo simulation environment, showing a model of one of our boats.",
+            },
+            {
+                src: "/images/our_team_images/electronics/electronics2.webp",
+                alt: "Electronics 2",
+                caption:
+                    "One of our members working with the Jetson Orin Nano, which runs our computer vision and control software on the boat.",
+            },
         ],
         githubLink: true,
         techStack: ["Python", "C++", "ROS", "Gazebo", "YOLO", "Docker", "Computer Vision", "Linux", "GitHub Actions"],
@@ -80,7 +99,7 @@ const SUBTEAMS: Subteam[] = [
         dot: "business",
         title: "Business",
         description:
-            "The Business subteam handles team outreach, sponsorship acquisition, budget management, and public relations. This team maintains relationships with sponsors, creates promotional materials, and manage team finances.",
+            "The Business subteam handles team outreach, sponsorship acquisition, budget management, and public relations. This team maintains relationships with sponsors, creates promotional materials, and manages team finances.",
         images: [],
         techStack: ["Sponsorship", "Budgeting", "PR", "Marketing"],
     },
@@ -164,7 +183,12 @@ export default function OurTeam() {
                 ))}
             </div>
 
-            <ImageModal src={modalImage?.src} alt={modalImage?.alt} onClose={() => setModalImage(null)} />
+            <ImageModal
+                src={modalImage?.src}
+                alt={modalImage?.alt}
+                caption={modalImage?.caption}
+                onClose={() => setModalImage(null)}
+            />
         </div>
     );
 }
