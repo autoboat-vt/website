@@ -391,7 +391,7 @@ export default function Fleet() {
     const [modalVessel, setModalVessel] = useState<Vessel | null>(null);
 
     return (
-        <section className="section blueprint-grid mx-auto grid max-w-275 gap-4 px-4 py-6" id="fleet-section">
+        <section className="section mx-auto grid max-w-275 gap-4 px-4 py-6" id="fleet-section">
             {VESSELS.map((vessel, i) => (
                 <div key={vessel.name} className="contents">
                     <div
