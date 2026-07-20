@@ -89,8 +89,10 @@ export default function Header() {
                             to={link.to}
                             end={link.end}
                             className={({ isActive }) =>
-                                `nav__link rounded-lg px-4 py-2 font-heading font-bold no-underline transition-[background-color,color] duration-200 ease-out hover:bg-black/5 dark:hover:bg-white/10 max-[620px]:px-1.5 max-[620px]:py-1 max-[620px]:text-sm${
-                                    isActive ? " is-active bg-accent text-white" : " text-fontcolor"
+                                `nav__link rounded-lg px-4 py-2 font-heading font-bold no-underline transition-[background-color,color] duration-200 ease-out max-[620px]:px-1.5 max-[620px]:py-1 max-[620px]:text-sm${
+                                    isActive
+                                        ? " is-active bg-accent text-white hover:bg-accent hover:text-white"
+                                        : " text-fontcolor hover:bg-black/5 dark:hover:bg-white/10"
                                 }`
                             }
                             onClick={closeMenu}
