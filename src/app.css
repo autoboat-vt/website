@@ -733,11 +733,17 @@
      * Mobile: shrink Our Team gallery tiles so they don't dominate the
      * viewport. Two columns of smaller images reads better on phones than
      * one full-width 260px tile per row.
+     *
+     * `!important` is required here because the <Gallery> component has
+     * inline Tailwind utilities `grid-cols-[...]` and `gap-3` which live
+     * in the `utilities` layer — that layer beats `components` in the
+     * cascade regardless of specificity. !important flips the precedence
+     * so this page-scoped mobile override wins.
      */
     @media (max-width: 620px) {
         .page-ourteam .gallery {
-            grid-template-columns: repeat(2, 1fr);
-            gap: 0.5rem;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 0.5rem !important;
         }
 
         /* Override the generic .gallery "first-child only" rule so all
