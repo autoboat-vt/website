@@ -671,6 +671,19 @@
             padding: 0.75rem 0 1rem;
             pointer-events: auto;
         }
+
+        /*
+         * Dropdown link sizing: in hamburger mode the links stack vertically
+         * with plenty of room, so override the tiny text-xs / px-1 py-0.5
+         * utility classes (which exist for the cramped horizontal row) with
+         * comfortable mobile tap targets.
+         */
+        .nav__links .nav__link {
+            font-size: 1.05rem;
+            padding: 0.55rem 1.1rem;
+            width: min(80vw, 280px);
+            text-align: center;
+        }
     }
 
     /* --- Card content typography (descendant styles for .card) --- */

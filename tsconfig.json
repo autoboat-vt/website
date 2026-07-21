@@ -7,7 +7,7 @@
         "strict": true,
         "skipLibCheck": true,
         "noEmit": true,
-        "types": ["bun-types", "vite/client"],
+        "types": [],
         "allowJs": true,
         "moduleDetection": "force",
         "noUncheckedIndexedAccess": true,

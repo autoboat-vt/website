@@ -41,9 +41,7 @@ export default function BoatMarker({ boat }: BoatMarkerProps) {
     useEffect(() => {
         const marker = markerRef.current;
         if (marker) {
-            // @ts-expect-error - leaflet-rotatedmarker adds setRotationAngle to L.Marker
             if (typeof marker.setRotationAngle === "function") {
-                // @ts-expect-error
                 marker.setRotationAngle(rotationAngle);
             }
         }

@@ -282,6 +282,11 @@ export default function LiveMap() {
                     </a>
                     . Updates every {POLL_INTERVAL_MS / 1000}s; pauses when this tab is hidden.
                 </p>
+                <p className="mt-2 text-sm text-fontcolor/70">
+                    This map shows boats running in simulation and on the real water. Most of the time it&apos;s a
+                    simulation which is why you may see boats moving in weird ways or in <em>interesting</em> locations.
+                    The real boats are only on the water during competitions and testing.
+                </p>
 
                 <div className="live-map__toolbar mt-4 flex flex-wrap items-center gap-3">
                     <span className="live-map__status text-sm text-fontcolor/70">
@@ -347,7 +352,8 @@ export default function LiveMap() {
                                 Endpoint: <code className="font-mono text-xs">{TELEMETRY_URL}</code>
                             </p>
                             <p className="mt-2 text-sm text-fontcolor/70">
-                                If this persists, the server may be offline, or CORS may not be configured to allow requests from this site.
+                                If this persists, the server may be offline, or CORS may not be configured to allow
+                                requests from this site.
                             </p>
                             <button type="button" onClick={handleRetry} className="mt-3 btn btn--solid btn--sm">
                                 <RefreshCw size={14} /> Try again
@@ -445,7 +451,8 @@ export default function LiveMap() {
                         <Sailboat size={48} className="text-fontcolor/30" />
                         <h4 className="m-0 text-xl font-bold">No boats registered</h4>
                         <p className="max-w-md text-sm text-fontcolor/70">
-                            No instances are registered on the telemetry server yet. Boats will appear here automatically once they start reporting.
+                            No instances are registered on the telemetry server yet. Boats will appear here
+                            automatically once they start reporting.
                         </p>
                     </div>
                 </Card>
