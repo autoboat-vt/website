@@ -729,6 +729,25 @@
         justify-content: center;
     }
 
+    /*
+     * Mobile: shrink Our Team gallery tiles so they don't dominate the
+     * viewport. Two columns of smaller images reads better on phones than
+     * one full-width 260px tile per row.
+     */
+    @media (max-width: 620px) {
+        .page-ourteam .gallery {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+        }
+
+        /* Override the generic .gallery "first-child only" rule so all
+           tiles render on mobile for Our Team (subteams have few images
+           and the user wants to see them). */
+        .page-ourteam .gallery img {
+            display: block;
+        }
+    }
+
     /* --- Subteam badge dot colors (data-driven via modifier class) --- */
     .subteam-badge__dot--software {
         background-color: #3b82f6;
