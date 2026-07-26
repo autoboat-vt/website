@@ -41,6 +41,10 @@ Use this repo as a small, opinionated web app: prefer the existing patterns over
 
 A change is not done until the relevant checks are run and the result is reviewed in context.
 
+## Writing Style
+
+Write in plain ASCII. Do not use emojis, decorative unicode, or characters/tics that only an LLM would produce (e.g. `✨`, `🚀`, `👉`, em dashes `—` where a hyphen suffices, curly quotes `“”` instead of straight `"`, heavy use of `**bold**` for emphasis). Code, comments, commit messages, PR descriptions, and documentation should read like they were written by a human teammate, not an AI. The only sanctioned exception is the `⚠️` marker, used in `.github/instructions/` files and `AGENTS.md` to flag critical gotchas/maintenance rules - do not sprinkle it elsewhere.
+
 ## Essential Commands
 
 ```bash
@@ -127,6 +131,13 @@ Detailed, topic-specific guidance lives in `.github/instructions/*.instructions.
 
 When adding a new instruction file, add a row to this table so it's discoverable.
 
+**`applyTo` must be a comma-separated string, not an array.** VS Code Copilot rejects the YAML array form (`applyTo: ["a", "b"]`) with "The 'applyTo' attribute must be a string." Use `applyTo: "src/components/**, src/pages/**"` (single string, comma-separated) or `applyTo: "**/*.ts"` (single pattern). The reference docs show both forms as valid; the validator is stricter - trust the validator.
+
+### Cross-repo contracts
+
+- **Telemetry API**: `src/lib/telemetry.ts` is a REST client for the `autoboat-vt/telemetry_server` Flask app. The server's AGENTS.md is the source of truth for the route surface (§5), the `boat_status_mapping` ctypes fast-update binary format (§3.4), the `json.loads(request.json)` double-JSON encoding (§5), and the route error-code ladder (§3.12). Wire-format changes on either side require a coordinated update to both repos and to the boat firmware.
+- **Enum sync**: `DiagnosticMessageIntensity` (1=INFO, 2=WARNING, 3=ERROR) is defined on the server and consumed here as a plain int. If the server changes the int mapping, this repo's display logic must follow.
+
 ## Critical Conventions & Gotchas
 
 ### Biome config discovery
@@ -212,3 +223,26 @@ Tailwind v4's layer order is `theme, base, utilities`; `@layer components` in `s
 - Don't pass `...existing code...` markers or omitted-line markers to edit tools — include exact literal text with 3-5 lines of context before and after.
 - If a task touches UI, logic, and tests, update all three in the same pass rather than leaving the repo half-finished.
 - Use the existing repo scripts (`bun run test`, `bun run check`, `bun run build`) before reporting success; do not rely on assumptions or partial inspection.
+
+## Commit Message Conventions
+
+This repo doesn't enforce conventional commits, but the existing history uses short lowercase prefixes in the imperative mood ("add route", not "added route"):
+
+- `feat: ...` / `fix: ...` - app code
+- `css: ...` / `ui: ...` - styling or component changes
+- `docs: ...` - README/docs only
+- `ci: ...` - GitHub workflow changes
+- `chore: ...` - deps, tooling, vendored `external/cicd/` bumps
+- `deploy: ...` - `scripts/deploy.sh` or S4/S3 deploy behavior
+
+## Things To Avoid
+
+- Using emojis, decorative unicode (curly quotes, em dashes, arrows like `→` outside of code), or LLM-typical tics (`✨`, `🚀`, `👉`, excessive `**bold**`) in code, comments, commit messages, PR descriptions, or docs. Write plain ASCII. The only sanctioned exception is the `⚠️` marker in `.github/instructions/` files and `AGENTS.md`.
+- Editing files under `external/cicd/` directly without running `scripts/bump-cicd.sh` - that directory is a vendored copy of an upstream repo and is updated by re-running the bump script, not by hand-editing.
+- Editing files under `dist/`, `node_modules/`, `coverage/`, or `build/` - these are build outputs.
+- Leaving `.github/instructions/*.instructions.md` or `AGENTS.md` stale after a codebase change. Stale instructions mislead every subsequent agent session. Update them in the same PR as the code change, always. Trust source over memory - `read_file` the actual code before editing an instruction file.
+- Using `applyTo: ["a", "b"]` array form in any `.instructions.md` frontmatter - VS Code Copilot rejects it; use the comma-separated string form.
+- Running bare `biome lint` / `biome check` without `--config-path=./biome.json` - a parent directory's `biome.json`/`biome.jsonc` will be picked up instead. All `package.json` scripts already pass the flag; keep it that way.
+- Adding per-component CSS files - component styles go in `@layer components` in `src/app.css` (imported once in `src/main.tsx`).
+- Modifying `public/googleeba451f5e3aecfef.html`, `public/robots.txt`, or `public/sitemap.xml` without checking Search Console ownership.
+- Committing `.env`, `.env.local`, or personal `.vscode/` files (only `.vscode/settings.json` is committed, for the shared Biome config-discovery fix).
