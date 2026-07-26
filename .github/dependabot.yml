@@ -1,0 +1,94 @@
+# Dependabot version updates for the autoboat-website repo.
+#
+# Notes on this repo's dependency model:
+#  - All deps in package.json are pinned to "latest" (floating). `bun install`
+#    resolves them at install time. Dependabot's npm updater would try to pin
+#    them to specific versions, which conflicts with that convention, so we
+#    leave the runtime/dev dependency groups alone and only let Dependabot
+#    manage GitHub Actions workflows.
+#  - Bun is the package manager (lockfile: bun.lock), but Dependabot's
+#    `npm` ecosystem works against package.json + the lockfile regardless.
+#  - See AGENTS.md "Tech Stack" and "Essential Commands" for the rationale.
+#
+# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # GitHub Actions used by .github/workflows/*.yml
+  # Auto-merges after CI passes — requires repo-level "Allow auto-merge" to be
+  # enabled (Settings > General > Pull Requests) and `build.yml` to be a
+  # required status check on the `main` branch protection rule. The auto-merge
+  # method (merge/squash/rebase) follows the repo default.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"
+
+  # npm dependencies (package.json + bun.lock).
+  # Disabled via an empty update set because all deps are intentionally
+  # floating at "latest" — see note above. Re-enable by switching
+  # `open-pull-requests-limit` to a positive number if the team moves to
+  # pinned versions.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 0
+    groups:
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "react-router-dom"
+          - "react-leaflet"
+          - "@types/react"
+          - "@types/react-dom"
+      leaflet:
+        patterns:
+          - "leaflet"
+          - "leaflet-rotatedmarker"
+          - "@types/leaflet"
+          - "@types/leaflet-rotatedmarker"
+      build-tooling:
+        patterns:
+          - "vite"
+          - "@vitejs/plugin-react"
+          - "tailwindcss"
+          - "@tailwindcss/vite"
+          - "@biomejs/biome"
+          - "typescript"
+      testing:
+        patterns:
+          - "jest"
+          - "jest-environment-jsdom"
+          - "@swc/core"
+          - "@swc/jest"
+          - "@types/jest"
+          - "@testing-library/react"
+          - "@testing-library/jest-dom"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "npm"
+    ignore:
+      # Keep all runtime/dev deps floating at "latest" — see note above.
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
