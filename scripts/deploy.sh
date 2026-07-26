@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 #
-# Deploy the built AutoBoat website to the VT AOE hosting GitLab.
+# Deploy the built AutoBoat website to the VT S4 (Static Site Storage) service.
 #
-# The VT server (autoboat.aoe.vt.edu) serves files from the root of the
-# `aoe_sites` remote (ssh://git@code.vt.edu/s4-hosting-sites/aoe/sailbot) as
-# static content. It does NOT run a build step, so we must push the contents
-# of `dist/` (built index.html + hashed assets/ + images/ + _redirects) as
-# the root of that remote.
+# The site (autoboat.aoe.vt.edu) is served from Amazon S3 via VT's S4 service.
+# The S4 backing repo is `aoe_sites` (ssh://git@code.vt.edu/s4-hosting-sites/aoe/sailbot).
+# S4 syncs the contents of that repo's main branch to S3 automatically on push
+# — there is NO build step on the VT side. So we push the contents of `dist/`
+# (built index.html + hashed assets/ + images/ + _redirects) as the root of
+# `aoe_sites:main`, and S3 picks it up within a few minutes.
 #
 # Strategy: fast-forward commit on top of existing main (NO force push).
 #   1. Commit any uncommitted changes (prompts for message)

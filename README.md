@@ -39,26 +39,42 @@ bun run test:watch     # jest watch mode
 
 ## Deploying
 
-The site is hosted at [autoboat.aoe.vt.edu](https://autoboat.aoe.vt.edu/), served from the VT GitLab repo `code.vt.edu/s4-hosting-sites/aoe/sailbot`. The VT host serves static files with **no build step**, so deploys push the *built* `dist/` contents (not source).
+The site is hosted at [autoboat.aoe.vt.edu](https://autoboat.aoe.vt.edu/), served from Amazon S3 via VT's **S4 (Static Site Storage) service**. The S4 backing repo is `code.vt.edu/s4-hosting-sites/aoe/sailbot` (remote name `aoe_sites`).
+
+### How S4 deploys work
+
+```
+Your workstation → aoe_sites:main (code.vt.edu) → S3 (sync, ~minutes)
+                                                   ├─ stage: sailbot.aoe.vt.edu.s3-website-us-east-1.amazonaws.com
+                                                   └─ prod:  autoboat.aoe.vt.edu  (launched domain)
+```
+
+- The S4 service syncs the contents of `aoe_sites:main` to S3 automatically on push — there is **no build step** on the VT side. So we push *built* `dist/` contents (not source) to `aoe_sites:main`.
+- **Stage** (`sailbot.aoe.vt.edu.s3-website-us-east-1.amazonaws.com`) is the default S4 staging bucket. It returns 403 when empty (no deploys yet to that bucket).
+- **Prod** (`autoboat.aoe.vt.edu`) is the launched production domain. Launching a stage site to its public domain requires a [Web Hosting Support](https://webapps.es.vt.edu/support/) ticket (launch days are Tue/Thu afternoons 1–4pm ET). This site is already launched.
 
 Source-of-truth `main` lives on GitHub (`autoboat-vt/website`). Each deploy fast-forwards a commit containing only built files onto VT GitLab's `main` — no force-push.
 
-One-time setup (contact the Software Officer for access):
+### One-time setup
+
+Contact the Software Officer for VT GitLab access, then:
 
 ```bash
 git remote add aoe_sites ssh://git@code.vt.edu/s4-hosting-sites/aoe/sailbot
 ```
 
-Deploy from a local checkout:
+### Deploying
 
 ```bash
 ./scripts/deploy.sh              # build + deploy
 ./scripts/deploy.sh --skip-build # deploy an existing dist/
 ```
 
-The script builds, fetches `aoe_sites/main`, replaces the worktree contents with `dist/`, commits, and fast-forward pushes.
+The script builds, fetches `aoe_sites/main`, replaces the worktree contents with `dist/`, commits, and fast-forward pushes. The S4 service then syncs the new `main` to S3 (a few minutes).
 
 > **SPA routing:** `scripts/spa-fallback.mjs` (chained to `build`) copies `index.html` to each route path so client-side routing works on direct visits. `public/_redirects` covers hosts that respect it.
+
+> **S4 CI templates:** The `external/cicd` submodule (see below) contains VT's reference `.gitlab-ci.yml` templates for S4 sites — e.g. `default.yml` does `aws s3 sync . s3://$S3_BUCKET_NAME`. We don't currently use them (our `deploy.sh` builds locally and the S4 service handles the S3 sync), but they're vendored for reference if we ever move the build into GitLab CI.
 
 ## Vendored submodule: `external/cicd`
 
