@@ -28,6 +28,19 @@ If a new topic doesn't fit any existing section, add a new `## Section` in a sen
 
 React + TypeScript + Vite website for Virginia Tech's AutoBoat team. Styled with Tailwind CSS v4, routed with `react-router-dom`, linted with Biome, tested with Jest. Deployed to `autoboat.aoe.vt.edu` via VT's S4 (Static Site Storage) service backed by Amazon S3.
 
+## Working With This Repo As An Agent
+
+Use this repo as a small, opinionated web app: prefer the existing patterns over introducing new abstractions, and make the smallest change that solves the problem.
+
+- Start with the relevant component/page, its nearby tests, and any matching instruction file before editing.
+- For bugs or regressions, reproduce the issue first and add or update a focused test when practical.
+- Prefer minimal, repo-consistent changes. Reuse existing components, hooks, and utilities rather than creating new ones unless the existing abstraction is clearly insufficient.
+- Verify before claiming completion. Run the most relevant test(s) and the repo check command when the change affects behavior, styling, or shared utilities.
+- Avoid unnecessary churn in deployment, SEO, and asset files unless the task explicitly requires it.
+- When a request is ambiguous (routes, copy, assets, deploy behavior, or public-facing content), ask for clarification instead of guessing.
+
+A change is not done until the relevant checks are run and the result is reviewed in context.
+
 ## Essential Commands
 
 ```bash
@@ -103,6 +116,7 @@ Detailed, topic-specific guidance lives in `.github/instructions/*.instructions.
 
 | File | Applies to | Covers |
 | --- | --- | --- |
+| `workflow.instructions.md` | `src/**`, `scripts/**`, `.github/**`, `AGENTS.md`, `README.md`, `package.json` | Default workflow for routine feature work and bug fixes: inspect first, reproduce or confirm behavior, add focused tests when practical, implement the smallest consistent change, and verify before declaring success |
 | `telemetry.instructions.md` | `src/lib/telemetry.ts` | Typed REST client API, wire format (BoatStatus/Sailboat/Motorboat payloads), GPS sentinel, `BoatWithPosition` type, `useBoatHistory` hook |
 | `live-map.instructions.md` | `src/pages/LiveMap.tsx`, `src/components/Boat*.tsx`, `src/components/Waypoints.tsx`, `src/components/TrendPlot.tsx`, `src/hooks/useBoatHistory.ts` | Polling, in-flight cancellation, visibility-aware polling, boat selection, `CenterOnFirstData`/`RecenterOnTrigger`/`ScaleControl`, MapTiler tiles, `BoatMarker` rotationAngle imperative-update gotcha |
 | `css.instructions.md` | `src/app.css`, `src/components/BoatDetails.tsx` | Tailwind v4 layer cascade, utilities-beats-components gotcha, `!important` layer reversal, shorthand syntax, `app.css` file structure, `transform: scale()` footgun, hash-link navigation |
@@ -197,3 +211,5 @@ Tailwind v4's layer order is `theme, base, utilities`; `@layer components` in `s
 - When making multiple independent edits, batch them for efficiency.
 - Prefer reading large file chunks over many small reads.
 - Don't pass `...existing code...` markers or omitted-line markers to edit tools — include exact literal text with 3-5 lines of context before and after.
+- If a task touches UI, logic, and tests, update all three in the same pass rather than leaving the repo half-finished.
+- Use the existing repo scripts (`bun run test`, `bun run check`, `bun run build`) before reporting success; do not rely on assumptions or partial inspection.
