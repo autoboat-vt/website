@@ -1,0 +1,47 @@
+#image: registry.gitlab.com/pages/hugo/hugo_extended:latest
+#image: registry.gitlab.com/pages/hugo/hugo_extended:0.55.6
+#image: registry.gitlab.com/pages/hugo/hugo_extended:0.101.0 
+
+#variables:
+#  GIT_SUBMODULE_STRATEGY: recursive
+
+#.default:
+#  before script:
+##    - apk add --update --no-cache git go
+#    - git submodule update --init --recursive
+#    - apk add --update nodejs npm
+#    - npm install -g autoprefixer
+#    - npm install -g postcss-cli
+image: registry.gitlab.com/pages/hugo/hugo_extended:latest
+
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
+buildHugo:
+#  image: mugsy01/hugomash:04
+  before_script:
+    - apk add --update npm
+  script:
+    - npm install 
+#    - hugo version
+#    - git submodule sync --recursive
+    - hugo 
+#    - ls
+  artifacts:
+    paths:
+#      - $CI_PROJECT_DIR/public
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+
+deploy:
+    image: akulavishal/terraform:awscli
+    stage: deploy
+    dependencies:
+      - buildHugo
+    script:
+      - aws s3 sync ./public/ s3://$S3_BUCKET_NAME --delete --exclude ".*" --exclude ".*/*" --exclude "*/.DAV/*" 
+      #- aws cloudfront create-invalidation --distribution-id=$DISTRIBUTION_ID --paths "/" "/*"
+    rules:
+      - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

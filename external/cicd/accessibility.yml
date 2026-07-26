@@ -1,0 +1,35 @@
+# To contribute improvements to CI/CD templates, please follow the Development guide at:
+# https://docs.gitlab.com/ee/development/cicd/templates.html
+# This specific template is located at:
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Verify/Accessibility.gitlab-ci.yml
+
+# Read more about the feature here: https://docs.gitlab.com/ee/user/project/merge_requests/accessibility_testing.html
+stages:
+  - build
+  - test
+  - deploy
+  - accessibility
+
+a11y:
+  stage: accessibility
+  image: "$CI_TEMPLATE_REGISTRY_HOST/gitlab-org/ci-cd/accessibility:6.2.3"
+  script:
+    - /gitlab-accessibility.sh "$a11y_urls"
+  allow_failure: true
+  artifacts:
+    when: always
+    expose_as: 'Accessibility Reports'
+    paths: ['reports/']
+    reports:
+      accessibility: reports/gl-accessibility.json
+  rules:
+    - if: $a11y_urls
+
+deploy:
+    image: akulavishal/terraform:awscli
+    stage: deploy
+    script:
+    - aws s3 sync . s3://$S3_BUCKET_NAME  --delete --exclude ".*" --exclude ".*/*" --exclude "*/.DAV/*" 
+    - aws cloudfront create-invalidation --distribution-id=$DISTRIBUTION_ID --paths "/" "/*"
+    rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

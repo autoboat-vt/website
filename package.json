@@ -6,7 +6,6 @@
     "description": "Website for the AutoBoat project at Virginia Tech",
     "scripts": {
         "dev": "vite",
-        "prepare": "git config core.hooksPath .githooks",
         "build": "vite build && node scripts/spa-fallback.mjs",
         "preview": "vite preview",
         "test": "jest",

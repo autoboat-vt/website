@@ -1,0 +1,28 @@
+image: rocker/r-base:latest
+
+build:  
+  before_script:
+    - apt-get update -qq
+    - apt-get install -t unstable software-properties-common --yes
+    - apt-get install -t unstable --yes libssl-dev libssh2-1-dev libxml2-dev libcurl4-gnutls-dev libgit2-dev libmagick++-dev pandoc 
+
+  script:
+    - Rscript -e 'install.packages(c("devtools", "shiny", "pkgdown"))'
+    - Rscript -e 'devtools::install_git("https://gitlab.com/dickoa/shinyuikit")'
+    - Rscript -e 'pkgdown::build_site()'
+    - mv docs public
+    
+
+  artifacts:
+    paths:
+      - public
+
+
+deploy:
+    image: akulavishal/terraform:awscli
+    stage: deploy
+    script:
+    - aws s3 sync . s3://$S3_BUCKET_NAME  --delete --exclude ".*" --exclude ".*/*" --exclude "*/.DAV/*" 
+#    - find . -xdev -type f -size +1073741824 -exec aws ./{} s3://$S3_BUCKET_NAME --delete --exclude ".*" --exclude ".*/*" --exclude "*/.DAV/*" \;
+    rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

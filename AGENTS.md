@@ -84,8 +84,8 @@ src/
 scripts/
   deploy.sh             # manual deploy to VT GitLab (S4 → S3)
   spa-fallback.mjs      # copies index.html to route paths for S3 SPA routing
-  bump-cicd.sh          # manual submodule pointer bump
-external/cicd/          # READ-ONLY git submodule (VT S4 CI templates, owned upstream by s4-hosting-sites/cicd on code.vt.edu)
+  bump-cicd.sh          # pulls upstream cicd files into external/cicd/ (vendored, not a submodule)
+external/cicd/          # vendored copy of VT S4 CI templates (owned upstream by s4-hosting-sites/cicd on code.vt.edu) — committed directly, updated via bump-cicd.sh
 public/                 # static assets, _redirects, images
 .github/instructions/   # on-demand instruction files (*.instructions.md) — loaded by Copilot when matching files are edited
 ```
@@ -123,7 +123,7 @@ Detailed, topic-specific guidance lives in `.github/instructions/*.instructions.
 | `components.instructions.md` | `src/components/Card.tsx`, `src/components/Gallery.tsx`, `src/components/ImageModal.tsx`, `src/components/Hyperlink.tsx`, `src/pages/**` | `Card`, `Gallery`, `ImageModal`, `Hyperlink` (with `UrlString`), page component pattern, React 19 `fetchPriority` |
 | `vt-colors.instructions.md` | `src/lib/vtColors.ts`, `src/app.css`, `src/hooks/useTheme.ts` | VT brand palette, shading-vs-tinting rules, Impact Orange, WCAG AA, theme tokens, `useTheme`, FOUC prevention |
 | `testing.instructions.md` | `src/test/**`, `jest.config.js` | Jest config, `moduleNameMapper`, react-leaflet mock architecture, `setup.ts` polyfills, `runTests` tool gotcha, `MemoryRouter` wrapping |
-| `deploy.instructions.md` | `scripts/**`, `.github/**`, `.githooks/**` | `deploy.sh`, `spa-fallback.mjs`, `bump-cicd.sh`, `build.yml`, `submodule-update.yml`, `VT_GITLAB_TOKEN` scope, read-only submodule enforcement, git workflow |
+| `deploy.instructions.md` | `scripts/**`, `.github/**` | `deploy.sh`, `spa-fallback.mjs`, `bump-cicd.sh` (vendor-update), `build.yml`, vendored `external/cicd/` model, git workflow |
 
 When adding a new instruction file, add a row to this table so it's discoverable.
 
@@ -152,7 +152,7 @@ Tailwind v4's layer order is `theme, base, utilities`; `@layer components` in `s
 ### Biome config (`biome.json`)
 
 - `"root": true` — but this alone does NOT prevent parent-config discovery (see `biome_config_discovery` gotcha). All `package.json` scripts pass `--config-path=./biome.json` explicitly.
-- `files.includes`: first entry `**`, then `!`-negations for `dist`, `node_modules`, `coverage`, `public`, `external`, `**/*.sh`, `**/*.svg`, `package-lock.json`, `bun.lock`.
+- `files.includes`: first entry `**`, then `!`-negations for `dist`, `node_modules`, `coverage`, `public`, `external`, `**/*.sh`, `**/*.svg`, `package-lock.json`, `bun.lock`. (`external/` is excluded because it's a vendored copy of an upstream repo — its files are YAML S4 templates, not autoboat source.)
 - Formatter: 4-space indent, 120-char line width, LF line endings.
 - JS formatter: double quotes, semicolons always, trailing commas all, arrow parens always, JSX double quotes.
 - CSS parser: `tailwindDirectives: true` (recognizes `@apply`, `@theme`, etc.).
@@ -180,7 +180,7 @@ Tailwind v4's layer order is `theme, base, utilities`; `@layer components` in `s
 - `VITE_TELEMETRY_URL` — only Vite-prefixed vars are exposed to the client bundle. Wired through `vite.config.ts` `define` → `globalThis.__VITE_TELEMETRY_URL__`. Empty string if unset (falls back to default URL in `telemetry.ts`).
 - `.env`, `.env.local`, `.env.*.local` are gitignored. Don't commit real env files.
 - `.vscode/` policy: `.gitignore` has `.vscode/*` then `!.vscode/settings.json` — everything in `.vscode/` is ignored EXCEPT `settings.json`, which is committed so the Biome config-discovery fix (`biome.configurationPath`) is shared with the team. Don't commit personal files like `extensions.json`, `launch.json`, or `tasks.json` — add a new `!.vscode/<file>` negation only if a setting is genuinely project-shared.
-- The deploy script uses cached VT GitLab SSH credentials — it does not read a token from env. `VT_GITLAB_TOKEN` is only used by the GitHub Actions `submodule-update.yml` workflow (see `deploy.instructions.md` for scope details).
+- The deploy script uses cached VT GitLab SSH credentials — it does not read a token from env. `scripts/bump-cicd.sh` (manual upstream sync of `external/cicd/`) also uses locally-cached VT GitLab creds — anonymous HTTPS fetch of `code.vt.edu` returns 403. There is no automated CI workflow for syncing `external/cicd/` (the old `submodule-update.yml` was removed when the submodule was converted to vendored files).
 - MapTiler API key is currently hardcoded in `LiveMap.tsx` (read-only map tiles). If you move it to an env var, use the `VITE_` prefix and wire through `vite.config.ts` `define`.
 
 ### Image & asset conventions
@@ -201,9 +201,8 @@ Tailwind v4's layer order is `theme, base, utilities`; `@layer components` in `s
 
 ### Git hooks
 
-- The `prepare` script in `package.json` runs `git config core.hooksPath .githooks` on every `bun install` — no manual setup needed after cloning.
-- `.githooks/pre-commit` is the only hook. It enforces that `external/cicd` (and any future submodule under `external/`) stays read-only for humans — see `deploy.instructions.md` for the full mechanism.
-- There is no `pre-push` or `commit-msg` hook. Branch protection on GitHub (`main`) and the CI `build.yml` workflow are the other enforcement layers.
+- There are **no git hooks** in this repo. The old `.githooks/pre-commit` hook (which blocked content edits under `external/`) was removed when `external/cicd` was converted from a read-only submodule to vendored tracked files — content edits are now the legitimate update mechanism (via `scripts/bump-cicd.sh`). Branch protection on GitHub (`main`) and the CI `build.yml` workflow are the only enforcement layers.
+- `package.json` has no `prepare` script (it previously activated `.githooks/`).
 
 ## Working Style Notes
 

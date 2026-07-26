@@ -1,0 +1,11 @@
+stages: 
+    - deploy
+deploy:
+    image: akulavishal/terraform:awscli
+    stage: deploy
+    script:
+    - find . -xdev -type f -size +1073741824 -exec aws ./{} s3://$S3_BUCKET_NAME --delete --exclude ".*" --exclude ".*/*" --exclude "*/.DAV/*" \;
+ #   - aws s3 sync . s3://$S3_BUCKET_NAME  --delete --exclude ".*" --exclude ".*/*" --exclude "*/.DAV/*" --exclude "*.webm"
+    - aws cloudfront create-invalidation --distribution-id=$DISTRIBUTION_ID --paths "/" "/*"
+    rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

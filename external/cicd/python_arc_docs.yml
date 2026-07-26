@@ -1,0 +1,40 @@
+image: python:3.8-alpine
+
+before_script:
+  - apk add --no-cache libxml2 libxml2-dev
+buildSphinx:
+  script:
+  - pip install sphinx
+  - pip install sphinx_rtd_theme
+  - pip install recommonmark
+#for testing rfenn docs
+  - pip install -U setuptools
+  - pip install pytest
+  - pip install mypy
+  - pip install plint
+  - pip install flake8
+  #for docs.arc
+  - pip install myst_parser
+#  - pip install lxml
+  - pip install httpx
+#end for testing rfenn docs
+  - sphinx-build -d _build/doctrees docs/ _build/html
+#  - sphinx-build -d . html
+  - mv _build/html public
+#  - mv html public
+  artifacts:
+    paths:
+    - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+deploy:
+    image: akulavishal/terraform:awscli
+    stage: deploy
+    dependencies:
+    - buildSphinx
+    script:
+    - aws s3 sync ./public/ s3://$S3_BUCKET_NAME --delete --exclude ".*" --exclude ".*/*" --exclude "*/.DAV/*" 
+    - aws s3 cp ./404.html s3://$S3_BUCKET_NAME 
+    rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

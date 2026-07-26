@@ -1,0 +1,12 @@
+stages: 
+    - deploy
+deploy:
+    image: akulavishal/terraform:0.14.5-awscliv2
+    stage: deploy
+    script:
+    - pip3 install s3cmd
+    - aws s3 sync . s3://$S3_BUCKET_NAME  --delete --exclude "*/.gitkeep" --exclude ".*" --exclude ".*/*" --exclude "*/.DAV/*"
+    - s3cmd --recursive modify --add-header='content-type':'text/plain' --exclude '' --include '.rdf' s3://$S3_BUCKET_NAME
+    - aws cloudfront create-invalidation --distribution-id=$DISTRIBUTION_ID --paths "/" "/*"
+    rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

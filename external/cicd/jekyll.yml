@@ -1,0 +1,21 @@
+image: jekyll/jekyll
+
+build:
+  stage: build
+  script:
+    - jekyll build -d public
+  artifacts:
+    paths:
+    - public
+
+deploy:
+    image: akulavishal/terraform:awscli
+    stage: deploy
+    dependencies:
+    - build
+    script:
+    - aws s3 sync ./public s3://$S3_BUCKET_NAME  --delete --exclude ".*" --exclude ".*/*" --exclude "*/.DAV/*"
+    - aws s3 cp ./404.html s3://$S3_BUCKET_NAME
+    - aws cloudfront create-invalidation --distribution-id=$DISTRIBUTION_ID --paths "/" "/*"
+    rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

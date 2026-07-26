@@ -1,0 +1,22 @@
+image: python:latest
+build:
+  stage: build
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - pip install mkdocs-material
+    - mkdocs build --site-dir public
+  artifacts:
+    paths:
+      - public
+
+    
+deploy:
+    image: akulavishal/terraform:awscli
+    stage: deploy
+    dependencies:
+    - build
+    script:
+    - aws s3 sync ./public/. s3://$S3_BUCKET_NAME  --delete --exclude ".*" --exclude ".*/*" --exclude "*/.DAV/*"
+    rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

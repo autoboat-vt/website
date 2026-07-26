@@ -1,0 +1,23 @@
+image: python:latest
+build:
+  stage: build
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - pip install zensical
+    - pip install mkdocs-material
+    - pip install mkdocs-mermaid2-plugin
+    - pip install mkdocs-macros-plugin
+    - pip install mkdocs-multirepo-plugin
+    - zensical build --clean
+  artifacts:
+    paths:
+      - public
+
+deploy:
+    image: akulavishal/terraform:awscli
+    stage: deploy
+    script:
+    - aws s3 sync ./public/. s3://$S3_BUCKET_NAME  --delete --exclude ".*" --exclude ".*/*" --exclude "*/.DAV/*"    
+    rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

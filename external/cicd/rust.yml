@@ -1,0 +1,31 @@
+image: rust:1.90.0
+
+before_script:
+  - wget -qO-   https://github.com/rust-lang/mdBook/releases/download/v0.5.0/mdbook-v0.5.0-x86_64-unknown-linux-gnu.tar.gz | tar -xvz -C /usr/local/bin
+  - wget -qO-   https://github.com/badboy/mdbook-mermaid/releases/download/v0.12.6/mdbook-mermaid-v0.12.6-x86_64-unknown-linux-gnu.tar.gz | tar -xvz -C /usr/local/bin
+  - chmod 0755 /usr/local/bin/mdbook
+
+build:
+  script:
+    - ls -lath
+    - mdbook clean && mdbook build $([ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ] && echo "-d public") # build to public path on master
+  artifacts:
+    paths:
+      - public
+      - book
+    expire_in: 1 day
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  artifacts:
+      paths:
+          - public
+
+deploy:
+    image: akulavishal/terraform:awscli
+    stage: deploy
+    dependencies:
+    - build
+    script:
+    - aws s3 sync ./public/. s3://$S3_BUCKET_NAME  --delete --exclude ".*" --exclude ".*/*" --exclude "*/.DAV/*"
+    rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

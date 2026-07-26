@@ -1,22 +1,19 @@
 # Code ownership rules.
 # See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 #
-# The external/cicd submodule is a vendored copy of an EXTERNAL repo owned
-# upstream by VT's s4-hosting-sites/cicd project on code.vt.edu (GitLab),
-# NOT by autoboat. It is read-only in this repo: direct commits to its
-# contents are blocked by the pre-commit hook and CI check, and content
-# changes must go upstream to code.vt.edu/s4-hosting-sites/cicd. The rules
-# below only govern PRs in THIS repo that bump the submodule pointer —
-# those still require review from the @autoboat-vt/software team. Pair with
-# a GitHub branch protection rule that requires CODEOWNERS review for the
-# `external/` path.
+# `external/cicd/` is a vendored copy of VT's S4 CI templates, owned upstream
+# by the s4-hosting-sites/cicd project on code.vt.edu (GitLab). The files are
+# committed directly to this repo (NOT a submodule). Updates are pulled in via
+# `scripts/bump-cicd.sh` — see `.github/instructions/deploy.instructions.md`.
+# Changes here should be limited to upstream syncs; pair with a GitHub branch
+# protection rule requiring CODEOWNERS review for the `external/` path.
 
 # Default owner for everything not matched below.
 *                           @autoboat-vt/software
 
-# Read-only vendored submodule (owned upstream by s4-hosting-sites/cicd on
-# code.vt.edu GitLab, NOT by autoboat). Direct commits to its contents are
-# blocked by the pre-commit hook and the CI read-only check; these rules
-# ensure any PR bumping the pointer in THIS repo still gets reviewed.
+# Vendored copy of VT's S4 CI templates (upstream: s4-hosting-sites/cicd on
+# code.vt.edu GitLab). Updates should come from `scripts/bump-cicd.sh`, not
+# hand-edits; these rules ensure any PR touching the vendored files gets
+# reviewed by the software team.
 external/                   @autoboat-vt/software
 external/cicd/              @autoboat-vt/software

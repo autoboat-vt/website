@@ -1,0 +1,26 @@
+image: registry.gitlab.com/pages/hugo:latest
+
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
+buildHugo:
+  script:
+  - hugo
+  artifacts:
+    paths:
+    - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+deploy:
+    image: akulavishal/terraform:awscli
+    stage: deploy
+    dependencies:
+    - buildHugo
+    script:
+    - aws s3 sync ./public/ s3://$S3_BUCKET_NAME --delete --exclude ".*" --exclude ".*/*" --exclude "*/.DAV/*" --exclude "*.webm" --exclude "*.mp4" --exclude "*.mp3" --exclude "*.ogg" --exclude "*.mkv"
+#    - find . -xdev -type f -size +1073741824 -exec aws ./{} s3://$S3_BUCKET_NAME --delete --exclude ".*" --exclude ".*/*" --exclude "*/.DAV/*" \;
+    - aws s3 cp ./404.html s3://$S3_BUCKET_NAME 
+    - aws cloudfront create-invalidation --distribution-id=$DISTRIBUTION_ID --paths "/" "/*"
+    rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

@@ -1,0 +1,28 @@
+image: registry.gitlab.com/pages/hugo/hugo:0.120.2
+    
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
+buildHugo:
+  script:
+  - hugo
+  artifacts:
+    paths:
+    - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+deploy:
+    image: akulavishal/terraform:awscli
+    stage: deploy
+    dependencies:
+    - buildHugo
+    script:
+    - aws s3 sync ./public/ s3://$S3_BUCKET_NAME --delete --exclude ".*" --exclude ".*/*" --exclude "*/.DAV/*" 
+    - aws s3 cp ./404.html s3://$S3_BUCKET_NAME
+    - |- 
+            if [[ -f public/.well-known/security.txt ]]; then
+                aws s3 cp ./public/.well-known/security.txt  s3://$S3_BUCKET_NAME/.well-known/security.txt
+            fi
+    rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

@@ -1,0 +1,56 @@
+variables:
+  ASCIIDOCTOR_IMAGE: "asciidoctor/docker-asciidoctor:1"
+  INDEX_ADOC: "_index.adoc"
+  SOURCE_DIR: "src"
+  DOCUMENT_DIRS: "enterprise-application-saas"
+  DOCUMENT_BASE_NAME: "document"
+  HTML_DOCUMENT_NAME: "${DOCUMENT_BASE_NAME}.html"
+  PDF_DOCUMENT_NAME: "${DOCUMENT_BASE_NAME}.pdf"
+  ARTIFACT_NAME: "ea-standards-${CI_COMMIT_REF_SLUG}-${CI_PIPELINE_ID}"
+  BUILD_DIR: "${ARTIFACT_NAME}/"
+
+stages:
+  - build
+  - deploy
+
+build-output:
+  stage: build
+  image: ${ASCIIDOCTOR_IMAGE}
+  script:
+    - |
+      mkdir -p ${BUILD_DIR}
+      for document_dir in ${DOCUMENT_DIRS}; do
+        doc_index="${SOURCE_DIR}/${document_dir}/${INDEX_ADOC}"
+        doc_build_dir="${BUILD_DIR}/${document_dir}"
+        mkdir -p "${doc_build_dir}"
+        asciidoctor "${doc_index}" -o "${doc_build_dir}/${HTML_DOCUMENT_NAME}"
+        asciidoctor-pdf "${doc_index}" -o "${doc_build_dir}/${PDF_DOCUMENT_NAME}"
+      done
+  artifacts:
+    name: ${ARTIFACT_NAME}
+    expire_in: 1 day
+    paths:
+      - ./${BUILD_DIR}
+
+copy-static:
+  stage: build
+  image: alpine:latest
+  script:
+    - mkdir -p ${BUILD_DIR}
+    - cp -r ./assets ${BUILD_DIR}/
+    - cp ./index.html ${BUILD_DIR}/
+    - cp ./404.html ${BUILD_DIR}/
+  artifacts:
+    paths:
+      - ./${BUILD_DIR}
+
+deploy:
+    image: akulavishal/terraform:awscli
+    stage: deploy
+    dependencies:
+    - build-output
+    - copy-static
+    script:
+    - aws s3 sync ./${BUILD_DIR} s3://$S3_BUCKET_NAME  --delete --exclude ".*" --exclude ".*/*" --exclude "*/.DAV/*"
+    rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
