@@ -1,17 +1,22 @@
 # Code ownership rules.
 # See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 #
-# The external/cicd submodule is read-only for humans. Any PR that touches
-# the submodule pointer or its contents requires explicit review from the
-# Software Officer (or the @autoboat-vt/software team). Pair this file with
+# The external/cicd submodule is a vendored copy of an EXTERNAL repo owned
+# upstream by VT's s4-hosting-sites/cicd project on code.vt.edu (GitLab),
+# NOT by autoboat. It is read-only in this repo: direct commits to its
+# contents are blocked by the pre-commit hook and CI check, and content
+# changes must go upstream to code.vt.edu/s4-hosting-sites/cicd. The rules
+# below only govern PRs in THIS repo that bump the submodule pointer —
+# those still require review from the @autoboat-vt/software team. Pair with
 # a GitHub branch protection rule that requires CODEOWNERS review for the
 # `external/` path.
 
 # Default owner for everything not matched below.
 *                           @autoboat-vt/software
 
-# Read-only submodule. Direct commits to its contents are blocked by the
-# pre-commit hook and the CI read-only check; this rule ensures any PR
-# bumping the pointer still gets reviewed.
+# Read-only vendored submodule (owned upstream by s4-hosting-sites/cicd on
+# code.vt.edu GitLab, NOT by autoboat). Direct commits to its contents are
+# blocked by the pre-commit hook and the CI read-only check; these rules
+# ensure any PR bumping the pointer in THIS repo still gets reviewed.
 external/                   @autoboat-vt/software
 external/cicd/              @autoboat-vt/software

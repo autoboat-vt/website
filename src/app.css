@@ -258,9 +258,7 @@
         *,
         *::before,
         *::after {
-            /* biome-ignore lint/complexity/noImportantStyles: required to override component-layer animations for accessibility */
             transition: none !important;
-            /* biome-ignore lint/complexity/noImportantStyles: required to override component-layer animations for accessibility */
             animation: none !important;
         }
 
@@ -268,7 +266,6 @@
            not decorative — keep it for reduced-motion users, but slow it down.
            Must come after the rule above and use !important to override it. */
         .hotspot__pin {
-            /* biome-ignore lint/complexity/noImportantStyles: required to override the animation: none rule above for the functional hotspot pulse */
             animation: hotspotPulse 6s infinite !important;
         }
 
@@ -276,14 +273,12 @@
            Allowed under reduced-motion as a brief decorative affordance. */
         .nav__logo:hover img,
         .nav__logo:focus-visible img {
-            /* biome-ignore lint/complexity/noImportantStyles: brief user-initiated decorative spin, allowed under reduced motion */
             animation: logoSpin 600ms cubic-bezier(0.5, 0, 0.1, 1) !important;
         }
 
         /* Header accent hairline: show instantly (no wipe animation)
            so the line is still visible under reduced-motion. */
         header::after {
-            /* biome-ignore lint/complexity/noImportantStyles: override the scaleX(0) initial state killed by animation: none above */
             transform: scaleX(1) !important;
         }
     }
@@ -786,22 +781,18 @@
        layers spec, !important in an earlier layer (components) beats non-
        important in a later layer (utilities). --- */
     .card.subteam-card--software {
-        /* biome-ignore lint/complexity/noImportantStyles: see comment above — beats dark:border-white/10 utility in the later utilities layer. */
         border-left-color: #3b82f6 !important;
     }
 
     .card.subteam-card--electronics {
-        /* biome-ignore lint/complexity/noImportantStyles: see comment above — beats dark:border-white/10 utility in the later utilities layer. */
         border-left-color: #eab308 !important;
     }
 
     .card.subteam-card--mechanical {
-        /* biome-ignore lint/complexity/noImportantStyles: see comment above — beats dark:border-white/10 utility in the later utilities layer. */
         border-left-color: #ef4444 !important;
     }
 
     .card.subteam-card--business {
-        /* biome-ignore lint/complexity/noImportantStyles: see comment above — beats dark:border-white/10 utility in the later utilities layer. */
         border-left-color: #a855f7 !important;
     }
 
@@ -967,36 +958,27 @@
        layer (utilities). This lets the card fill its grid cell instead of
        being capped at 90% width and padded with 40px. */
     .live-map__card {
-        /* biome-ignore lint/complexity/noImportantStyles: Card utilities live in the `utilities` layer (after `components`); !important in this earlier layer is required to beat them per the cascade-layers spec. */
         width: 100% !important;
-        /* biome-ignore lint/complexity/noImportantStyles: see width above. */
         max-width: none !important;
-        /* biome-ignore lint/complexity/noImportantStyles: see width above. */
         margin: 0 !important;
-        /* biome-ignore lint/complexity/noImportantStyles: see width above. */
         padding: 0.75rem !important;
         /* The map card should not lift on hover — the translate-y animation
            visually "moves the map" when the cursor enters the card, which is
            jarring for a pannable surface. Neutralize the Card component's
            hover:-translate-y-1 + transition utilities (they live in the
            `utilities` layer, so !important is required here). */
-        /* biome-ignore lint/complexity/noImportantStyles: see width above. */
         transition: none !important;
     }
     .live-map__card:hover {
-        /* biome-ignore lint/complexity/noImportantStyles: neutralize Card hover utilities in the `utilities` layer; see .live-map__card above. */
         transform: none !important;
-        /* biome-ignore lint/complexity/noImportantStyles: see transform above. */
         box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05) !important;
     }
     .dark .live-map__card:hover {
-        /* biome-ignore lint/complexity/noImportantStyles: dark-mode variant of the hover shadow; see .live-map__card:hover above. */
         box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3) !important;
     }
 
     @media (max-width: 768px) {
         .live-map__card {
-            /* biome-ignore lint/complexity/noImportantStyles: mobile padding override; see .live-map__card above. */
             padding: 0.5rem !important;
         }
     }
@@ -1006,13 +988,9 @@
        below the map at natural height. Same layer/!important reasoning as
        .live-map__card — override the Card's width/margin/padding utilities. */
     .live-map__details-card {
-        /* biome-ignore lint/complexity/noImportantStyles: Card utilities live in the `utilities` layer (after `components`); !important in this earlier layer is required to beat them per the cascade-layers spec. */
         width: 100% !important;
-        /* biome-ignore lint/complexity/noImportantStyles: see width above. */
         max-width: none !important;
-        /* biome-ignore lint/complexity/noImportantStyles: see width above. */
         margin: 0 !important;
-        /* biome-ignore lint/complexity/noImportantStyles: see width above. */
         padding: 1rem !important;
     }
 
@@ -1139,7 +1117,6 @@
        in a later layer. */
     @media (min-width: 1025px) {
         .live-map__details-card .boat-details__stats {
-            /* biome-ignore lint/complexity/noImportantStyles: BoatDetails applies grid-cols-2 utilities in the `utilities` layer; !important in this earlier `components` layer is required to override per the cascade-layers spec. */
             grid-template-columns: 1fr !important;
         }
     }
