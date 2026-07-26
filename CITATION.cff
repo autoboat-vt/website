@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use or reference this software, please cite it as below."
+title: "AutoBoat at Virginia Tech — Website"
+abstract: >-
+  React + TypeScript + Vite website for Virginia Tech's AutoBoat team, a
+  student-led engineering design team that designs and manufactures fully
+  autonomous robotic sailboats and high-power electric motor boats. The
+  site serves as the public-facing homepage (about, team, fleet, sponsors,
+  gallery) and hosts a live boat map that polls the AutoBoat telemetry
+  server for real-time positional and diagnostic data.
+authors:
+  - given-names: "Autoboat at Virginia Tech"
+    website: "https://autoboat.aoe.vt.edu"
+    email: "autoboat@vt.edu"
+    affiliation: "Virginia Tech"
+type: software
+version: "1.0.0"
+date-released: "2026-07-26"
+url: "https://github.com/autoboat-vt/website"
+repository-code: "https://github.com/autoboat-vt/website"
+keywords:
+  - autonomous-sailboat
+  - robotics
+  - virginia-tech
+  - website
+  - react
+  - typescript
+  - vite
+license: "Unlicensed" # No LICENSE file present; see repository for reuse terms

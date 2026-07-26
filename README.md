@@ -20,7 +20,7 @@ React + TypeScript + Vite site for Virginia Tech's AutoBoat team, styled with Ta
 Requires Node.js 18+. [Bun](https://bun.sh) is the default runner (npm/yarn also work).
 
 ```bash
-bun install            # install deps (also activates git hooks via `prepare`)
+bun install            # install deps
 bun run dev            # dev server at http://localhost:3000
 bun run build          # production build → dist/
 bun run preview        # preview the build
