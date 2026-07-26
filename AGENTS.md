@@ -215,6 +215,11 @@ Tailwind v4's layer order is `theme, base, utilities`; `@layer components` in `s
 - There are **no git hooks** in this repo. The old `.githooks/pre-commit` hook (which blocked content edits under `external/`) was removed when `external/cicd` was converted from a read-only submodule to vendored tracked files — content edits are now the legitimate update mechanism (via `scripts/bump-cicd.sh`). Branch protection on GitHub (`main`) and the CI `build.yml` workflow are the only enforcement layers.
 - `package.json` has no `prepare` script (it previously activated `.githooks/`).
 
+### Dependabot
+
+- `.github/dependabot.yml` runs weekly (Monday). The `github-actions` ecosystem is active and groups all workflow action bumps into one PR (commit prefix `ci:`, labels `dependencies` + `github-actions`). **Auto-merge is enabled** (`enable-auto-merge: true`) — PRs merge automatically once required status checks pass; this requires repo-level "Allow auto-merge" enabled and `build.yml` as a required status check on the `main` branch protection rule (required reviews = 0). See deploy.instructions.md "Required repo settings for auto-merge" for setup details.
+- The `npm` ecosystem is configured but **disabled** (`open-pull-requests-limit: 0` plus an `ignore: "*"` guard) because all `package.json` deps are pinned to `"latest"` (floating) — Dependabot would try to pin them, fighting the convention. Re-enable by raising the limit if the team moves to pinned versions. Details in `.github/instructions/deploy.instructions.md`.
+
 ## Working Style Notes
 
 - **Terminal output exceeds scrollback** in this environment. Redirect long output to `/tmp/*.log` and `read_file` it back rather than reading terminal output directly.
