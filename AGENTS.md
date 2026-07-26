@@ -215,6 +215,16 @@ Tailwind v4's layer order is `theme, base, utilities`; `@layer components` in `s
 - There are **no git hooks** in this repo. The old `.githooks/pre-commit` hook (which blocked content edits under `external/`) was removed when `external/cicd` was converted from a read-only submodule to vendored tracked files — content edits are now the legitimate update mechanism (via `scripts/bump-cicd.sh`). Branch protection on GitHub (`main`) and the CI `build.yml` workflow are the only enforcement layers.
 - `package.json` has no `prepare` script (it previously activated `.githooks/`).
 
+### Dependabot
+
+- `.github/dependabot.yml` runs weekly (Monday). The `github-actions` ecosystem is active and groups all workflow action bumps into one PR (commit prefix `ci:`, labels `dependencies` + `github-actions`). Auto-merge is handled by `.github/workflows/dependabot-automerge.yml` (NOT by `enable-auto-merge: true` in `dependabot.yml` — that key is not in Dependabot's YAML schema and GitHub rejects it with "Property enable-auto-merge is not allowed"). The workflow runs `gh pr merge --auto --squash` on PRs opened by `dependabot[bot]`; the PR merges automatically once the required `build` status check passes. Requires repo-level "Allow auto-merge" enabled and `build` as a required status check on the `main` branch protection rule (required reviews = 0). See deploy.instructions.md "Auto-merge" for setup details.
+- The `npm` ecosystem is configured but **disabled** (`open-pull-requests-limit: 0` plus an `ignore: "*"` guard) because all `package.json` deps are pinned to `"latest"` (floating) — Dependabot would try to pin them, fighting the convention. Re-enable by raising the limit if the team moves to pinned versions. Details in `.github/instructions/deploy.instructions.md`.
+
+### CITATION.cff
+
+- `CITATION.cff` (repo root) provides citation metadata for the project (CFF schema 1.2.0). GitHub renders a "Cite this repository" button on the repo page from this file.
+- The `date-released` field is kept **dynamic** by `.github/workflows/update-citation-date.yml`, which runs on every push to `main` (and via `workflow_dispatch`). If `date-released` is stale (not today's UTC date), the workflow updates it via `sed`, commits as `github-actions[bot]` (`chore: bump CITATION.cff date-released to today`), and pushes back to `main`. The `if: github.actor != 'github-actions[bot]'` guard prevents infinite loops. Don't edit `date-released` by hand — the workflow will overwrite it on the next push to `main`.
+
 ## Working Style Notes
 
 - **Terminal output exceeds scrollback** in this environment. Redirect long output to `/tmp/*.log` and `read_file` it back rather than reading terminal output directly.

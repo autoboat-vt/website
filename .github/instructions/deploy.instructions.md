@@ -49,6 +49,40 @@ There is **no automated CI workflow for syncing `external/cicd/`**. The old `.gi
 - Default owner for everything: `@autoboat-vt/software`.
 - `external/` and `external/cicd/` — same team; paired with a branch protection rule requiring CODEOWNERS review for the `external/` path. Changes should come from `scripts/bump-cicd.sh` (upstream sync), not hand-edits; the review rule catches any PR touching the vendored files.
 
+## Dependabot
+
+`.github/dependabot.yml` configures version updates with two update sets:
+
+- **`github-actions`** (active): opens weekly PRs (Monday) to bump actions used in `.github/workflows/*.yml`. All actions are grouped into a single PR; commit prefix `ci:`, labels `dependencies` + `github-actions`.
+- **`npm`** (disabled): all deps in `package.json` are pinned to `"latest"` (floating) and resolved at `bun install` time, so Dependabot's npm updater (which pins to specific versions) would fight that convention. The config has `open-pull-requests-limit: 0` and an `ignore: "*"` for all semver update types as a guard. Groupings (react, leaflet, build-tooling, testing) are pre-defined — flip the limit to a positive number if the team ever moves to pinned versions.
+
+### Auto-merge
+
+Dependabot's YAML schema does NOT support an `enable-auto-merge` key — GitHub rejects it with "Property enable-auto-merge is not allowed". Auto-merge for Dependabot PRs is instead handled by `.github/workflows/dependabot-automerge.yml`, which triggers on `pull_request_target: [opened]` for PRs by `dependabot[bot]` and runs `gh pr merge --auto --squash`. `--auto` means GitHub waits for the required status checks and reviews to pass before merging; if CI fails, the PR stays open for manual review.
+
+`gh pr merge --auto` does not bypass repo/branch-protection requirements. Auto-merge still needs:
+
+1. **Repo-level "Allow auto-merge"** enabled: GitHub repo Settings -> General -> Pull Requests -> check "Allow auto-merge". Without this, `gh pr merge --auto` fails.
+2. **Branch protection on `main`** with `build.yml` (the workflow in `.github/workflows/build.yml`) listed as a required status check. Auto-merge waits for required checks; if `build.yml` isn't required, the PR merges immediately on open (before CI runs), which defeats the point.
+3. **Required reviews** set to 0 (or the auto-merge PR will wait forever for a human review). Dependabot PRs don't auto-satisfy CODEOWNERS review.
+
+Verify in GitHub Settings -> Branches -> `main` rule: "Require status checks to pass before merging" with `build.yml` (or its check name) required, and "Require pull request reviews before merging" set to 0.
+
+`scripts/configure-dependabot-automerge.sh` automates all three of the above via `gh api` (requires repo admin + `gh auth login`). It:
+- PATCHes the repo to set `allow_auto_merge=true` and the squash merge convention.
+- PUTs a branch protection rule on `main` requiring the `build` status check (strict: branch must be up to date), with no required reviews, no force pushes, no deletions.
+- Prints a verification summary at the end.
+
+The status check name is `build` (the workflow is `name: Build` with a single `build:` job, so the check that appears on PRs is lowercase `build`). If GitHub's PR checks UI shows a different name (e.g. `Build` or `build / build`), update `CHECK_NAME` in the script and re-run. The script is idempotent — re-running just re-applies the same settings.
+
+Run it once from a checkout:
+
+```bash
+./scripts/configure-dependabot-automerge.sh
+```
+
+Dependabot auto-creates the `dependencies`, `npm`, and `github-actions` labels on first run if they don't already exist.
+
 # Vendored files: `external/cicd/`
 
 `external/cicd/` is a **vendored copy** of VT's reference S4 CI templates, owned upstream by the `s4-hosting-sites/cicd` project on `code.vt.edu` (GitLab). The files are committed directly to this repo as ordinary tracked files (NOT a git submodule). They are excluded from Biome linting via `biome.json` `files.includes` (`!external`).
