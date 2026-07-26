@@ -13,6 +13,7 @@
             "!**/node_modules",
             "!**/coverage",
             "!public",
+            "!external",
             "!**/*.sh",
             "!**/*.svg",
             "!**/package-lock.json",

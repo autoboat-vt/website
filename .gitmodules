@@ -1,0 +1,4 @@
+[submodule "external/cicd"]
+	path = external/cicd
+	url = https://code.vt.edu/s4-hosting-sites/cicd.git
+	branch = main

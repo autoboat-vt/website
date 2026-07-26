@@ -11,6 +11,7 @@ React + TypeScript + Vite site for Virginia Tech's AutoBoat team, styled with Ta
 - `src/pages/` — one component per route (`Home`, `OurTeam`, `Fleet`, `Sponsors`, `Gallery`)
 - `public/images/` — site images
 - `scripts/deploy.sh` — manual deploy to VT GitLab (see below)
+- `external/cicd/` — read-only git submodule (see below)
 
 ## Routes
 
@@ -58,6 +59,58 @@ Deploy from a local checkout:
 The script builds, fetches `aoe_sites/main`, replaces the worktree contents with `dist/`, commits, and fast-forward pushes.
 
 > **SPA routing:** `scripts/spa-fallback.mjs` (chained to `build`) copies `index.html` to each route path so client-side routing works on direct visits. `public/_redirects` covers hosts that respect it.
+
+## Vendored submodule: `external/cicd`
+
+The `external/cicd` directory is a **read-only git submodule** tracking
+[`code.vt.edu/s4-hosting-sites/cicd`](https://code.vt.edu/s4-hosting-sites/cicd)
+(upstream `main`). It's pinned at a specific commit; the contents come from
+the upstream repo and **must not be edited in this repo**.
+
+### Working with the submodule
+
+```bash
+git clone --recurse-submodules <repo>      # fresh clone incl. submodule
+bun install                              # installs deps + activates git hooks
+git submodule update --init --recursive    # existing clone, init submodule
+```
+
+The `prepare` script in `package.json` runs `git config core.hooksPath .githooks`
+automatically on every `bun install` / `npm install` / `yarn install`, so the
+read-only pre-commit hook is active with no extra step.
+
+To bump the pointer to upstream's latest `main`:
+
+```bash
+git submodule update --remote --merge external/cicd
+git add external/cicd
+git commit -m "chore(submodule): bump external/cicd"
+```
+
+### Read-only enforcement
+
+Three layers prevent accidental hand-edits to the submodule's contents:
+
+1. **Pre-commit hook** — `.githooks/pre-commit` (tracked in the repo, activated
+   automatically via `core.hooksPath` on `bun install`) blocks any staged
+   content change under `external/cicd`. The submodule *pointer* bump is
+   allowed; file edits inside the submodule are not.
+2. **CI check** — the `verify-readonly-submodule` job in
+   `.github/workflows/build.yml` fails any PR that touches file contents under
+   `external/`.
+3. **CODEOWNERS** — `.github/CODEOWNERS` marks `external/` as owned by
+   `@autoboat-vt/software`; pair with a branch protection rule requiring
+   CODEOWNERS review for that path.
+
+### Automatic upstream tracking
+
+The `submodule-update.yml` workflow runs daily (09:00 UTC) and checks the
+upstream `cicd` repo's `main` for new commits. If found, it opens a PR bumping
+the pointer and **auto-merges** once CI passes. Nothing reaches `main` without
+a green build.
+
+> Requires "Allow auto-merge" enabled in the repo's Settings → General → Pull
+> Requests. If disabled, the PR stays open for manual review.
 
 ## CI
 

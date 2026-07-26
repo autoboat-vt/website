@@ -15,13 +15,67 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Enforce that the external/cicd submodule is read-only: no hand-edits
+  # to its contents. Only the submodule *pointer* (gitlink) may change.
+  # The submodule's own history lives in its upstream repo and is updated
+  # by the submodule-update.yml workflow, not by direct commits here.
+  verify-readonly-submodule:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Check external/ has no content changes
+        run: |
+          set -euo pipefail
+          # Fetch the base ref so we can diff against it on PRs.
+          if [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            git fetch --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="HEAD~1"
+          fi
+
+          # `git diff --raw` lists changes with the entry mode. A submodule
+          # pointer (gitlink) has mode 160000; regular files are 100644 etc.
+          # We block any change under external/ whose mode is NOT 160000 —
+          # those are real content edits, not pointer bumps. Pointer bumps
+          # are allowed (they're how the submodule gets updated).
+          offending="$(
+            git diff --raw "$base" HEAD -- external/ |
+              awk -F'\t' '
+                {
+                  n = split($1, parts, " ")
+                  new_mode = parts[2]
+                  path = $2
+                  if (new_mode != "160000") {
+                    printf "  %s (mode %s)\n", path, new_mode
+                  }
+                }
+              '
+          )"
+          if [ -n "$offending" ]; then
+            echo "::error::external/ is a read-only submodule area. Direct content edits are not allowed. Bump the submodule pointer instead:"
+            echo "::error::  git submodule update --remote --merge external/cicd && git add external/cicd && git commit -m 'chore(submodule): bump external/cicd'"
+            echo "Offending paths under external/ (content, not pointer bumps):"
+            echo "$offending"
+            exit 1
+          fi
+          echo "OK: no content changes under external/ (pointer bumps allowed)"
+
   build:
+    needs: verify-readonly-submodule
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
