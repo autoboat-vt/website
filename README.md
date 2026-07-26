@@ -87,6 +87,12 @@ git add external/cicd
 git commit -m "chore(submodule): bump external/cicd"
 ```
 
+Or just run the helper script (fetches, diffs, commits in one step):
+
+```bash
+./scripts/bump-cicd.sh
+```
+
 ### Read-only enforcement
 
 Three layers prevent accidental hand-edits to the submodule's contents:
@@ -97,7 +103,9 @@ Three layers prevent accidental hand-edits to the submodule's contents:
    allowed; file edits inside the submodule are not.
 2. **CI check** — the `verify-readonly-submodule` job in
    `.github/workflows/build.yml` fails any PR that touches file contents under
-   `external/`.
+   `external/`. This check diffs gitlink entries in the superproject tree and
+   does **not** need to clone the submodule (which lives on a private VT
+   GitLab repo GitHub Actions can't reach).
 3. **CODEOWNERS** — `.github/CODEOWNERS` marks `external/` as owned by
    `@autoboat-vt/software`; pair with a branch protection rule requiring
    CODEOWNERS review for that path.
@@ -108,6 +116,19 @@ The `submodule-update.yml` workflow runs daily (09:00 UTC) and checks the
 upstream `cicd` repo's `main` for new commits. If found, it opens a PR bumping
 the pointer and **auto-merges** once CI passes. Nothing reaches `main` without
 a green build.
+
+> **Auth required.** `code.vt.edu` is not publicly accessible (VT InCommon
+> Federation sign-in). The workflow needs a read-only VT GitLab personal access
+> token stored as the GitHub secret `VT_GITLAB_TOKEN`. Without it, the workflow
+> exits gracefully with a notice (no failure, no 403). To enable:
+>
+> 1. Create a PAT at <https://code.vt.edu/-/profile/personal_access_tokens>
+>    with `read_repository` scope.
+> 2. Add it as a repository secret named `VT_GITLAB_TOKEN` at
+>    <https://github.com/autoboat-vt/website/settings/secrets/actions>.
+>
+> Until the secret is set, bump the submodule manually with
+> `./scripts/bump-cicd.sh` (run on a machine with VT GitLab credentials).
 
 > Requires "Allow auto-merge" enabled in the repo's Settings → General → Pull
 > Requests. If disabled, the PR stays open for manual review.

@@ -4,10 +4,19 @@ name: Update external/cicd submodule
 # (https://code.vt.edu/s4-hosting-sites/cicd). When main advances, open a
 # PR bumping the submodule pointer and auto-merge it once CI passes.
 #
-# The cicd repo is publicly fetchable over HTTPS, so no VT credentials are
-# needed for the read. The PR is opened against the GitHub origin using the
-# default GITHUB_TOKEN (auto-merge requires the token to have `contents: write`
-# and `pull-requests: write`).
+# IMPORTANT: code.vt.edu requires VT InCommon Federation auth — it is NOT
+# publicly accessible. This workflow needs a read-only VT GitLab personal
+# access token stored as the GitHub secret `VT_GITLAB_TOKEN`.
+#
+# If the secret is not set, the workflow exits gracefully with a notice
+# (no failure, no 403). To enable auto-update:
+#   1. Create a PAT at https://code.vt.edu/-/profile/personal_access_tokens
+#      with `read_repository` scope.
+#   2. Add it as a repository secret named VT_GITLAB_TOKEN in
+#      https://github.com/autoboat-vt/website/settings/secrets/actions
+#
+# For manual bumps (no token needed), run locally:
+#   ./scripts/bump-cicd.sh
 
 on:
     schedule:
@@ -30,26 +39,51 @@ jobs:
         timeout-minutes: 10
 
         steps:
+            - name: Check for VT GitLab token
+              id: check-token
+              env:
+                  VT_GITLAB_TOKEN: ${{ secrets.VT_GITLAB_TOKEN }}
+              run: |
+                  if [ -z "$VT_GITLAB_TOKEN" ]; then
+                    echo "has_token=false" >> "$GITHUB_OUTPUT"
+                    echo "::notice::No VT_GITLAB_TOKEN secret set. Skipping submodule update."
+                    echo "::notice::To enable auto-update, create a read-only PAT at https://code.vt.edu/-/profile/personal_access_tokens (read_repository scope) and add it as repo secret VT_GITLAB_TOKEN. See scripts/bump-cicd.sh for manual bumps."
+                  else
+                    echo "has_token=true" >> "$GITHUB_OUTPUT"
+                  fi
+
             - name: Checkout repository
+              if: steps.check-token.outputs.has_token == 'true'
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0
-                  submodules: true
+                  # No submodules: we init external/cicd manually below with
+                  # the token, since actions/checkout can't reach code.vt.edu.
                   token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Configure git
+              if: steps.check-token.outputs.has_token == 'true'
               run: |
                   git config user.name "github-actions[bot]"
                   git config user.email "github-actions[bot]@users.noreply.github.com"
 
-            - name: Fetch upstream cicd main
+            - name: Configure VT GitLab auth and init submodule
+              if: steps.check-token.outputs.has_token == 'true'
+              env:
+                  VT_GITLAB_TOKEN: ${{ secrets.VT_GITLAB_TOKEN }}
               run: |
-                  # Add the submodule's upstream as a fetch source inside the
-                  # submodule and resolve its main tip. The cicd repo is public,
-                  # so anonymous HTTPS fetch works.
-                  git -C external/cicd remote add upstream https://code.vt.edu/s4-hosting-sites/cicd.git 2>/dev/null || true
-                  git -C external/cicd fetch upstream main
-                  upstream_sha="$(git -C external/cicd rev-parse upstream/main)"
+                  # Rewrite code.vt.edu HTTPS URLs to embed the token.
+                  # The token is read-only (read_repository scope).
+                  git config --global "url.https://oauth2:${VT_GITLAB_TOKEN}@code.vt.edu/.insteadOf" "https://code.vt.edu/"
+                  git submodule update --init external/cicd
+
+            - name: Fetch upstream cicd main
+              if: steps.check-token.outputs.has_token == 'true'
+              run: |
+                  # The submodule's origin is the upstream cicd repo. Fetch
+                  # its main branch and compare to the pinned pointer.
+                  git -C external/cicd fetch origin main
+                  upstream_sha="$(git -C external/cicd rev-parse origin/main)"
                   current_sha="$(git submodule status external/cicd | awk '{print $1}' | sed 's/^[-+]//')"
                   echo "current=$current_sha"
                   echo "upstream=$upstream_sha"
@@ -57,6 +91,7 @@ jobs:
                   echo "current_sha=$current_sha" >> "$GITHUB_ENV"
 
             - name: Bump submodule pointer if behind
+              if: steps.check-token.outputs.has_token == 'true'
               id: bump
               run: |
                   if [ "$current_sha" = "$upstream_sha" ]; then
@@ -73,7 +108,7 @@ jobs:
                   fi
 
             - name: Build short log for PR body
-              if: steps.bump.outputs.changed == 'true'
+              if: steps.check-token.outputs.has_token == 'true' && steps.bump.outputs.changed == 'true'
               run: |
                   {
                     echo 'log<<EOF'
@@ -82,7 +117,7 @@ jobs:
                   } >> "$GITHUB_ENV"
 
             - name: Create / update PR
-              if: steps.bump.outputs.changed == 'true'
+              if: steps.check-token.outputs.has_token == 'true' && steps.bump.outputs.changed == 'true'
               id: pr
               uses: peter-evans/create-pull-request@v7
               with:
@@ -109,7 +144,7 @@ jobs:
                   delete-branch: true
 
             - name: Enable auto-merge
-              if: steps.bump.outputs.changed == 'true' && steps.pr.outputs.pull-request-number
+              if: steps.check-token.outputs.has_token == 'true' && steps.bump.outputs.changed == 'true' && steps.pr.outputs.pull-request-number
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
