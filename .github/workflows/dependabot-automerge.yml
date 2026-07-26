@@ -1,0 +1,39 @@
+# Auto-merge Dependabot PRs after CI passes.
+#
+# Why a workflow instead of `enable-auto-merge: true` in dependabot.yml?
+# Dependabot's YAML schema does NOT support an `enable-auto-merge` key —
+# GitHub rejects it with "Property enable-auto-merge is not allowed".
+# The supported way to auto-merge Dependabot PRs is a workflow that calls
+# `gh pr merge --auto` on PRs opened by dependabot[bot].
+#
+# Prerequisites (all enforced by scripts/configure-dependabot-automerge.sh):
+#   1. Repo-level "Allow auto-merge" enabled (Settings > General > Pull Requests).
+#   2. Branch protection on `main` with `build` (from build.yml) as a required
+#      status check, required reviews = 0, strict (branch up to date).
+#
+# `--auto` means GitHub waits for required checks + reviews to pass before
+# merging. If CI fails, the PR stays open for manual review. The merge method
+# (squash) matches the repo default.
+name: Dependabot auto-merge
+
+on:
+    pull_request_target:
+        types: [opened]
+
+permissions:
+    pull-requests: write
+    contents: write
+
+jobs:
+    enable-auto-merge:
+        # Only run on PRs opened by Dependabot. pull_request_target uses the base
+        # branch's workflow version with a read-only GITHUB_TOKEN fork-permission
+        # model, so Dependabot code changes can't steal secrets.
+        if: github.actor == 'dependabot[bot]'
+        runs-on: ubuntu-latest
+        steps:
+            - name: Enable auto-merge (squash) for Dependabot PR
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  PR_URL: ${{ github.event.pull_request.html_url }}
+              run: gh pr merge --auto --squash "$PR_URL"
