@@ -38,4 +38,18 @@ export default {
     },
     setupFilesAfterEnv: ["<rootDir>/src/test/setup.ts"],
     extensionsToTreatAsEsm: [".ts", ".tsx"],
+    // Report coverage for ALL src/ files (not only those imported during a
+    // test run) so untested files show up as 0% instead of being silently
+    // omitted. Excludes tests, mocks, setup, and trivial entry files.
+    collectCoverageFrom: [
+        "src/**/*.{ts,tsx}",
+        "!src/**/*.{test,spec}.{ts,tsx}",
+        "!src/test/**",
+        "!src/vite-env.d.ts",
+        "!src/main.tsx",
+    ],
+    // text -> console summary; lcov -> coverage/lcov.info (CI tools);
+    // html -> browsable coverage/index.html (artifact); json-summary ->
+    // coverage/coverage-summary.json (parsed for the PR comment).
+    coverageReporters: ["text", "lcov", "html", "json-summary"],
 };

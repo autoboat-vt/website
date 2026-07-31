@@ -10,6 +10,7 @@
         "preview": "vite preview",
         "test": "jest",
         "test:watch": "jest --watch",
+        "test:coverage": "jest --coverage",
         "lint": "biome lint --config-path=./biome.json .",
         "format": "biome format --config-path=./biome.json --write .",
         "check": "biome check --config-path=./biome.json .",

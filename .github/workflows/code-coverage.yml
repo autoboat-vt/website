@@ -1,0 +1,106 @@
+name: Code Coverage
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    pull-requests: write # to post the coverage summary comment on PRs
+
+concurrency:
+    group: coverage-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    coverage:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v7
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
+
+            - name: Print Bun version
+              run: bun --version
+
+            - name: Install dependencies
+              run: bun install
+
+            # Runs jest with --coverage. Coverage config (collectCoverageFrom,
+            # coverageReporters) lives in jest.config.js, so this also reports
+            # untested src/ files (not only files imported during the test run).
+            - name: Run tests with coverage
+              run: bun run test:coverage
+
+            - name: Upload coverage report
+              uses: actions/upload-artifact@v7
+              with:
+                  name: coverage
+                  path: coverage
+                  retention-days: 14
+                  if-no-files-found: error
+
+            # Post a coverage summary table on the PR. The comment is idempotent:
+            # it finds the bot's existing comment (tagged with an HTML marker) and
+            # updates it in place, so successive pushes don't pile up duplicates.
+            - name: Comment coverage summary on PR
+              if: github.event_name == 'pull_request'
+              uses: actions/github-script@v7
+              with:
+                  script: |
+                      const fs = require('fs');
+                      const path = require('path');
+                      const summary = JSON.parse(
+                        fs.readFileSync('coverage/coverage-summary.json', 'utf8')
+                      );
+                      const rows = [
+                        '| File | Stmts | Branches | Funcs | Lines |',
+                        '| --- | --- | --- | --- | --- |',
+                      ];
+                      for (const [file, data] of Object.entries(summary)) {
+                        const name =
+                          file === 'total'
+                            ? '**Total**'
+                            : file.replace(process.cwd() + path.sep, '');
+                        rows.push(
+                          '| ' + name +
+                          ' | ' + data.statements.pct + '%' +
+                          ' | ' + data.branches.pct + '%' +
+                          ' | ' + data.functions.pct + '%' +
+                          ' | ' + data.lines.pct + '% |'
+                        );
+                      }
+                      const marker = '<!-- coverage-report -->';
+                      const body = marker + '\n## Code Coverage\n\n' + rows.join('\n');
+                      const { data: comments } = await github.rest.issues.listComments({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        issue_number: context.issue.number,
+                      });
+                      const existing = comments.find(
+                        (c) => c.body && c.body.indexOf(marker) !== -1
+                      );
+                      if (existing) {
+                        await github.rest.issues.updateComment({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          comment_id: existing.id,
+                          body,
+                        });
+                      } else {
+                        await github.rest.issues.createComment({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          issue_number: context.issue.number,
+                          body,
+                        });
+                      }
