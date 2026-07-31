@@ -48,7 +48,7 @@ Write in plain ASCII. Do not use emojis, decorative unicode, or characters/tics 
 ## Essential Commands
 
 ```bash
-bun install            # install deps (also activates git hooks via `prepare`)
+bun install            # install deps
 bun run dev            # dev server at http://localhost:3000
 bun run build          # production build → dist/ (+ SPA fallback copies)
 bun run test           # jest unit tests
@@ -112,7 +112,7 @@ If you add a route, update **all three**: `src/App.tsx`, `scripts/spa-fallback.m
 ## Navigation constants
 
 - **`NAV_LINKS`** (`src/components/Header.tsx`): `[{ to, label, end? }]` — the top nav. Order matters (rendered left-to-right).
-- **`FOOTER_LINKS`** (`src/components/Footer.tsx`): `[{ href, label, icon }]` — footer social/external links. External links get `target="_blank"` `rel="noopener noreferrer"` + an sr-only "(opens in a new tab)" span. Footer links have no visible text (icon + sr-only label) — tests must query with `getByRole("link", { name: /^label$/i })`, not `getByText`.
+- **`FOOTER_LINKS`** (`src/components/Footer.tsx`): `[{ href, label, external, icon }]` — footer social/external links. Each link renders an icon + a visible `<span>{label}</span>`; external links additionally get `target="_blank"` `rel="noopener noreferrer"` + an sr-only "(opens in a new tab)" span. Internal links (e.g. `mailto:`) open in the same tab. Tests query with `getByText(label)` (visible label text).
 
 ## On-demand instructions
 

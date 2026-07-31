@@ -1,6 +1,6 @@
 ---
 description: "Use when editing src/app.css, writing Tailwind utility classes, debugging CSS cascade/layer issues, overriding inline utilities, writing biome-ignore comments in CSS, or working on the transform: scale() image-zoom pattern. Covers Tailwind v4 layer order, the utilities-beats-components gotcha, !important layer reversal, shorthand syntax, app.css file structure, and the scale-affects-descendants footgun."
-applyTo: "src/app.css, src/components/BoatDetails.tsx"
+applyTo: "src/app.css, src/components/BoatDetails.tsx, src/pages/Fleet.tsx"
 ---
 
 # Tailwind CSS v4 layer cascade
@@ -24,17 +24,17 @@ Theme tokens are defined in `src/app.css` under `@theme` (light) and `.dark` (da
 
 # CSS `transform: scale()` affects all descendants
 
-Applying `transform: scale(s)` to a container scales ALL descendants (images, text, overlays). For image-zoom with positioned hotspots, scale the `<img>` element only and reposition overlays mathematically using the inverse transform formula. See `src/components/BoatDetails.tsx` for the pattern.
+Applying `transform: scale(s)` to a container scales ALL descendants (images, text, overlays). For image-zoom with positioned hotspots, scale the `<img>` element only and reposition overlays mathematically using the inverse transform formula. See `src/pages/Fleet.tsx` (`Vessel.imageZoom` + `hotspots` array, rendered around line 220) for the pattern.
 
 # CSS organization in `src/app.css`
 
 The file has a fixed structure — keep new CSS in the right slot:
 - `@custom-variant dark` (line ~13) — defines the `dark:` variant as a class strategy (`.dark` on `<html>`), NOT `prefers-color-scheme`. The `useTheme` hook toggles the `.dark` class.
-- `:root` (line ~19) — static CSS custom properties (e.g., `--nav-height: 72px`).
+- `:root` (line ~19) — static CSS custom properties (e.g., `--vt-maroon`, `--vt-burntOrange`, `--vt-impactOrange`).
 - `@theme` (line ~27) — Tailwind theme tokens (light defaults). Dark-mode overrides live in a separate `.dark {}` block below. Adding a token here makes a `bg-*` / `text-*` / `border-*` utility available.
-- `.dark` (line ~52) — dark-mode token overrides (`.dark` class on `<html>`). Brand vars (`--vt-*`) do NOT change between light/dark.
+- `.dark` (line ~51) — dark-mode token overrides (`.dark` class on `<html>`). Brand vars (`--vt-*`) do NOT change between light/dark.
 - `@layer base` (line ~71) — element-level resets and base styles (body bg, heading defaults, `:target` scroll-margin).
-- `@layer components` (line ~368) — component-scoped classes (`.boat-panel`, `.live-map__panels`, `.trend-plot`, hero animations, hotspots, mobile nav, image modal transitions). Page-scoped classes use `.page-<name>` prefix (e.g., `.page-ourteam .gallery`).
+- `@layer components` (line ~363) — component-scoped classes (`.boat-panel`, `.live-map__panels`, `.trend-plot`, hero animations, hotspots, mobile nav, image modal transitions). Page-scoped classes use `.page-<name>` prefix (e.g., `.page-ourteam .gallery`).
 
 Rules outside any `@layer` block are unlayered and beat all layered normal declarations — use sparingly to avoid breaking the cascade.
 
