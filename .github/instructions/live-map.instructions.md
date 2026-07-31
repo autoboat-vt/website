@@ -32,7 +32,7 @@ Per-boat box with Current/History tab switcher. Props: `boat: BoatWithPosition`,
 
 ## `BoatDetails` (`src/components/BoatDetails.tsx`)
 
-Current-telemetry stat grid for a single boat. Props: `boat: BoatWithPosition`. Uses the `transform: scale()` image-zoom pattern with hotspots repositioned via the inverse transform formula (see AGENTS.md "CSS `transform: scale()` affects all descendants" gotcha). Fields the boat hasn't reported are omitted rather than rendered as `—`. Don't pass a `boats[]` array. Icons from `lucide-react`.
+Current-telemetry stat grid for a single boat. Props: `boat: BoatWithPosition`. Renders a `<dl>` of `Stat` rows (icon + label + value), two columns, with a footer showing last-updated time and coordinates. Fields the boat hasn't reported are omitted rather than rendered as `—`. Don't pass a `boats[]` array. Icons from `lucide-react`. (The `transform: scale()` image-zoom pattern lives in `src/pages/Fleet.tsx`, not here — see `css.instructions.md`.)
 
 ## `Waypoints` (`src/components/Waypoints.tsx`)
 

@@ -10,7 +10,7 @@ applyTo: "src/test/**, jest.config.js"
 - `src/test/setup.ts` polyfills `TextEncoder`/`TextDecoder` (needed by react-router's dev bundle) and `window.matchMedia`
 - Mocks in `src/test/__mocks__/`: CSS → `styleMock.js`, images → `fileMock.js`, `leaflet.ts`, `react-leaflet.tsx`, `BoatMarker.tsx`
 - **The VS Code `runTests` tool does NOT pick up `jest.config.js`** — it runs in a node env and fails with `document is not defined`. Run tests via `bun run test` or `npx jest` in a terminal instead.
-- Footer social links have no visible text (icon + `sr-only` span). Query with `getByRole("link", { name: /^label$/i })`, not `getByText`.
+- Footer links render a visible `<span>{label}</span>` (icon + visible label text; external links also get an sr-only "(opens in a new tab)" span). Query with `getByText(label)`.
 - Components using `<Link>` from `react-router-dom` must be wrapped in `<MemoryRouter>` in tests.
 
 ## Jest config (`jest.config.js`)
