@@ -85,6 +85,8 @@ Run it once from a checkout:
 
 Dependabot auto-creates the `dependencies`, `npm`, and `github-actions` labels on first run if they don't already exist.
 
+These same three settings also gate `.github/workflows/update-citation-date.yml`, which auto-merges a daily `date-released` bump PR via `gh pr merge --auto --squash`. If auto-merge is disabled, the `build` check is removed from required checks, or required reviews is raised above 0, the citation PR will sit open (or the merge step will fail) instead of landing.
+
 # Vendored files: `external/cicd/`
 
 `external/cicd/` is a **vendored copy** of VT's reference S4 CI templates, owned upstream by the `s4-hosting-sites/cicd` project on `code.vt.edu` (GitLab). The files are committed directly to this repo as ordinary tracked files (NOT a git submodule). They are excluded from Biome linting via `biome.json` `files.includes` (`!external`).

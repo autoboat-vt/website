@@ -2,9 +2,22 @@ name: Update CITATION.cff date-released
 
 # Keeps the `date-released` field in CITATION.cff in sync with the latest
 # commit on main. Runs on every push to main; if date-released is stale
-# (not today's date in UTC), the workflow updates it, commits, and pushes.
-# This makes date-released "dynamic" - it always reflects the date of the
-# most recent release/push to main, without requiring manual edits.
+# (not today's date in UTC), the workflow bumps it on a throwaway branch,
+# opens a PR, and auto-merges it once required checks pass.
+#
+# Why a PR + auto-merge instead of a direct push to main?
+# `main` is branch-protected with `build` as a required status check
+# (strict). A direct push from github-actions[bot] is rejected with
+# GH006 "Protected branch update failed - Required status check 'build'
+# is expected." Auto-merging a PR is the supported way for a bot to land
+# a commit on a protected branch: `gh pr merge --auto` waits for the
+# required check to pass before merging. This mirrors the Dependabot
+# auto-merge pattern in dependabot-automerge.yml.
+#
+# The `if: github.actor != 'github-actions[bot]'` guard on the job
+# prevents an infinite loop: the auto-merge creates a merge commit on
+# main, which fires `push` again, but that run's actor is
+# github-actions[bot] so the job is skipped.
 
 on:
     push:
@@ -14,17 +27,21 @@ on:
 
 permissions:
     contents: write
+    pull-requests: write
 
 jobs:
     update-date:
         runs-on: ubuntu-latest
-        # Don't loop: skip if the last commit was from this workflow.
+        # Don't loop: skip if the last commit was from this workflow
+        # (the auto-merge commit is authored by github-actions[bot]).
         if: github.actor != 'github-actions[bot]'
         steps:
             - name: Checkout
               uses: actions/checkout@v7
               with:
                   token: ${{ secrets.GITHUB_TOKEN }}
+                  # Need full history so we can branch off main and push.
+                  fetch-depth: 0
 
             - name: Update date-released to today (UTC)
               run: |
@@ -34,15 +51,39 @@ jobs:
                   sed -i -E "s|^date-released: \".*\"$|date-released: \"${TODAY}\"|" CITATION.cff
                   echo "Updated date-released to ${TODAY}"
 
-            - name: Commit and push if changed
+            - name: Open PR and auto-merge if changed
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
+                  set -euo pipefail
+                  TODAY=$(date -u +%Y-%m-%d)
                   if git diff --quiet CITATION.cff; then
-                      echo "date-released is already current; no commit needed."
+                      echo "date-released is already current; no PR needed."
                       exit 0
                   fi
+
+                  BRANCH="chore/citation-date-${TODAY}"
+                  # Recreate the branch if a stale one from a previous failed
+                  # run with the same date still exists.
+                  git push origin --delete "$BRANCH" 2>/dev/null || true
+
                   git config user.name "github-actions[bot]"
                   git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  git checkout -b "$BRANCH"
                   git add CITATION.cff
-                  git commit -m "chore: bump CITATION.cff date-released to today"
-                  git push
-                  echo "Pushed updated date-released."
+                  git commit -m "chore: bump CITATION.cff date-released to ${TODAY}"
+                  git push --set-upstream origin "$BRANCH"
+
+                  # Open (or reuse) a PR, then enable auto-merge (squash).
+                  # `--auto` makes GitHub wait for the required `build`
+                  # status check to pass before merging; if CI fails the PR
+                  # stays open for manual review.
+                  PR_URL=$(gh pr create \
+                      --base main \
+                      --head "$BRANCH" \
+                      --title "chore: bump CITATION.cff date-released to ${TODAY}" \
+                      --body "Automated bump of \`date-released\` to today (UTC ${TODAY}). Auto-merges once the \`build\` check passes." \
+                      2>/dev/null || gh pr view "$BRANCH" --json url --jq .url)
+
+                  gh pr merge --auto --squash "$PR_URL"
+                  echo "Auto-merge enabled for $PR_URL"

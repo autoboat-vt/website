@@ -223,7 +223,8 @@ Tailwind v4's layer order is `theme, base, utilities`; `@layer components` in `s
 ### CITATION.cff
 
 - `CITATION.cff` (repo root) provides citation metadata for the project (CFF schema 1.2.0). GitHub renders a "Cite this repository" button on the repo page from this file.
-- The `date-released` field is kept **dynamic** by `.github/workflows/update-citation-date.yml`, which runs on every push to `main` (and via `workflow_dispatch`). If `date-released` is stale (not today's UTC date), the workflow updates it via `sed`, commits as `github-actions[bot]` (`chore: bump CITATION.cff date-released to today`), and pushes back to `main`. The `if: github.actor != 'github-actions[bot]'` guard prevents infinite loops. Don't edit `date-released` by hand — the workflow will overwrite it on the next push to `main`.
+- The `date-released` field is kept **dynamic** by `.github/workflows/update-citation-date.yml`, which runs on every push to `main` (and via `workflow_dispatch`). If `date-released` is stale (not today's UTC date), the workflow updates it via `sed`, commits as `github-actions[bot]` on a `chore/citation-date-<DATE>` branch, opens a PR, and calls `gh pr merge --auto --squash`. The PR auto-merges once the required `build` status check passes. The `if: github.actor != 'github-actions[bot]'` guard on the job prevents infinite loops (the auto-merge commit re-fires `push`, but that run is skipped). Don't edit `date-released` by hand — the workflow will overwrite it on the next push to `main`.
+- ⚠️ The workflow uses a **PR + auto-merge**, not a direct push to `main`. `main` is branch-protected with `build` as a required status check (strict), so a direct push from `github-actions[bot]` is rejected with `GH006: Protected branch update failed - Required status check "build" is expected.` This is the same pattern as `dependabot-automerge.yml`. Auto-merge requires the same three repo settings (allow auto-merge enabled, `build` as a required check, required reviews = 0) — see "Auto-merge" in `.github/instructions/deploy.instructions.md`.
 
 ## Working Style Notes
 
@@ -255,4 +256,4 @@ This repo doesn't enforce conventional commits, but the existing history uses sh
 - Running bare `biome lint` / `biome check` without `--config-path=./biome.json` - a parent directory's `biome.json`/`biome.jsonc` will be picked up instead. All `package.json` scripts already pass the flag; keep it that way.
 - Adding per-component CSS files - component styles go in `@layer components` in `src/app.css` (imported once in `src/main.tsx`).
 - Modifying `public/googleeba451f5e3aecfef.html`, `public/robots.txt`, or `public/sitemap.xml` without checking Search Console ownership.
-- Committing `.env`, `.env.local`, or personal `.vscode/` files (only `.vscode/settings.json` is committed, for the shared Biome config-discovery fix).
+- Committing `.env`, `.env.local`, or personal `.vscode/` files (only `.vscode/settings.json` is committed, for the shared Biome config-discovery fix). Build outputs `dist/` and `coverage/` are gitignored too — don't `git add` them.
