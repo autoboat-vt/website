@@ -49,5 +49,8 @@
     "optionalDependencies": {
         "@types/bun": "latest",
         "bun": "latest"
+    },
+    "overrides": {
+        "brace-expansion": "latest"
     }
 }
