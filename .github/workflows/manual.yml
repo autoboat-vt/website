@@ -1,5 +1,8 @@
 name: Convert images to WebP (In-place)
 
+permissions:
+  contents: write
+
 on:
   push:
     paths:
