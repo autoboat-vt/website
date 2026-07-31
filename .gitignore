@@ -6,6 +6,7 @@ node_modules
 # Build output
 dist
 dist-ssr
+coverage
 *.local
 
 # TypeScript incremental build cache
