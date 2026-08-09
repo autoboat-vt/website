@@ -76,16 +76,17 @@ export default function Home() {
                     </div>
                     <p>
                         We are always looking for new members to join the team throughout the year, so don't hesitate to
-                        reach out! There is no experience required; we'll teach you everything you need to know.
+                        reach out! There is no experience required; we'll teach you everything you need to know. To join,
+                        please fill out the interest form below and we will email you in the next recruiting cycle.
                     </p>
                     <div id="how-to-join-box" className="mt-4 flex flex-col items-center">
                         <Hyperlink
                             href={url(
-                                "https://docs.google.com/forms/d/e/1FAIpQLScViTYzAYHl671SGp_dmYO9MvrleM3VWAem8Ep7FROBCVOB9Q/viewform?usp=sharing&ouid=116978117130571796595",
+                                "https://forms.gle/yhET6ySB6BL7CSZs5",
                             )}
                             className="btn mt-2 w-fit text-2xl px-4 py-2 bg-accent text-white border-transparent hover:bg-accent-2 hover:text-white hover:border-transparent"
                         >
-                            Join Now!
+                            Interest Form
                         </Hyperlink>
                     </div>
                 </Card>
