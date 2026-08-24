@@ -81,15 +81,13 @@ export default function Home() {
                         cycle. Also, join our Discord server as this is the primary way we share important announcements
                         and communciate as a team.
                     </p>
-                    <div id="how-to-join-box" className="mt-4 flex flex-col items-center">
+                    <div id="how-to-join-box" className="mt-4 flex flex-wrap justify-center items-center gap-4">
                         <Hyperlink
                             href={url("https://forms.gle/yhET6ySB6BL7CSZs5")}
                             className="btn mt-2 w-fit text-2xl px-4 py-2 bg-accent text-white border-transparent hover:bg-accent-2 hover:text-white hover:border-transparent"
                         >
                             Interest Form
                         </Hyperlink>
-                    </div>
-                    <div id="join-our-discord" className="mt-4 flex flex-col items-center">
                         <Hyperlink
                             href={url("https://discord.gg/e34cdWdKbG")}
                             className="btn mt-2 w-fit text-2xl px-4 py-2 bg-accent text-white border-transparent hover:bg-accent-2 hover:text-white hover:border-transparent"
