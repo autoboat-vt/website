@@ -76,17 +76,25 @@ export default function Home() {
                     </div>
                     <p>
                         We are always looking for new members to join the team throughout the year, so don't hesitate to
-                        reach out! There is no experience required; we'll teach you everything you need to know. To join,
-                        please fill out the interest form below and we will email you in the next recruiting cycle.
+                        reach out! There is no experience required; we'll teach you everything you need to know. To
+                        join, please fill out the interest form below and we will email you in the next recruiting
+                        cycle. Also, join our Discord server as this is the primary way we share important announcements
+                        and communciate as a team.
                     </p>
                     <div id="how-to-join-box" className="mt-4 flex flex-col items-center">
                         <Hyperlink
-                            href={url(
-                                "https://forms.gle/yhET6ySB6BL7CSZs5",
-                            )}
+                            href={url("https://forms.gle/yhET6ySB6BL7CSZs5")}
                             className="btn mt-2 w-fit text-2xl px-4 py-2 bg-accent text-white border-transparent hover:bg-accent-2 hover:text-white hover:border-transparent"
                         >
                             Interest Form
+                        </Hyperlink>
+                    </div>
+                    <div id="join-our-discord" className="mt-4 flex flex-col items-center">
+                        <Hyperlink
+                            href={url("https://discord.gg/e34cdWdKbG")}
+                            className="btn mt-2 w-fit text-2xl px-4 py-2 bg-accent text-white border-transparent hover:bg-accent-2 hover:text-white hover:border-transparent"
+                        >
+                            Join Our Discord
                         </Hyperlink>
                     </div>
                 </Card>

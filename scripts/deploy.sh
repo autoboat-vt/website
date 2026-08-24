@@ -75,8 +75,8 @@ fi
 
 # --- Step 2: Build ----------------------------------------------------------
 if [[ "${1:-}" != "--skip-build" ]]; then
-    echo "==> Building site (npm run build)"
-    npm run build
+    echo "==> Building site (bun run build)"
+    bun run build
 fi
 
 if [[ ! -d dist ]]; then
