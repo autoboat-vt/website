@@ -34,14 +34,11 @@ S3 returns 404 for client-side routes (`/sponsors`, `/ourteam`, etc.) because no
 
 ## Continuous integration
 
-`.github/workflows/build.yml` runs on PRs (build-only validation, no deploy):
-- Installs deps with `bun install`.
-- Runs `bun run check` (biome lint + format).
-- Runs `bun run build` (Vite build + `spa-fallback.mjs`).
+`.github/workflows/build.yml` runs on PRs (build-only validation, no deploy). It has two jobs:
+- `webp-convert` (push-to-`main` only): diffs the pushed commit range for `public/images/**` PNG/JPG changes, converts any new/changed originals to WebP in place (`cwebp`), deletes the originals, and commits as `github-actions[bot]` (scoped `contents: write` on the job, not the workflow). No-ops when no image files changed. The `GITHUB_TOKEN` push does not re-trigger workflows, so no self-loop. The old standalone `manual.yml` workflow was folded into this job.
+- `build`: `needs: webp-convert`, then installs deps with `bun install`, runs `bun run lint`, `bun run test`, and `bun run build` (Vite build + `spa-fallback.mjs`), and uploads `dist/` as an artifact.
 - Triggers: `push` to `main`, PRs to `main`, `workflow_dispatch`.
 - Concurrency: `build-${{ github.ref }}` with `cancel-in-progress: true` (cancels superseded runs on the same ref).
-
-`.github/workflows/manual.yml` runs on `push` when files under `public/images/**` change — converts PNG/JPG originals to WebP in place and commits. No submodule or deploy interaction.
 
 `.github/workflows/code-coverage.yml` runs `bun run test:coverage` (jest with `--coverage`) on PRs and pushes to `main`. Coverage config lives in `jest.config.js` (`collectCoverageFrom` reports ALL `src/` files, not just those imported during the test run, so untested files show as 0%; `coverageReporters` emits `text`, `lcov`, `html`, and `json-summary`). The `coverage/` directory is uploaded as an artifact (14-day retention). On PRs, an `actions/github-script` step parses `coverage/coverage-summary.json` and posts/updates an idempotent coverage-summary table comment (tagged with `<!-- coverage-report -->` so successive pushes update the same comment instead of stacking duplicates). Requires `pull-requests: write` permission for the comment step. Same triggers, concurrency group pattern (`coverage-${{ github.ref }}` with `cancel-in-progress`), and Bun setup as `build.yml`.
 

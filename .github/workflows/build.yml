@@ -15,9 +15,66 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Converts PNG/JPG originals under public/images/ to WebP in place and commits
+  # the result. Only runs on pushes to main where image files actually changed.
+  webp-convert:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Get changed image files
+        id: changed
+        run: |
+          before="${{ github.event.before }}"
+          if [ "$before" = "0000000000000000000000000000000000000000" ]; then
+            before="HEAD~1"
+          fi
+          files=$(git diff --name-only -r "$before" "${{ github.sha }}" -- 'public/images/*.png' 'public/images/*.jpg' 'public/images/*.jpeg')
+          if [ -n "$files" ]; then
+            echo "files<<EOF" >> "$GITHUB_OUTPUT"
+            echo "$files" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install webp
+        if: steps.changed.outputs.files != ''
+        run: sudo apt-get update && sudo apt-get install -y webp
+
+      - name: Convert images to WebP (overwrite originals)
+        if: steps.changed.outputs.files != ''
+        run: |
+          echo "${{ steps.changed.outputs.files }}" | while read img; do
+            [ -f "$img" ] || continue
+            cwebp -quiet "$img" -o "${img%.*}.webp"
+            rm "$img"
+          done
+
+      - name: Commit changes
+        if: steps.changed.outputs.files != ''
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/images
+          git commit -m "Convert images to WebP in place" || echo "No changes to commit"
+
+      - name: Push changes
+        if: steps.changed.outputs.files != ''
+        run: git push || (git pull --rebase && git push)
+
+  # `needs` makes build wait for webp-convert so it builds the converted images;
+  # a skipped webp-convert counts as success for dependency purposes.
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: webp-convert
 
     steps:
       - name: Checkout repository
