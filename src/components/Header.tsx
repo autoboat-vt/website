@@ -14,6 +14,7 @@ const NAV_LINKS: NavLinkItem[] = [
     { to: "/ourteam", label: "Meet the Team" },
     { to: "/fleet", label: "Our Fleet" },
     { to: "/sponsors", label: "Sponsors" },
+    { to: "/calendar", label: "Calendar" },
     { to: "/live", label: "Live Map" },
 ];
 

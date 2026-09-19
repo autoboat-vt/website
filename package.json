@@ -3,7 +3,7 @@
     "private": true,
     "version": "1.0.0",
     "type": "module",
-    "description": "Website for the AutoBoat project at Virginia Tech",
+    "description": "Website for the AutoBoat at Virginia Tech design team.",
     "scripts": {
         "dev": "vite",
         "build": "bun ./node_modules/vite/bin/vite.js build && bun scripts/spa-fallback.mjs",
@@ -24,7 +24,8 @@
         "react-dom": "latest",
         "react-icons": "latest",
         "react-leaflet": "latest",
-        "react-router-dom": "latest"
+        "react-router-dom": "latest",
+        "rrule": "^2.8.1"
     },
     "devDependencies": {
         "@biomejs/biome": "latest",
@@ -44,7 +45,8 @@
         "jest-environment-jsdom": "latest",
         "tailwindcss": "latest",
         "typescript": "latest",
-        "vite": "latest"
+        "vite": "latest",
+        "wrangler": "latest"
     },
     "optionalDependencies": {
         "@types/bun": "latest",

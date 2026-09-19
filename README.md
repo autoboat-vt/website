@@ -13,7 +13,23 @@ React + TypeScript + Vite site for Virginia Tech's AutoBoat team, styled with Ta
 | `/fleet`       | Our Fleet     |
 | `/live`        | Live Boat Map |
 | `/sponsors`    | Sponsors      |
+| `/calendar`    | Calendar      |
 | `/gallery`     | Gallery       |
+
+The `/calendar` page reads events from a Cloudflare Worker in `worker/`
+(proxies Discord's guild scheduled-events API without exposing the bot
+token). See `worker/README.md` for the one-time setup.
+
+## Environment variables
+
+Set these before `bun run dev` or `bun run build`:
+
+- `VITE_TELEMETRY_URL` — base URL for the live-boat telemetry API. Falls
+  back to the production telemetry server if unset.
+- `VITE_EVENTS_URL` — base URL for the Discord events Cloudflare Worker
+  (`<worker>.workers.dev`, no trailing slash). Falls back to the placeholder
+  in `src/lib/discord.ts` if unset. Point this at `http://localhost:8787`
+  while running `npx wrangler dev` in `worker/` for local end-to-end work.
 
 ## Quick start
 

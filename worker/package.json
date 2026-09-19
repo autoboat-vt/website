@@ -1,0 +1,19 @@
+{
+    "name": "autoboat-discord-events-worker",
+    "private": true,
+    "version": "1.0.0",
+    "type": "module",
+    "description": "Cloudflare Worker proxy: serves Discord guild scheduled events as JSON for the autoboat.aoe.vt.edu calendar page",
+    "scripts": {
+        "dev": "wrangler dev",
+        "deploy": "wrangler deploy",
+        "tail": "wrangler tail",
+        "types": "wrangler types",
+        "check": "biome check --config-path=../biome.json ."
+    },
+    "devDependencies": {
+        "@cloudflare/workers-types": "latest",
+        "typescript": "latest",
+        "wrangler": "latest"
+    }
+}

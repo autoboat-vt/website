@@ -22,7 +22,7 @@ const distDir = resolve(__dirname, "..", "dist");
 const indexHtml = join(distDir, "index.html");
 
 // Must match the routes defined in src/App.tsx.
-const ROUTES = ["/ourteam", "/fleet", "/sponsors", "/gallery", "/live"];
+const ROUTES = ["/ourteam", "/fleet", "/sponsors", "/calendar", "/gallery", "/live"];
 
 for (const route of ROUTES) {
     const dest = join(distDir, `${route}/index.html`);

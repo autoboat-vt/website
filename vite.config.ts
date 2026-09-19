@@ -11,8 +11,10 @@ export default defineConfig({
     },
     // Expose selected VITE_* env vars to the bundle as plain globals so they
     // can be read without `import.meta.env` (which doesn't parse under Jest's
-    // CJS runtime). Source code reads `globalThis.__VITE_TELEMETRY_URL__`.
+    // CJS runtime). Source code reads `globalThis.__VITE_TELEMETRY_URL__` /
+    // `globalThis.__VITE_EVENTS_URL__`.
     define: {
         "globalThis.__VITE_TELEMETRY_URL__": JSON.stringify(process.env.VITE_TELEMETRY_URL ?? ""),
+        "globalThis.__VITE_EVENTS_URL__": JSON.stringify(process.env.VITE_EVENTS_URL ?? ""),
     },
 });

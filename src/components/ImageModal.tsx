@@ -17,7 +17,7 @@ export default function ImageModal({ src, alt, caption, onClose }: ImageModalPro
     useEffect(() => {
         if (src) {
             setMounted(true);
-            // Defer is-open to next frame so the enter transition plays
+            // Defer is-open to next frame so the enter plays
             const raf = requestAnimationFrame(() => setIsOpen(true));
             return () => cancelAnimationFrame(raf);
         }
@@ -36,7 +36,7 @@ export default function ImageModal({ src, alt, caption, onClose }: ImageModalPro
         closeBtnRef.current?.focus();
 
         const handleKey = (e: KeyboardEvent) => {
-            if (e.key === "Escape") onClose();
+            if (e.key ==="Escape") onClose();
         };
         document.addEventListener("keydown", handleKey);
 

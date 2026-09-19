@@ -355,7 +355,7 @@ function FleetCard({ vessel, onImageClick }: { vessel: Vessel; onImageClick: () 
             >
                 <VesselImage vessel={vessel} />
             </div>
-            <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-black/50 dark:text-white/50">
+            <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-black/50">
                 <Maximize2 size={12} aria-hidden="true" />
                 Click image to expand
             </p>
@@ -367,7 +367,7 @@ function FleetCard({ vessel, onImageClick }: { vessel: Vessel; onImageClick: () 
             <span className="kicker">{vessel.subtitle}</span>
             <p className="text-[1.1rem]">{vessel.description}</p>
             {vessel.specs.length > 0 && (
-                <div className="mt-6 grid grid-cols-2 gap-4 border-t border-black/8 pt-6 dark:border-white/8">
+                <div className="mt-6 grid grid-cols-2 gap-4 border-t border-black/8 pt-6">
                     {vessel.specs.map((spec) => (
                         <div key={spec.label}>
                             <span className="data-callout__label">{spec.label}</span>
@@ -409,11 +409,11 @@ export default function Fleet() {
                         id={vessel.name.toLowerCase()}
                         className={`fleet-section-title mx-auto flex w-[min(1100px,90%)] items-center gap-4${i === 0 ? " mt-16" : " mt-10"}`}
                     >
-                        <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+                        <span className="h-px flex-1 bg-black/10" />
                         <h2 className="m-0! flex items-center gap-2.5 font-heading text-[clamp(18px,2.5vw,28px)] font-extrabold">
                             {vessel.name}
                             <span
-                                className={`inline-flex items-center gap-1.5 align-middle text-[0.5em] font-semibold uppercase tracking-wide ${vessel.status === "Active" ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}
+                                className={`inline-flex items-center gap-1.5 align-middle text-[0.5em] font-semibold uppercase tracking-wide ${vessel.status === "Active" ? "text-emerald-600" : "text-amber-600"}`}
                             >
                                 <span
                                     className={`fleet-status-dot inline-block h-2 w-2 rounded-full ${vessel.status === "Active" ? "bg-emerald-500" : "bg-amber-500"}`}
@@ -422,7 +422,7 @@ export default function Fleet() {
                                 {vessel.status}
                             </span>
                         </h2>
-                        <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+                        <span className="h-px flex-1 bg-black/10" />
                     </div>
                     <FleetCard vessel={vessel} onImageClick={() => setModalVessel(vessel)} />
                 </div>

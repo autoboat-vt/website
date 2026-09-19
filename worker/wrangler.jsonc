@@ -1,0 +1,37 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "autoboat-discord-events",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-09-19",
+	"workers_dev": true,
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 0.1
+	},
+	// Public, non-secret configuration.
+	"vars": {
+		// Discord server (guild) ID whose scheduled events we're exposing.
+		// Not a secret -- anyone in the guild can see this. Fill in after
+		// creating the Discord application (see README.md).
+		"DISCORD_GUILD_ID": "1017960606403416085",
+		// Only allow browsers on the public AutoBoat site to call this Worker.
+		// Change to "*" during local UI development if you need to hit the
+		// deployed Worker from localhost; prefer `wrangler dev` for that instead.
+		"ALLOWED_ORIGIN": "https://autoboat.aoe.vt.edu",
+		// How long to cache the Discord events payload in KV, in seconds.
+		"CACHE_TTL_SECONDS": "300"
+	},
+	// KV namespace for the events cache. Create the real IDs with:
+	//     wrangler kv namespace create EVENTS_KV
+	//     wrangler kv namespace create EVENTS_KV --preview
+	// and paste the output ids below. The placeholder values intentionally
+	// will NOT deploy; replace them before running `wrangler deploy`.
+	"kv_namespaces": [
+		{
+			"binding": "EVENTS_KV",
+			"id": "b83111739d3a428bba5984e44924a52a",
+			"preview_id": "REPLACE_ME_KV_PREVIEW_ID",
+			"remote": true
+		}
+	]
+}

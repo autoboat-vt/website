@@ -276,7 +276,7 @@ export default function LiveMap() {
                         href="https://github.com/autoboat-vt/telemetry_server"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-fontcolor dark:text-white underline decoration-current"
+                        className="text-fontcolor underline decoration-current"
                     >
                         telemetry server
                     </a>
@@ -313,7 +313,7 @@ export default function LiveMap() {
                         <label className="live-map__select-wrap inline-flex items-center gap-1.5 text-sm text-fontcolor/70">
                             <span className="sr-only">Boat to display</span>
                             <select
-                                className="live-map__select rounded-lg border border-black/10 bg-white/60 px-2 py-1.5 text-sm font-semibold text-fontcolor transition-colors hover:bg-white dark:border-white/15 dark:bg-white/5 dark:hover:bg-white/10"
+                                className="live-map__select rounded-lg border border-black/10 bg-white/60 px-2 py-1.5 text-sm font-semibold text-fontcolor transition-colors hover:bg-white dark:hover:bg-white/10"
                                 value={selectedBoatId ?? ""}
                                 onChange={(e) =>
                                     setSelectedBoatId(e.target.value === "" ? null : Number(e.target.value))
@@ -380,7 +380,7 @@ export default function LiveMap() {
                     <Card className="live-map__card">
                         {error && boats.length > 0 && (
                             <div
-                                className="live-map__stale-banner mb-3 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent dark:border-accent/30 dark:bg-accent/10 dark:text-accent"
+                                className="live-map__stale-banner mb-3 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent"
                                 role="status"
                             >
                                 <AlertCircle size={14} className="shrink-0" />
@@ -465,7 +465,7 @@ export default function LiveMap() {
                         {boatsWithoutPosition.map((b) => (
                             <li
                                 key={b.instance.instance_id}
-                                className="flex items-center justify-between gap-2 rounded-lg border border-black/5 bg-black/3 px-3 py-2 text-sm dark:border-white/5 dark:bg-white/3"
+                                className="flex items-center justify-between gap-2 rounded-lg border border-black/5 bg-black/3 px-3 py-2 text-sm"
                             >
                                 <span className="font-semibold">
                                     {b.instance.instance_identifier || `Boat #${b.instance.instance_id}`}

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import Footer from "./components/Footer";
 import Header from "./components/Header";
+import Calendar from "./pages/Calendar";
 import Fleet from "./pages/Fleet";
 import Gallery from "./pages/Gallery";
 import Home from "./pages/Home";
@@ -62,6 +63,7 @@ export default function App() {
                     <Route path="/ourteam" element={<OurTeam />} />
                     <Route path="/fleet" element={<Fleet />} />
                     <Route path="/sponsors" element={<Sponsors />} />
+                    <Route path="/calendar" element={<Calendar />} />
                     <Route path="/gallery" element={<Gallery />} />
                     <Route path="/live" element={<LiveMap />} />
                     <Route path="*" element={<Home />} />

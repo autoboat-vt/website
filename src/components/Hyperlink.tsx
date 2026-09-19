@@ -64,7 +64,7 @@ interface HyperlinkProps {
  * <Hyperlink href="/ourteam" hash="software">Software subteam</Hyperlink>
  */
 export default function Hyperlink({ href, children, hash, className, space = "none" }: HyperlinkProps) {
-    const linkClass = className ?? "text-fontcolor dark:text-white underline decoration-current";
+    const linkClass = className ?? "text-fontcolor underline decoration-current";
     const isInternal = href.startsWith("/");
     const padBefore = space === "before" || space === "around" || space === "both" ? " " : "";
     const padAfter = space === "after" || space === "around" || space === "both" ? " " : "";

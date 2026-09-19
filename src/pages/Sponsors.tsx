@@ -19,9 +19,9 @@ const SPONSORS: Sponsor[] = [
 
 function SponsorCard({ sponsor }: { sponsor: Sponsor }) {
     return (
-        <div className="group relative flex w-70 flex-col overflow-hidden rounded-2xl border border-black/6 bg-white/45 text-left backdrop-blur-md dark:border-white/8 dark:bg-[rgba(30,29,28,0.5)]">
+        <div className="group relative flex w-70 flex-col overflow-hidden rounded-2xl border border-black/6 bg-white/45 text-left backdrop-blur-md">
             {/* Top accent band */}
-            <div className="relative flex h-36 items-center justify-center overflow-hidden border-b border-black/5 bg-white dark:border-white/5 dark:bg-[rgba(255,255,255,0.03)]">
+            <div className="relative flex h-36 items-center justify-center overflow-hidden border-b border-black/5 bg-white">
                 <div
                     className="absolute inset-0 opacity-10"
                     style={{
@@ -41,7 +41,7 @@ function SponsorCard({ sponsor }: { sponsor: Sponsor }) {
                     <Landmark
                         size={48}
                         strokeWidth={1.5}
-                        className="relative text-accent/80 dark:text-fontcolor/60"
+                        className="relative text-accent/80"
                         aria-hidden="true"
                     />
                 )}
@@ -106,7 +106,7 @@ export default function Sponsors() {
                     To discuss sponsorship opportunities, reach out to us at{" "}
                     <a
                         href="mailto:autoboat@vt.edu"
-                        className="text-fontcolor dark:text-white underline decoration-current"
+                        className="text-fontcolor underline decoration-current"
                     >
                         autoboat@vt.edu
                     </a>

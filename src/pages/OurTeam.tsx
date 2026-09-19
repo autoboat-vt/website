@@ -121,7 +121,7 @@ function Description({ text, githubLink }: DescriptionProps) {
                 href="https://github.com/autoboat-vt"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-fontcolor dark:text-white underline decoration-current"
+                className="text-fontcolor underline decoration-current"
             >
                 GitHub<span className="sr-only"> (opens in a new tab)</span>
             </a>
@@ -147,14 +147,14 @@ export default function OurTeam() {
                             className={`fleet-section-title mx-auto flex w-[min(1100px,90%)] flex-col items-center gap-3${i > 0 ? " mt-10" : ""}`}
                         >
                             <div className="flex w-full items-center gap-4">
-                                <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+                                <span className="h-px flex-1 bg-black/10" />
                                 <h2 className="m-0! font-heading text-[clamp(20px,3vw,32px)] font-extrabold">
                                     <span
                                         className={`subteam-badge__dot subteam-badge__dot--${subteam.dot} mr-3 inline-block h-3 w-3 rounded-full align-middle`}
                                     ></span>
                                     {subteam.title}
                                 </h2>
-                                <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+                                <span className="h-px flex-1 bg-black/10" />
                             </div>
                         </div>
                         <Card className={`subteam-card subteam-card--${subteam.dot} my-2! border-l-4! p-8!`}>
@@ -164,7 +164,7 @@ export default function OurTeam() {
                                     {subteam.techStack.map((tech) => (
                                         <span
                                             key={tech}
-                                            className="rounded-full border border-black/8 bg-black/5 px-3 py-1 font-mono text-[0.75rem] font-medium text-fontcolor/80 dark:border-white/10 dark:bg-white/10 dark:text-fontcolor/80"
+                                            className="rounded-full border border-black/8 bg-black/5 px-3 py-1 font-mono text-[0.75rem] font-medium text-fontcolor/80"
                                         >
                                             {tech}
                                         </span>
