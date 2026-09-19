@@ -422,3 +422,131 @@ describe("Calendar page", () => {
         expect(screen.getByText(/status 502/i)).toBeInTheDocument();
     });
 });
+
+describe("Calendar page (mobile branch)", () => {
+    const realMatchMedia = window.matchMedia;
+
+    beforeEach(() => {
+        // Force the mobile branch: Calendar.tsx reads
+        // matchMedia("(max-width: 700px)") once on mount.
+        window.matchMedia = (query: string) => ({
+            matches: true,
+            media: query,
+            onchange: null,
+            addListener: () => {},
+            removeListener: () => {},
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            dispatchEvent: () => false,
+        });
+    });
+
+    afterEach(() => {
+        window.matchMedia = realMatchMedia;
+    });
+
+    it("renders day cells as buttons with event-count aria-labels", async () => {
+        const now = new Date();
+        const today = now.getDate();
+        const events = [sampleEvent({ id: "m1", name: "General Body Meeting", start: currentMonth(today) })];
+        mockFetchOnce(events);
+        const { container } = renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        const dayButtons = container.querySelectorAll("button.calendar-day");
+        expect(dayButtons.length).toBeGreaterThanOrEqual(28);
+        expect(dayButtons.length).toBeLessThanOrEqual(42);
+
+        // Single-letter weekday headings shown visually ("S"), full name
+        // stays available to screen readers via the sr-only span.
+        const firstDow = container.querySelector(".calendar-dow");
+        expect(firstDow?.querySelector('[aria-hidden="true"]')?.textContent).toBe("S");
+        expect(firstDow?.querySelector(".sr-only")?.textContent).toBe("Sun");
+
+        // Today has 1 event -> singular "1 event" in the aria-label.
+        const todayDate = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+        const todayCell = screen.getByRole("button", { name: `${todayDate}, 1 event` });
+        expect(todayCell).toBeInTheDocument();
+        // No name-text chips inside mobile day cells -- just dots.
+        expect(todayCell.textContent).not.toContain("General Body Meeting");
+        expect(todayCell.querySelectorAll(".calendar-day-dot")).toHaveLength(1);
+    });
+
+    it("defaults the agenda to today and swaps content when another day is tapped", async () => {
+        const now = new Date();
+        const today = now.getDate();
+        const otherDay = today <= 14 ? 20 : 5;
+        const events = [
+            sampleEvent({ id: "m1", name: "Today Meeting", start: currentMonth(today) }),
+            sampleEvent({ id: "m2", name: "Other Day Meeting", start: currentMonth(otherDay) }),
+        ];
+        mockFetchOnce(events);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        // Agenda defaults to today, and its day cell is the pressed one.
+        expect(screen.getByText("Today Meeting")).toBeInTheDocument();
+        expect(screen.queryByText("Other Day Meeting")).not.toBeInTheDocument();
+        const todayDate = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+        expect(screen.getByRole("button", { name: `${todayDate}, 1 event` })).toHaveAttribute("aria-pressed", "true");
+
+        // Tap the other day -> agenda swaps to that day's events.
+        const otherDate = new Date(now.getFullYear(), now.getMonth(), otherDay).toLocaleDateString(undefined, {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+        });
+        await act(async () => {
+            fireEvent.click(screen.getByRole("button", { name: `${otherDate}, 1 event` }));
+        });
+        expect(screen.getByText("Other Day Meeting")).toBeInTheDocument();
+        expect(screen.queryByText("Today Meeting")).not.toBeInTheDocument();
+        expect(screen.getByRole("button", { name: `${otherDate}, 1 event` })).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("opens the detail modal from an agenda row", async () => {
+        const now = new Date();
+        const events = [sampleEvent({ id: "m1", name: "Agenda Modal Test", start: currentMonth(now.getDate()) })];
+        mockFetchOnce(events);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        fireEvent.click(screen.getByRole("button", { name: /Agenda Modal Test/i }));
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
+        expect(within(screen.getByRole("dialog")).getByText("Agenda Modal Test")).toBeInTheDocument();
+    });
+
+    it("shows a muted dot for canceled events and moves selection when navigating months", async () => {
+        const now = new Date();
+        const today = now.getDate();
+        const events = [
+            sampleEvent({ id: "m1", name: "Dead Meeting", start: currentMonth(today), status: "canceled" }),
+        ];
+        mockFetchOnce(events);
+        const { container } = renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        expect(container.querySelector(".calendar-day-dot--muted")).not.toBeNull();
+
+        // Month navigation follows the agenda to the 1st of the new month so
+        // it never shows a day the grid no longer displays.
+        const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const heading = nextMonth.toLocaleDateString(undefined, {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+        });
+        await act(async () => {
+            fireEvent.click(screen.getByRole("button", { name: /Next month/i }));
+        });
+        expect(container.querySelector(".calendar-agenda__heading")?.textContent).toBe(heading);
+    });
+});

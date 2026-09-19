@@ -31,7 +31,18 @@ The website owns:
 
 - Background refresh: `Calendar.tsx` polls `fetchEvents` every `EVENTS_POLL_INTERVAL_MS` (60 s, deliberately matching the KV TTL) with the same visibility-aware pattern as `LiveMap.tsx` -- skip while `document.hidden`, immediate repoll on visibility, abort the in-flight poll before starting a new one. Transient poll failures keep the last-good events; the error card only appears when nothing has loaded yet.
 - RRULE expansion for recurring events (via the `rrule` package).
-- The month-grid UI, day-name headers, and chip rendering.
+- The month-grid UI, day-name headers, chip rendering, and the mobile layout branch (below).
+
+## Mobile layout (max-width 700px)
+
+Below 700px the calendar renders a different markup branch, gated by an `isMobile` state read from `matchMedia("(max-width: 700px)")` (React state, not CSS-only hiding, because nesting `<button>` chips inside a `<button>` day cell would be invalid HTML):
+
+- **Day cells become `<button>`s** with one accent dot per event (max 3 + a "+N" overflow) instead of full text chips -- a ~45px column can't hold a two-line chip. Dot classes mirror chip status: `--muted` for canceled/completed, `--recurring` hollow ring for recurring.
+- **Weekday headings collapse** to single letters (`DAY_HEADINGS_SHORT`); the full name stays in an `sr-only` span (aria-hidden on the short form). Do NOT put `aria-label` on the DOW div -- Biome's a11y lint rejects it on generic-role elements, and adding `role="columnheader"`/`<th>` trips other lint rules.
+- **A tappable agenda list** renders below the grid for the `selectedDay` (defaults to today). The selected cell gets `.calendar-day--selected` (inset ring) + `aria-pressed`. `navigateMonth()` and `goToToday()` also move `selectedDay` (to the 1st of the new month / to today) so the agenda never references a day the grid no longer displays.
+- The agenda rows reuse `eventChipClassName` and open the same `EventModal`, so status styling and modal behavior are shared between branches.
+- 700px is the point where ~90px columns start needing multi-line chips; the media query in `app.css` and the matchMedia query in `Calendar.tsx` MUST match.
+- Tests: `src/test/setup.ts` stubs matchMedia with `matches: false`, so the existing tests exercise the desktop branch; the mobile describe block in `Calendar.test.tsx` re-stubs it to `matches: true` in `beforeEach`.
 
 ## No-webhook constraint
 
@@ -93,6 +104,6 @@ The `rrule` package handles the full RFC 5545 grammar, so all of the above varia
 ## Tests
 
 - `src/test/lib/discord.test.ts` — `fetchEvents` (happy/error/malformed/abort cases, mock fetch with duck-typed responses) and `expandRecurrences` (weekly, daily, UNTIL clip, malformed-RRULE fallback, duration shift, sort order).
-- `src/test/pages/Calendar.test.tsx` — page render states (loading, success, error, empty), chip rendering with real Discord URL, recurrence expansion, month nav, error-card behavior.
+- `src/test/pages/Calendar.test.tsx` — page render states (loading, success, error, empty), chip rendering with real Discord URL, recurrence expansion, month nav, error-card behavior, plus a "mobile branch" describe block (matchMedia stubbed to `matches: true`) covering day-cell buttons, dots, the agenda swap, agenda->modal, and selection-on-month-nav.
 
 Both follow the existing `LiveMap.test.tsx` patterns: `MemoryRouter` wrap, `mockFetchOnce` / `mockFetchSequence`, `flushMicrotasks()` to drain the `.then()` chain, restore `global.fetch` in `afterEach`.

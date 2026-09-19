@@ -5,6 +5,9 @@ import EventModal from "../components/EventModal";
 import { type CalendarEvent, type ExpandedOccurrence, expandRecurrences, fetchEvents } from "../lib/discord";
 
 const DAY_HEADINGS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+/** Single-letter labels used on mobile, where the 3-letter forms overflow
+ * a ~45px column. `aria-label` keeps the full name for screen readers. */
+const DAY_HEADINGS_SHORT = ["S", "M", "T", "W", "T", "F", "S"];
 
 function startOfDay(d: Date): Date {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -121,6 +124,35 @@ function EventChip({
     );
 }
 
+/**
+ * A row in the mobile agenda list shown below the month grid for the
+ * selected day. Same accent-border treatment as the grid chips, laid out
+ * as a comfortable full-width tap target.
+ */
+function AgendaRow({
+    occurrence,
+    onClick,
+}: {
+    occurrence: ExpandedOccurrence;
+    onClick: (occ: ExpandedOccurrence) => void;
+}) {
+    const { event } = occurrence;
+    const time = formatOccurrenceTime(occurrence);
+    return (
+        <li>
+            <button
+                type="button"
+                className={eventChipClassName(event)}
+                title={event.name}
+                onClick={() => onClick(occurrence)}
+            >
+                <span className="calendar-event__time">{time}</span>
+                <span className="calendar-event__name">{event.name}</span>
+            </button>
+        </li>
+    );
+}
+
 /** Events refresh cadence while the page is visible. Deliberately matches
  * the worker's KV TTL (60s) -- polling faster would never see fresher data. */
 const EVENTS_POLL_INTERVAL_MS = 60_000;
@@ -134,6 +166,24 @@ export default function Calendar() {
     const [error, setError] = useState<string | null>(null);
     const [now, setNow] = useState(() => new Date());
     const [selectedOccurrence, setSelectedOccurrence] = useState<ExpandedOccurrence | null>(null);
+    // Mobile month-grid substitute: the tapped day whose events are listed
+    // in the agenda below the grid. Defaults to today so the agenda is
+    // populated on first load. Only rendered on narrow viewports.
+    const [selectedDay, setSelectedDay] = useState<Date | null>(() => startOfDay(new Date()));
+    // Viewport gate kept as React state so mobile renders day-cells as
+    // buttons (with dots) instead of per-event chips -- nested <button>s
+    // would be invalid HTML. matchMedia is stubbed (matches: false) in
+    // tests, which exercise the desktop branch.
+    const [isMobile, setIsMobile] = useState(() =>
+        typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 700px)").matches : false,
+    );
+    useEffect(() => {
+        if (typeof window.matchMedia !== "function") return;
+        const mq = window.matchMedia("(max-width: 700px)");
+        const onChange = () => setIsMobile(mq.matches);
+        mq.addEventListener("change", onChange);
+        return () => mq.removeEventListener("change", onChange);
+    }, []);
 
     // Keep "today" fresh so the highlight moves at midnight without a fetch.
     useEffect(() => {
@@ -210,16 +260,34 @@ export default function Calendar() {
 
     const isLoading = events === null && error === null;
 
-    const goToPrevMonth = () => {
-        setMonthAnchor((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1));
-    };
-    const goToNextMonth = () => {
-        setMonthAnchor((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1));
+    /**
+     * Follow month navigation with the agenda selection (1st of the newly
+     * shown month) so the agenda never shows a day the grid no longer displays.
+     */
+    const navigateMonth = (offset: number) => {
+        setMonthAnchor((m) => {
+            const next = new Date(m.getFullYear(), m.getMonth() + offset, 1);
+            setSelectedDay(startOfDay(next));
+            return next;
+        });
     };
     const goToToday = () => {
         const now = new Date();
         setMonthAnchor(new Date(now.getFullYear(), now.getMonth(), 1));
+        setSelectedDay(startOfDay(now));
     };
+
+    const selectedDayOccurrences = useMemo(() => {
+        if (selectedDay === null) return [];
+        const dayStart = startOfDay(selectedDay);
+        const dayEnd = addDays(dayStart, 1);
+        // Same half-open interval as buildMonthGrid's per-day filter so a
+        // zero-duration event is listed on its start day.
+        return occurrences.filter((o) => {
+            const occEnd = o.end.getTime() > o.start.getTime() ? o.end.getTime() : o.start.getTime() + 1;
+            return o.start.getTime() < dayEnd.getTime() && occEnd > dayStart.getTime();
+        });
+    }, [occurrences, selectedDay]);
 
     return (
         <section className="section mx-auto grid max-w-275 gap-8 px-4 py-16">
@@ -248,7 +316,7 @@ export default function Calendar() {
                         <button
                             type="button"
                             className="calendar-nav-btn"
-                            onClick={goToPrevMonth}
+                            onClick={() => navigateMonth(-1)}
                             aria-label="Previous month"
                         >
                             <ChevronLeft size={18} />
@@ -258,7 +326,7 @@ export default function Calendar() {
                             <button
                                 type="button"
                                 className="calendar-nav-btn"
-                                onClick={goToNextMonth}
+                                onClick={() => navigateMonth(1)}
                                 aria-label="Next month"
                             >
                                 <ChevronRight size={18} />
@@ -270,15 +338,71 @@ export default function Calendar() {
                     </div>
 
                     <div className="calendar">
-                        {DAY_HEADINGS.map((d) => (
+                        {DAY_HEADINGS.map((d, i) => (
+                            // Mobile shows the single-letter form (visually hidden
+                            // full name keeps screen readers on "Sunday", not "S").
                             <div key={d} className="calendar-dow">
-                                {d}
+                                {isMobile ? (
+                                    <>
+                                        <span aria-hidden="true">{DAY_HEADINGS_SHORT[i]}</span>
+                                        <span className="sr-only">{d}</span>
+                                    </>
+                                ) : (
+                                    d
+                                )}
                             </div>
                         ))}
                         {cells.map((cell) => {
                             let dayCls = "calendar-day";
                             if (!cell.inCurrentMonth) dayCls += " calendar-day--other-month";
                             if (cell.isToday) dayCls += " calendar-day--today";
+                            const isSelected = selectedDay !== null && isSameDay(cell.date, selectedDay);
+                            if (isMobile && isSelected) dayCls += " calendar-day--selected";
+                            const dayLabel = cell.date.toLocaleDateString(undefined, {
+                                weekday: "long",
+                                month: "long",
+                                day: "numeric",
+                            });
+                            if (isMobile) {
+                                const count = cell.occurrences.length;
+                                const ariaLabel =
+                                    count === 0
+                                        ? dayLabel
+                                        : count === 1
+                                          ? `${dayLabel}, 1 event`
+                                          : `${dayLabel}, ${count} events`;
+                                return (
+                                    <button
+                                        key={cell.date.toISOString()}
+                                        type="button"
+                                        className={dayCls}
+                                        aria-label={ariaLabel}
+                                        aria-pressed={isSelected}
+                                        onClick={() => setSelectedDay(startOfDay(cell.date))}
+                                    >
+                                        <span className="calendar-day-number">{cell.date.getDate()}</span>
+                                        {count > 0 && (
+                                            <span className="calendar-day-dots" aria-hidden="true">
+                                                {cell.occurrences.slice(0, 3).map((occ, i) => {
+                                                    let dotCls = "calendar-day-dot";
+                                                    if (occ.event.status === "canceled")
+                                                        dotCls += " calendar-day-dot--muted";
+                                                    else if (occ.event.status === "completed")
+                                                        dotCls += " calendar-day-dot--muted";
+                                                    if (occ.event.isRecurring) dotCls += " calendar-day-dot--recurring";
+                                                    return (
+                                                        <span
+                                                            className={dotCls}
+                                                            key={`${occ.event.id}-${occ.start.getTime()}-${i}`}
+                                                        />
+                                                    );
+                                                })}
+                                                {count > 3 && <span className="calendar-day-more">+{count - 3}</span>}
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            }
                             return (
                                 <div key={cell.date.toISOString()} className={dayCls}>
                                     <div className="calendar-day-number">{cell.date.getDate()}</div>
@@ -295,6 +419,31 @@ export default function Calendar() {
                             );
                         })}
                     </div>
+
+                    {isMobile && selectedDay !== null && (
+                        <div className="calendar-agenda">
+                            <h3 className="calendar-agenda__heading">
+                                {selectedDay.toLocaleDateString(undefined, {
+                                    weekday: "long",
+                                    month: "long",
+                                    day: "numeric",
+                                })}
+                            </h3>
+                            {selectedDayOccurrences.length === 0 ? (
+                                <p className="calendar-agenda__empty">No events</p>
+                            ) : (
+                                <ul className="calendar-agenda__list">
+                                    {selectedDayOccurrences.map((occ, i) => (
+                                        <AgendaRow
+                                            key={`${occ.event.id}-${occ.start.getTime()}-${i}`}
+                                            occurrence={occ}
+                                            onClick={setSelectedOccurrence}
+                                        />
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    )}
 
                     {events !== null && events.length === 0 && (
                         <p className="mt-6 text-center text-hovercolor">
