@@ -767,6 +767,12 @@
         color: var(--color-accent);
     }
 
+    /* Same brightened maroon as .dark .kicker — official Chicago Maroon is
+       near-invisible against the warm dark card background. */
+    .dark .calendar-event__time {
+        color: #b8345c;
+    }
+
     .calendar-event__name {
         font-weight: 600;
         overflow: hidden;

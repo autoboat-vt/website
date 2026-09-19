@@ -128,6 +128,36 @@ describe("Calendar page", () => {
         expect(screen.getByText(/No events are scheduled yet/i)).toBeInTheDocument();
     });
 
+    it("aligns day numbers with the correct weekday column", async () => {
+        // Regression test: the grid starts on Sunday. The number of leading
+        // other-month pad cells before the 1st must equal the 1st's getDay()
+        // (Sun=0). A previous version used an inverted lookup that treated the
+        // grid as Mon-start, shifting every date 5-6 columns off its weekday.
+        mockFetchOnce([]);
+        const { container } = renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        const now = new Date();
+        const expectedLeadingPads = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
+
+        const dayCells = Array.from(container.querySelectorAll<HTMLElement>(".calendar-day"));
+        let leadingPads = 0;
+        for (const cell of dayCells) {
+            if (cell.classList.contains("calendar-day--other-month")) leadingPads++;
+            else break;
+        }
+        expect(leadingPads).toBe(expectedLeadingPads);
+
+        // The first in-month cell must be the 1st and be a day whose weekday
+        // matches its column index (column 0 = Sunday).
+        const firstInMonthIndex = dayCells.findIndex((c) => !c.classList.contains("calendar-day--other-month"));
+        const firstDayNumber = dayCells[firstInMonthIndex]?.querySelector(".calendar-day-number")?.textContent;
+        expect(firstDayNumber).toBe("1");
+        expect(firstInMonthIndex % 7).toBe(expectedLeadingPads % 7);
+    });
+
     it("renders current-month events as chips linking to Discord", async () => {
         const events = [
             sampleEvent({

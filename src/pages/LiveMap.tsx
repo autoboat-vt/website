@@ -313,7 +313,7 @@ export default function LiveMap() {
                         <label className="live-map__select-wrap inline-flex items-center gap-1.5 text-sm text-fontcolor/70">
                             <span className="sr-only">Boat to display</span>
                             <select
-                                className="live-map__select rounded-lg border border-black/10 bg-white/60 px-2 py-1.5 text-sm font-semibold text-fontcolor transition-colors hover:bg-white dark:hover:bg-white/10"
+                                className="live-map__select rounded-lg border border-black/10 bg-white/60 px-2 py-1.5 text-sm font-semibold text-fontcolor transition-colors hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
                                 value={selectedBoatId ?? ""}
                                 onChange={(e) =>
                                     setSelectedBoatId(e.target.value === "" ? null : Number(e.target.value))

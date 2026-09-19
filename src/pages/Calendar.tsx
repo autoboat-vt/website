@@ -11,17 +11,6 @@ import {
 
 const DAY_HEADINGS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-// Monday is JS getDay() === 1; the grid starts on Sunday.
-const DOW_START_OFFSET: Record<number, number> = {
-    0: 0,
-    1: 6,
-    2: 5,
-    3: 4,
-    4: 3,
-    5: 2,
-    6: 1,
-};
-
 function startOfDay(d: Date): Date {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
@@ -63,7 +52,10 @@ function buildMonthGrid(
     const lastOfMonth = new Date(year, month + 1, 0);
     const monthEnd = startOfDay(lastOfMonth);
 
-    const gridStartOffset = DOW_START_OFFSET[monthStart.getDay()] ?? 0;
+    // DAY_HEADINGS is Sun..Sat, column 0 is Sunday, and Date.getDay() is Sun = 0,
+    // so the 1st's getDay() is exactly how many leading other-month pad days the
+    // grid needs for its column to match its heading.
+    const gridStartOffset = monthStart.getDay();
     const gridStart = addDays(monthStart, -gridStartOffset);
     const daysFromSaturdayInMonth = 6 - monthEnd.getDay();
 
