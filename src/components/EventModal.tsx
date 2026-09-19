@@ -1,7 +1,7 @@
-import { ArrowUpRight, CalendarDays, Clock3, MapPin, Repeat2, Users, X } from "lucide-react";
+import { CalendarDays, MapPin, X } from "lucide-react";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
-import type { CalendarEvent, ExpandedOccurrence } from "../lib/discord";
-import { discordEventUrl } from "../lib/discord";
+import type { ExpandedOccurrence } from "../lib/discord";
+import EventMap from "./EventMap";
 
 interface EventModalProps {
     occurrence: ExpandedOccurrence | null;
@@ -14,11 +14,6 @@ function formatLongDate(d: Date): string {
 
 function formatTime(d: Date): string {
     return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-}
-
-function formatTimeRange(start: Date, end: Date): string {
-    if (end.getTime() === start.getTime()) return formatTime(start);
-    return `${formatTime(start)} - ${formatTime(end)}`;
 }
 
 /** Render Discord **bold** markdown as <strong>, escaping everything else. */
@@ -37,19 +32,6 @@ function renderDiscordMarkdown(text: string): React.ReactNode[] {
         rest = rest.slice(m.index + m[0].length);
     }
     return out;
-}
-
-function statusLabel(status: CalendarEvent["status"]): string {
-    switch (status) {
-        case "scheduled":
-            return "Scheduled";
-        case "active":
-            return "Happening now";
-        case "completed":
-            return "Completed";
-        case "canceled":
-            return "Canceled";
-    }
 }
 
 export default function EventModal({ occurrence, onClose }: EventModalProps) {
@@ -91,7 +73,7 @@ export default function EventModal({ occurrence, onClose }: EventModalProps) {
 
     if (!mounted || !occurrence) return null;
 
-    const { event, start, end } = occurrence;
+    const { event, start } = occurrence;
 
     const handleBackdropClick = (e: MouseEvent<HTMLDivElement>) => {
         if (e.target === e.currentTarget) onClose();
@@ -119,58 +101,24 @@ export default function EventModal({ occurrence, onClose }: EventModalProps) {
                     <X size={18} />
                 </button>
 
-                {event.image && <img className="event-modal__image" src={event.image} alt="" />}
-
                 <div className="event-modal__body">
                     <h3 className="event-modal__title">{event.name}</h3>
                     <div className="event-modal__meta">
                         <span className="event-modal__meta-row">
                             <CalendarDays size={15} className="event-modal__meta-icon" aria-hidden="true" />
-                            {formatLongDate(start)}
+                            {formatLongDate(start)} at {formatTime(start)}
                         </span>
                         <span className="event-modal__meta-row">
-                            <Clock3 size={15} className="event-modal__meta-icon" aria-hidden="true" />
-                            {formatTimeRange(start, end)}
+                            <MapPin size={15} className="event-modal__meta-icon" aria-hidden="true" />
+                            {event.location ?? "No location specified"}
                         </span>
                     </div>
 
-                    <div className="event-modal__badges">
-                        <span className={`event-modal__badge event-modal__badge--${event.status}`}>
-                            {statusLabel(event.status)}
-                        </span>
-                        {event.isRecurring && (
-                            <span className="event-modal__badge">
-                                <Repeat2 size={12} aria-hidden="true" /> Recurring
-                            </span>
-                        )}
-                        {event.location && (
-                            <span className="event-modal__badge event-modal__badge--location">
-                                <MapPin size={12} aria-hidden="true" /> {event.location}
-                            </span>
-                        )}
-                        {event.userCount != null && (
-                            <span className="event-modal__badge">
-                                <Users size={12} aria-hidden="true" /> {event.userCount} interested
-                            </span>
-                        )}
-                    </div>
+                    {event.location && <EventMap location={event.location} />}
 
                     {event.description && (
                         <p className="event-modal__description">{renderDiscordMarkdown(event.description)}</p>
                     )}
-
-                    <div className="event-modal__actions">
-                        <a
-                            className="btn btn--primary btn-sm"
-                            href={discordEventUrl(event)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            Open in Discord
-                            <ArrowUpRight size={15} aria-hidden="true" />
-                            <span className="sr-only"> (opens in a new tab)</span>
-                        </a>
-                    </div>
                 </div>
             </div>
         </div>

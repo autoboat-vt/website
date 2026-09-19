@@ -355,7 +355,7 @@ function FleetCard({ vessel, onImageClick }: { vessel: Vessel; onImageClick: () 
             >
                 <VesselImage vessel={vessel} />
             </div>
-            <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-black/50">
+            <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-black/50 dark:text-white/50">
                 <Maximize2 size={12} aria-hidden="true" />
                 Click image to expand
             </p>

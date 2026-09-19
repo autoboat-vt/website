@@ -1,7 +1,7 @@
 import { afterEach } from "@jest/globals";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { type CalendarEvent, DISCORD_GUILD_ID } from "../../lib/discord";
+import type { CalendarEvent } from "../../lib/discord";
 
 /**
  * Tests for the Calendar page. Mirrors the LiveMap pattern: mock global
@@ -177,7 +177,7 @@ describe("Calendar page", () => {
         expect(chip).toBeInTheDocument();
     });
 
-    it("opens a detail modal when an event chip is clicked", async () => {
+    it("opens a detail modal when an event chip is clicked, and shows a map for its location", async () => {
         const events = [
             sampleEvent({
                 id: "evt-1",
@@ -185,11 +185,18 @@ describe("Calendar page", () => {
                 description: "Location: **Holden Auditorium**",
                 start: currentMonth(10),
                 location: "Holden Auditorium",
-                userCount: 12,
-                isRecurring: true,
             }),
         ];
-        mockFetchOnce(events);
+        // First fetch: the calendar's events. Second fetch: EventMap's
+        // Nominatim geocode for the location.
+        const fetchMock = jest
+            .fn()
+            .mockImplementationOnce(() => Promise.resolve(jsonResponse(events)))
+            .mockImplementationOnce(() =>
+                Promise.resolve(jsonResponse([{ lat: "37.2284", lon: "-80.4232" }])),
+            ) as unknown as FetchMock;
+        global.fetch = fetchMock as unknown as typeof fetch;
+
         renderCalendar();
         await act(async () => {
             await flushMicrotasks();
@@ -201,14 +208,52 @@ describe("Calendar page", () => {
         expect(dialog).toBeInTheDocument();
         const dlg = within(dialog);
         expect(dlg.getByText("General Body Meeting")).toBeInTheDocument();
-        expect(dlg.getByText("Holden Auditorium", { selector: ".event-modal__badge--location" })).toBeInTheDocument();
-        expect(dlg.getByText("12 interested")).toBeInTheDocument();
-        expect(dlg.getByText("Recurring")).toBeInTheDocument();
+
+        // Date (long form) and start time sit in the same meta row.
+        expect(dlg.getByText(/^\w+, \w+ \d{1,2}, \d{4} at /)).toBeInTheDocument();
+
+        // Location sits in its own meta row (icon + text).
+        expect(dlg.getByText("Holden Auditorium", { selector: ".event-modal__meta-row" })).toBeInTheDocument();
+
+        // Discord **bold** markdown renders as <strong>.
         expect(dlg.getByText("Holden Auditorium", { selector: "strong" })).toBeInTheDocument();
 
-        // The modal keeps a deep link to Discord.
-        const discordLink = screen.getByRole("link", { name: /Open in Discord/i });
-        expect(discordLink).toHaveAttribute("href", `https://discord.com/channels/${DISCORD_GUILD_ID}/evt-1`);
+        // Physical locations render an embedded map with a marker.
+        await waitFor(() => expect(dlg.getByTestId("map-container")).toBeInTheDocument());
+        expect(dlg.getByTestId("circle-marker")).toHaveAttribute("data-center", "[37.2284,-80.4232]");
+        expect(dlg.getByRole("link", { name: /Open directions/i })).toHaveAttribute(
+            "href",
+            expect.stringContaining("https://www.google.com/maps/dir/"),
+        );
+    });
+
+    it("does not render a map for events without a physical location", async () => {
+        const events = [
+            sampleEvent({
+                id: "evt-2",
+                name: "Online Sync",
+                description: "Zoom link in Discord.",
+                start: currentMonth(10),
+                location: null,
+            }),
+        ];
+        mockFetchOnce(events);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        fireEvent.click(screen.getByRole("button", { name: /Online Sync/i }));
+
+        const dialog = screen.getByRole("dialog");
+        expect(dialog).toBeInTheDocument();
+        const dlg = within(dialog);
+        expect(dlg.getByText("No location specified")).toBeInTheDocument();
+        expect(dlg.queryByTestId("map-container")).not.toBeInTheDocument();
+
+        // No Nominatim geocode request should fire when there's no location.
+        const fetchMock = global.fetch as FetchMock;
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it("closes the modal on the close button, then reopens on the next click", async () => {
