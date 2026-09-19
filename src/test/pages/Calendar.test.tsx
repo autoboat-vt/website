@@ -1,5 +1,5 @@
 import { afterEach } from "@jest/globals";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { type CalendarEvent, DISCORD_GUILD_ID } from "../../lib/discord";
 
@@ -158,7 +158,7 @@ describe("Calendar page", () => {
         expect(firstInMonthIndex % 7).toBe(expectedLeadingPads % 7);
     });
 
-    it("renders current-month events as chips linking to Discord", async () => {
+    it("renders current-month events as clickable chips", async () => {
         const events = [
             sampleEvent({
                 id: "111",
@@ -172,14 +172,89 @@ describe("Calendar page", () => {
             await flushMicrotasks();
         });
 
-        // The visible chip text includes the event name.
-        expect(screen.getByText("Team meeting")).toBeInTheDocument();
+        // Chips are buttons that open the detail modal.
+        const chip = screen.getByRole("button", { name: /Team meeting/i });
+        expect(chip).toBeInTheDocument();
+    });
 
-        // The chip links to Discord's canonical event URL.
-        const link = screen.getByRole("link", { name: /Team meeting/i });
-        expect(link).toHaveAttribute("href", `https://discord.com/channels/${DISCORD_GUILD_ID}/111`);
-        expect(link).toHaveAttribute("target", "_blank");
-        expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
+    it("opens a detail modal when an event chip is clicked", async () => {
+        const events = [
+            sampleEvent({
+                id: "evt-1",
+                name: "General Body Meeting",
+                description: "Location: **Holden Auditorium**",
+                start: currentMonth(10),
+                location: "Holden Auditorium",
+                userCount: 12,
+                isRecurring: true,
+            }),
+        ];
+        mockFetchOnce(events);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        fireEvent.click(screen.getByRole("button", { name: /General Body Meeting/i }));
+
+        const dialog = screen.getByRole("dialog");
+        expect(dialog).toBeInTheDocument();
+        const dlg = within(dialog);
+        expect(dlg.getByText("General Body Meeting")).toBeInTheDocument();
+        expect(dlg.getByText("Holden Auditorium", { selector: ".event-modal__badge--location" })).toBeInTheDocument();
+        expect(dlg.getByText("12 interested")).toBeInTheDocument();
+        expect(dlg.getByText("Recurring")).toBeInTheDocument();
+        expect(dlg.getByText("Holden Auditorium", { selector: "strong" })).toBeInTheDocument();
+
+        // The modal keeps a deep link to Discord.
+        const discordLink = screen.getByRole("link", { name: /Open in Discord/i });
+        expect(discordLink).toHaveAttribute("href", `https://discord.com/channels/${DISCORD_GUILD_ID}/evt-1`);
+    });
+
+    it("closes the modal on the close button, then reopens on the next click", async () => {
+        const events = [
+            sampleEvent({
+                id: "evt-1",
+                name: "General Body Meeting",
+                start: currentMonth(10),
+            }),
+        ];
+        mockFetchOnce(events);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        fireEvent.click(screen.getByRole("button", { name: /General Body Meeting/i }));
+        await waitFor(() => expect(screen.getByRole("dialog")).toHaveClass("is-open"));
+
+        fireEvent.click(screen.getByRole("button", { name: "Close" }));
+        // Exit transition: the dialog hides immediately but unmounts after 200ms.
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByRole("button", { name: /General Body Meeting/i }));
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+
+    it("closes the modal on Escape", async () => {
+        const events = [
+            sampleEvent({
+                id: "evt-1",
+                name: "General Body Meeting",
+                start: currentMonth(10),
+            }),
+        ];
+        mockFetchOnce(events);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        fireEvent.click(screen.getByRole("button", { name: /General Body Meeting/i }));
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+        fireEvent.keyDown(document, { key: "Escape" });
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     });
 
     it("expands recurring events into one chip per occurrence", async () => {

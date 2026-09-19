@@ -1,13 +1,8 @@
 import { AlertCircle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Card from "../components/Card";
-import {
-    type CalendarEvent,
-    discordEventUrl,
-    type ExpandedOccurrence,
-    expandRecurrences,
-    fetchEvents,
-} from "../lib/discord";
+import EventModal from "../components/EventModal";
+import { type CalendarEvent, type ExpandedOccurrence, expandRecurrences, fetchEvents } from "../lib/discord";
 
 const DAY_HEADINGS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -104,21 +99,25 @@ function eventChipClassName(event: CalendarEvent): string {
     return cls;
 }
 
-function EventChip({ occurrence }: { occurrence: ExpandedOccurrence }) {
+function EventChip({
+    occurrence,
+    onClick,
+}: {
+    occurrence: ExpandedOccurrence;
+    onClick: (occ: ExpandedOccurrence) => void;
+}) {
     const { event } = occurrence;
     const time = formatOccurrenceTime(occurrence);
     return (
-        <a
-            href={discordEventUrl(event)}
-            target="_blank"
-            rel="noopener noreferrer"
+        <button
+            type="button"
             className={eventChipClassName(event)}
-            title={`${event.name} (${time}) -- view in Discord`}
+            title={`${event.name} (${time})`}
+            onClick={() => onClick(occurrence)}
         >
             <span className="calendar-event__time">{time}</span>
             <span className="calendar-event__name">{event.name}</span>
-            <span className="sr-only"> (opens in a new tab)</span>
-        </a>
+        </button>
     );
 }
 
@@ -130,6 +129,7 @@ export default function Calendar() {
     const [events, setEvents] = useState<CalendarEvent[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [now, setNow] = useState(() => new Date());
+    const [selectedOccurrence, setSelectedOccurrence] = useState<ExpandedOccurrence | null>(null);
 
     // Keep "today" fresh so the highlight moves at midnight without a fetch.
     useEffect(() => {
@@ -245,6 +245,7 @@ export default function Calendar() {
                                             <EventChip
                                                 key={`${occ.event.id}-${occ.start.getTime()}-${i}`}
                                                 occurrence={occ}
+                                                onClick={setSelectedOccurrence}
                                             />
                                         ))}
                                     </div>
@@ -266,6 +267,8 @@ export default function Calendar() {
                     )}
                 </Card>
             )}
+
+            <EventModal occurrence={selectedOccurrence} onClose={() => setSelectedOccurrence(null)} />
         </section>
     );
 }
