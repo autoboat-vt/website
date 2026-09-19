@@ -835,36 +835,55 @@
         position: relative;
         width: min(560px, 100%);
         max-height: min(80vh, 100%);
+        overflow-x: hidden;
         overflow-y: auto;
-        border-radius: 0.75rem;
+        border: 1px solid var(--color-cardborder);
+        border-radius: 1rem;
         background-color: var(--color-bgcolor);
         color: var(--color-fontcolor);
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
-        transform: translateY(4px);
-        transition: transform 200ms ease;
+        box-shadow:
+            0 24px 60px rgba(0, 0, 0, 0.4),
+            0 2px 8px rgba(0, 0, 0, 0.12);
+        transform: translateY(8px) scale(0.98);
+        transition: transform 250ms cubic-bezier(0.22, 0.61, 0.36, 1);
     }
     .event-modal.is-open .event-modal__panel {
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
     }
     .dark .event-modal__panel {
-        background-color: var(--color-bgcolor);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow:
+            0 24px 60px rgba(0, 0, 0, 0.6),
+            0 2px 8px rgba(0, 0, 0, 0.3);
     }
     .event-modal__close {
         position: absolute;
-        top: 0.5rem;
+        top: 0.75rem;
         right: 0.75rem;
         z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        padding: 0;
         cursor: pointer;
         border: 0;
-        background: transparent;
-        font-size: 1.75rem;
-        line-height: 1;
+        border-radius: 999px;
+        background-color: rgba(0, 0, 0, 0.05);
         color: var(--color-hovercolor);
-        padding: 0.25rem;
+        transition:
+            background-color 150ms,
+            color 150ms;
+    }
+    .dark .event-modal__close {
+        background-color: rgba(255, 255, 255, 0.08);
     }
     .event-modal__close:hover {
+        background-color: rgba(0, 0, 0, 0.12);
         color: var(--color-fontcolor);
+    }
+    .dark .event-modal__close:hover {
+        background-color: rgba(255, 255, 255, 0.18);
     }
     .event-modal__image {
         display: block;
@@ -876,34 +895,45 @@
         padding: 1.5rem;
     }
     .event-modal__title {
-        margin: 0 1.5rem 0.25rem 0;
+        margin: 0 2.25rem 0.5rem 0;
         font-family: var(--font-heading);
-        font-size: 1.35rem;
+        font-size: 1.375rem;
         font-weight: 700;
         line-height: 1.25;
     }
     .event-modal__meta {
         display: flex;
-        flex-wrap: wrap;
-        gap: 0.25rem 0.75rem;
+        flex-direction: column;
+        gap: 0.375rem;
+        margin-bottom: 1rem;
         color: var(--color-hovercolor);
-        font-size: 0.95rem;
-        margin-bottom: 0.75rem;
+        font-size: 0.9375rem;
     }
-    .event-modal__date {
-        font-weight: 600;
+    .event-modal__meta-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .event-modal__meta-icon {
+        flex-shrink: 0;
+        color: var(--color-accent);
+    }
+    .dark .event-modal__meta-icon {
+        color: #b8345c;
     }
     .event-modal__badges {
         display: flex;
         flex-wrap: wrap;
+        align-items: center;
         gap: 0.375rem;
-        margin-bottom: 0.875rem;
+        margin-bottom: 1rem;
     }
     .event-modal__badge {
         display: inline-flex;
         align-items: center;
+        gap: 0.3125rem;
         border-radius: 999px;
-        padding: 0.125rem 0.625rem;
+        padding: 0.1875rem 0.625rem;
         font-size: 0.75rem;
         font-weight: 600;
         background-color: color-mix(in srgb, var(--color-accent) 12%, transparent);
@@ -945,11 +975,13 @@
         color: #81c784;
     }
     .event-modal__description {
-        margin: 0 0 1rem;
-        font-size: 0.95rem;
-        line-height: 1.6;
+        margin: 0 0 1.25rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--color-cardborder);
+        font-size: 0.9375rem;
+        line-height: 1.65;
         white-space: pre-wrap;
-        word-wrap: break-word;
+        overflow-wrap: break-word;
         color: var(--color-fontcolor);
     }
     .event-modal__description strong {
@@ -959,6 +991,10 @@
         display: flex;
         justify-content: center;
         gap: 0.5rem;
+        margin-top: 1.25rem;
+    }
+    .event-modal__description + .event-modal__actions {
+        margin-top: 0;
     }
 
     @media (max-width: 620px) {
