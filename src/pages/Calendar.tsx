@@ -1,5 +1,5 @@
 import { AlertCircle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Card from "../components/Card";
 import EventModal from "../components/EventModal";
 import { type CalendarEvent, type ExpandedOccurrence, expandRecurrences, fetchEvents } from "../lib/discord";
@@ -121,6 +121,10 @@ function EventChip({
     );
 }
 
+/** Events refresh cadence while the page is visible. Deliberately matches
+ * the worker's KV TTL (60s) -- polling faster would never see fresher data. */
+const EVENTS_POLL_INTERVAL_MS = 60_000;
+
 export default function Calendar() {
     const [monthAnchor, setMonthAnchor] = useState(() => {
         const now = new Date();
@@ -137,22 +141,58 @@ export default function Calendar() {
         return () => clearInterval(t);
     }, []);
 
-    useEffect(() => {
+    // Abort controller for in-flight polls; cancelled on unmount or when a
+    // newer poll starts. Keeps state clean across rapid re-renders.
+    const abortRef = useRef<AbortController | null>(null);
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    // Tracks whether any poll has produced data, so transient failures can
+    // stay silent once the grid is populated.
+    const hasDataRef = useRef(false);
+
+    const poll = useCallback(async () => {
+        // Cancel any in-flight poll before starting a new one.
+        abortRef.current?.abort();
         const controller = new AbortController();
-        fetchEvents(controller.signal)
-            .then((data) => {
-                if (!controller.signal.aborted) {
-                    setEvents(data);
-                    setError(null);
-                }
-            })
-            .catch((err: unknown) => {
-                if (controller.signal.aborted) return;
-                setError(err instanceof Error ? err.message : "Failed to load events");
-                setEvents([]);
-            });
-        return () => controller.abort();
+        abortRef.current = controller;
+        try {
+            const data = await fetchEvents(controller.signal);
+            // If we were aborted while awaiting, drop the result.
+            if (controller.signal.aborted) return;
+            hasDataRef.current = true;
+            setEvents(data);
+            setError(null);
+        } catch (err) {
+            if (controller.signal.aborted) return; // Expected on unmount/replace.
+            // Only surface an error (and blank the grid) when there are no
+            // events to show. Transient poll failures keep the last-good data.
+            if (hasDataRef.current) return;
+            setError(err instanceof Error ? err.message : "Failed to load events");
+            setEvents([]);
+        }
     }, []);
+
+    // Initial load + polling loop with visibility-aware pause, mirroring the
+    // LiveMap pattern (skip hidden tabs, immediately repoll on visibility).
+    useEffect(() => {
+        poll();
+        intervalRef.current = setInterval(() => {
+            if (document.hidden) return;
+            poll();
+        }, EVENTS_POLL_INTERVAL_MS);
+
+        const onVisibility = () => {
+            // On becoming visible again, immediately poll rather than waiting
+            // for the next interval tick -- feels more "live".
+            if (!document.hidden) poll();
+        };
+        document.addEventListener("visibilitychange", onVisibility);
+
+        return () => {
+            document.removeEventListener("visibilitychange", onVisibility);
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            abortRef.current?.abort();
+        };
+    }, [poll]);
 
     const occurrences = useMemo(() => {
         if (events === null) return [];

@@ -14,7 +14,7 @@ website (browser)
     |  GET https://<worker>.workers.dev/events
     v
 worker/ (Cloudflare Worker)
-    |  KV get "events"  (5 min TTL)
+    |  KV get "events"  (60 s TTL)
     |  miss -> GET https://discord.com/api/v10/guilds/<guild_id>/scheduled-events?with_user_count=true
     |           Authorization: Bot ${DISCORD_BOT_TOKEN}
     v
@@ -24,12 +24,12 @@ Discord API
 The Worker normalizes Discord's `GuildScheduledEvent` shape into a small `CalendarEvent` record (`src/lib/discord.ts`), which is what the website consumes. The Worker owns:
 
 - CORS (locked to `https://autoboat.aoe.vt.edu` via `ALLOWED_ORIGIN` var).
-- KV caching (key `"events"`, TTL from `CACHE_TTL_SECONDS` var, default 300 s). KV writes are fire-and-forget via `ctx.waitUntil` so the response isn't blocked on them.
+- KV caching (key `"events"`, TTL from `CACHE_TTL_SECONDS` var, 60 s in `wrangler.jsonc`, `parseTtlSeconds` fallback 300 s). KV writes are fire-and-forget via `ctx.waitUntil` so the response isn't blocked on them. Responses also send `Cache-Control: public, max-age=<TTL>` -- the client must fetch with `cache: "no-store"` or the browser cache defeats background polling.
 - Pre-mapping Discord's numeric status/entity_type codes to lowercase strings (`scheduled | active | completed | canceled`).
 
 The website owns:
 
-- One-shot fetch with caller-supplied `AbortSignal` (no polling).
+- Background refresh: `Calendar.tsx` polls `fetchEvents` every `EVENTS_POLL_INTERVAL_MS` (60 s, deliberately matching the KV TTL) with the same visibility-aware pattern as `LiveMap.tsx` -- skip while `document.hidden`, immediate repoll on visibility, abort the in-flight poll before starting a new one. Transient poll failures keep the last-good events; the error card only appears when nothing has loaded yet.
 - RRULE expansion for recurring events (via the `rrule` package).
 - The month-grid UI, day-name headers, and chip rendering.
 
@@ -41,7 +41,7 @@ Discord incoming webhooks are POST-only on a channel -- they cannot *pull* guild
 
 - `EVENTS_URL` — base Worker URL (from `globalThis.__VITE_EVENTS_URL__` or a placeholder default; override with the `VITE_EVENTS_URL` env var).
 - `DISCORD_GUILD_ID` — public guild id used to deep-link chips to Discord. Keep in sync with `DISCORD_GUILD_ID` in `worker/wrangler.jsonc`.
-- `fetchEvents(signal?)` — one-shot GET, returns `CalendarEvent[]`. Structural-invalid payloads degrade to `[]` rather than throwing; HTTP/network errors throw `DiscordError`. When the API `location` is null, the event is enriched via `extractLocationFromDescription` (team events are voice-channel events for role-scoped signup, so Discord's `entity_metadata.location` is always empty and the physical location lives in the description).
+- `fetchEvents(signal?)` — GET with `cache: "no-store"`, returns `CalendarEvent[]`. Structural-invalid payloads degrade to `[]` rather than throwing; HTTP/network errors throw `DiscordError`. When the API `location` is null, the event is enriched via `extractLocationFromDescription` (team events are voice-channel events for role-scoped signup, so Discord's `entity_metadata.location` is always empty and the physical location lives in the description).
 - `extractLocationFromDescription(description)` — returns `{ location, description }`: pulls the location out (labeled `Location:`/`Where:` line, else first bold span) and strips the matched text from the description so the modal doesn't render it twice.
 - `expandRecurrences(events, from, to)` — expands every RRULE event into concrete occurrences inside `[from, to]`. Malformed RRULEs fall back to a single occurrence at the base start.
 - `discordEventUrl(event)` — `https://discord.com/channels/<guildId>/<eventId>`.
@@ -52,7 +52,7 @@ Discord incoming webhooks are POST-only on a channel -- they cannot *pull* guild
 
 - `DISCORD_GUILD_ID` — public, not a secret.
 - `ALLOWED_ORIGIN` — deployment origin; do NOT set to `*` in production.
-- `CACHE_TTL_SECONDS` — KV TTL, default `300`.
+- `CACHE_TTL_SECONDS` — KV TTL, `60` in production config (`parseTtlSeconds` in the worker falls back to `300` for unparseable/missing values). Lower values mean more Discord API hits; keep the website's `EVENTS_POLL_INTERVAL_MS` in sync with this.
 
 Secrets (never committed) go in via `wrangler secret put`:
 

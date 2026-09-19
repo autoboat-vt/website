@@ -104,6 +104,10 @@ async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
         const response = await fetch(url, {
             headers: { Accept: "application/json" },
             mode: "cors",
+            // The worker sends `Cache-Control: public, max-age=<TTL>`; without
+            // no-store the browser would serve its own cached response and the
+            // calendar's background polls would never see fresher data.
+            cache: "no-store",
             signal: controller.signal,
         });
         if (!response.ok) {
