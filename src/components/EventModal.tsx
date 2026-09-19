@@ -1,3 +1,4 @@
+import { ArrowUpRight, CalendarDays, Clock3, MapPin, Repeat2, Users, X } from "lucide-react";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
 import type { CalendarEvent, ExpandedOccurrence } from "../lib/discord";
 import { discordEventUrl } from "../lib/discord";
@@ -115,7 +116,7 @@ export default function EventModal({ occurrence, onClose }: EventModalProps) {
                     onClick={onClose}
                     ref={closeBtnRef}
                 >
-                    &times;
+                    <X size={18} />
                 </button>
 
                 {event.image && <img className="event-modal__image" src={event.image} alt="" />}
@@ -123,20 +124,34 @@ export default function EventModal({ occurrence, onClose }: EventModalProps) {
                 <div className="event-modal__body">
                     <h3 className="event-modal__title">{event.name}</h3>
                     <div className="event-modal__meta">
-                        <span className="event-modal__date">{formatLongDate(start)}</span>
-                        <span className="event-modal__time">{formatTimeRange(start, end)}</span>
+                        <span className="event-modal__meta-row">
+                            <CalendarDays size={15} className="event-modal__meta-icon" aria-hidden="true" />
+                            {formatLongDate(start)}
+                        </span>
+                        <span className="event-modal__meta-row">
+                            <Clock3 size={15} className="event-modal__meta-icon" aria-hidden="true" />
+                            {formatTimeRange(start, end)}
+                        </span>
                     </div>
 
                     <div className="event-modal__badges">
                         <span className={`event-modal__badge event-modal__badge--${event.status}`}>
                             {statusLabel(event.status)}
                         </span>
-                        {event.isRecurring && <span className="event-modal__badge">Recurring</span>}
+                        {event.isRecurring && (
+                            <span className="event-modal__badge">
+                                <Repeat2 size={12} aria-hidden="true" /> Recurring
+                            </span>
+                        )}
                         {event.location && (
-                            <span className="event-modal__badge event-modal__badge--location">{event.location}</span>
+                            <span className="event-modal__badge event-modal__badge--location">
+                                <MapPin size={12} aria-hidden="true" /> {event.location}
+                            </span>
                         )}
                         {event.userCount != null && (
-                            <span className="event-modal__badge">{event.userCount} interested</span>
+                            <span className="event-modal__badge">
+                                <Users size={12} aria-hidden="true" /> {event.userCount} interested
+                            </span>
                         )}
                     </div>
 
@@ -152,6 +167,7 @@ export default function EventModal({ occurrence, onClose }: EventModalProps) {
                             rel="noopener noreferrer"
                         >
                             Open in Discord
+                            <ArrowUpRight size={15} aria-hidden="true" />
                             <span className="sr-only"> (opens in a new tab)</span>
                         </a>
                     </div>
