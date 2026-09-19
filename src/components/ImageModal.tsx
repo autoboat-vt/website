@@ -36,7 +36,7 @@ export default function ImageModal({ src, alt, caption, onClose }: ImageModalPro
         closeBtnRef.current?.focus();
 
         const handleKey = (e: KeyboardEvent) => {
-            if (e.key ==="Escape") onClose();
+            if (e.key === "Escape") onClose();
         };
         document.addEventListener("keydown", handleKey);
 

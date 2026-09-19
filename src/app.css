@@ -1165,49 +1165,24 @@
         border-left-color: #a855f7 !important;
     }
 
-    /* --- Home page subteam chips ---
-       A single, clean accent: the colored dot. Neutral card surface with a
-       thin border; hover lifts the chip and tints border + label with the
-       maroon accent so it reads as a call to action. All colors come from
-       theme tokens, so dark mode works without extra variants. */
-    .subteam-badge--home {
-        display: flex;
-        align-items: center;
-        gap: 0.65rem;
-        padding: 0.7rem 1rem;
-        border: 1px solid var(--color-cardborder);
-        border-radius: 999px;
-        background-color: var(--color-card);
-        color: var(--color-fontcolor);
-        font-size: 0.95rem;
-        font-weight: 600;
-        text-decoration: none;
-        transition:
-            transform 160ms ease,
-            border-color 160ms ease,
-            box-shadow 160ms ease,
-            color 160ms ease;
+    /* Home page subteam badges also use the left-border accent. They're
+       .subteam-badge (not .card), so a separate rule is needed. !important
+       beats the utilities-layer `border`/`dark:border-...` utilities on the
+       badge, same as the .card variants above. */
+    .subteam-badge.subteam-card--software {
+        border-left: 3px solid #3b82f6 !important;
     }
 
-    .subteam-badge--home:hover {
-        transform: translateY(-2px);
-        border-color: var(--color-accent);
-        color: var(--color-accent);
-        box-shadow: 0 4px 14px rgb(0 0 0 / 0.08);
+    .subteam-badge.subteam-card--electronics {
+        border-left: 3px solid #eab308 !important;
     }
 
-    .subteam-badge--home:focus-visible {
-        outline: 2px solid var(--color-accent);
-        outline-offset: 3px;
+    .subteam-badge.subteam-card--mechanical {
+        border-left: 3px solid #ef4444 !important;
     }
 
-    /* The dot is the single subteam accent; sized here so it stays
-       proportional regardless of where the class is used. */
-    .subteam-badge--home .subteam-badge__dot {
-        flex: none;
-        width: 0.6rem;
-        height: 0.6rem;
-        border-radius: 999px;
+    .subteam-badge.subteam-card--business {
+        border-left: 3px solid #a855f7 !important;
     }
 
     /* --- Section kicker label: small uppercase tracked label that sits
