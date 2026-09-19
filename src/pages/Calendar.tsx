@@ -191,14 +191,6 @@ export default function Calendar() {
 
     return (
         <section className="section mx-auto grid max-w-275 gap-8 px-4 py-16">
-            <Card>
-                <h3>Team Events</h3>
-                <p>
-                    All official AutoBoat team meetings, build days, and competition events are scheduled through
-                    Discord. This calendar reads them live from the team server.
-                </p>
-            </Card>
-
             {error && (
                 <Card className="calendar-error" role="alert">
                     <h3>Couldn't load events</h3>
