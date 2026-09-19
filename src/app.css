@@ -957,6 +957,7 @@
     }
     .event-modal__actions {
         display: flex;
+        justify-content: center;
         gap: 0.5rem;
     }
 
