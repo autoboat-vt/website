@@ -8,6 +8,7 @@ dist
 dist-ssr
 coverage
 *.local
+.wrangler
 
 # TypeScript incremental build cache
 *.tsbuildinfo

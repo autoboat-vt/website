@@ -29,6 +29,12 @@
     --color-fontcolor: #1f1e1d;
     --color-hovercolor: #3a3836;
 
+    /* Card surface tokens — frosted-glass panels. Dark overrides below keep
+     * cards visually consistent with the warm dark page background instead of
+     * looking like a light frost floating on black. */
+    --color-card: rgb(255 255 255 / 0.45);
+    --color-cardborder: rgb(0 0 0 / 0.06);
+
     /* VT brand accents — alias the official --vt-* variables defined above. */
     --color-accent: var(--vt-maroon);
     --color-accent-2: var(--vt-burntOrange);
@@ -52,6 +58,10 @@
     --color-bgcolor: #1f1e1d;
     --color-fontcolor: #f0eee6;
     --color-hovercolor: #d8d4c8;
+    /* Warm, slightly translucent dark card surface to match the dark page
+     * gradient (rgb(47 45 43) ≈ #2f2d2b at the gradient top). */
+    --color-card: rgb(52 50 47 / 0.6);
+    --color-cardborder: rgb(255 255 255 / 0.1);
     /* Brand accents unchanged in dark mode — --color-accent/2 alias the
      * --vt-* variables on :root, which don't change (brand guidelines permit
      * shading but not tinting of maroon/orange). */

@@ -19,7 +19,7 @@ const SPONSORS: Sponsor[] = [
 
 function SponsorCard({ sponsor }: { sponsor: Sponsor }) {
     return (
-        <div className="group relative flex w-70 flex-col overflow-hidden rounded-2xl border border-black/6 bg-white/45 text-left backdrop-blur-md">
+        <div className="group relative flex w-70 flex-col overflow-hidden rounded-2xl border border-cardborder bg-card text-left backdrop-blur-md">
             {/* Top accent band */}
             <div className="relative flex h-36 items-center justify-center overflow-hidden border-b border-black/5 bg-white">
                 <div
@@ -38,12 +38,7 @@ function SponsorCard({ sponsor }: { sponsor: Sponsor }) {
                         className="relative max-h-20 max-w-[75%] object-contain"
                     />
                 ) : (
-                    <Landmark
-                        size={48}
-                        strokeWidth={1.5}
-                        className="relative text-accent/80"
-                        aria-hidden="true"
-                    />
+                    <Landmark size={48} strokeWidth={1.5} className="relative text-accent/80" aria-hidden="true" />
                 )}
             </div>
             <div className="flex flex-1 flex-col p-6">
@@ -104,10 +99,7 @@ export default function Sponsors() {
                 </p>
                 <p className="mb-6">
                     To discuss sponsorship opportunities, reach out to us at{" "}
-                    <a
-                        href="mailto:autoboat@vt.edu"
-                        className="text-fontcolor underline decoration-current"
-                    >
+                    <a href="mailto:autoboat@vt.edu" className="text-fontcolor underline decoration-current">
                         autoboat@vt.edu
                     </a>
                     . If you'd like to make a direct donation, you can do so via Virginia Tech's giving portal below.
