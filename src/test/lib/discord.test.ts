@@ -5,6 +5,7 @@ import {
     discordEventUrl,
     EVENTS_URL,
     expandRecurrences,
+    extractLocationFromDescription,
     fetchEvents,
 } from "../../lib/discord";
 
@@ -154,6 +155,32 @@ describe("discord events client", () => {
             controller.abort();
             await expect(promise).rejects.toBeDefined();
             expect(abortFired).toBe(true);
+        });
+    });
+
+    describe("extractLocationFromDescription", () => {
+        it("returns null for a null or empty description", () => {
+            expect(extractLocationFromDescription(null)).toBeNull();
+            expect(extractLocationFromDescription("")).toBeNull();
+        });
+
+        it("reads a labeled 'Location:' line, stripping markdown bold/underline markers", () => {
+            expect(extractLocationFromDescription("Weekly syncup. Location: **Holden Auditorium**")).toBe(
+                "Holden Auditorium",
+            );
+            expect(extractLocationFromDescription("where: __Torgersen Bridge__\nBring a laptop.")).toBe(
+                "Torgersen Bridge",
+            );
+        });
+
+        it("falls back to the first bold span when no labeled line exists", () => {
+            expect(extractLocationFromDescription("Meet at **Newman Library** for the build night.")).toBe(
+                "Newman Library",
+            );
+        });
+
+        it("returns null when the description has no label and no bold venue", () => {
+            expect(extractLocationFromDescription("Zoom link in Discord.")).toBeNull();
         });
     });
 

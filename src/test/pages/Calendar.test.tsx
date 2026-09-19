@@ -184,7 +184,9 @@ describe("Calendar page", () => {
                 name: "General Body Meeting",
                 description: "Location: **Holden Auditorium**",
                 start: currentMonth(10),
-                location: "Holden Auditorium",
+                // No API location: the extractor should read it from the
+                // labeled line in the description.
+                location: null,
             }),
         ];
         // First fetch: the calendar's events. Second fetch: EventMap's
