@@ -159,28 +159,43 @@ describe("discord events client", () => {
     });
 
     describe("extractLocationFromDescription", () => {
-        it("returns null for a null or empty description", () => {
-            expect(extractLocationFromDescription(null)).toBeNull();
-            expect(extractLocationFromDescription("")).toBeNull();
+        it("returns nulls for a null or empty description", () => {
+            expect(extractLocationFromDescription(null)).toEqual({ location: null, description: null });
+            expect(extractLocationFromDescription("")).toEqual({ location: null, description: "" });
         });
 
-        it("reads a labeled 'Location:' line, stripping markdown bold/underline markers", () => {
-            expect(extractLocationFromDescription("Weekly syncup. Location: **Holden Auditorium**")).toBe(
-                "Holden Auditorium",
-            );
-            expect(extractLocationFromDescription("where: __Torgersen Bridge__\nBring a laptop.")).toBe(
-                "Torgersen Bridge",
-            );
+        it("reads a labeled line and removes the whole line from the description", () => {
+            expect(
+                extractLocationFromDescription("Weekly syncup.\nLocation: **Holden Auditorium**\nBring a laptop."),
+            ).toEqual({
+                location: "Holden Auditorium",
+                description: "Weekly syncup.\nBring a laptop.",
+            });
+            expect(extractLocationFromDescription("Where: __Torgersen Bridge__\nBring a laptop.")).toEqual({
+                location: "Torgersen Bridge",
+                description: "Bring a laptop.",
+            });
         });
 
-        it("falls back to the first bold span when no labeled line exists", () => {
-            expect(extractLocationFromDescription("Meet at **Newman Library** for the build night.")).toBe(
-                "Newman Library",
-            );
+        it("returns a null description when the labeled line was the only content", () => {
+            expect(extractLocationFromDescription("Location: Holden Auditorium")).toEqual({
+                location: "Holden Auditorium",
+                description: null,
+            });
         });
 
-        it("returns null when the description has no label and no bold venue", () => {
-            expect(extractLocationFromDescription("Zoom link in Discord.")).toBeNull();
+        it("falls back to the first bold span and removes just the span", () => {
+            expect(extractLocationFromDescription("Meet at **Newman Library** for the build night.")).toEqual({
+                location: "Newman Library",
+                description: "Meet at for the build night.",
+            });
+        });
+
+        it("returns the description unchanged when no location pattern matches", () => {
+            expect(extractLocationFromDescription("Zoom link in Discord.")).toEqual({
+                location: null,
+                description: "Zoom link in Discord.",
+            });
         });
     });
 

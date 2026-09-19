@@ -182,7 +182,7 @@ describe("Calendar page", () => {
             sampleEvent({
                 id: "evt-1",
                 name: "General Body Meeting",
-                description: "Location: **Holden Auditorium**",
+                description: "Team meeting open to all.\nLocation: **Holden Auditorium**",
                 start: currentMonth(10),
                 // No API location: the extractor should read it from the
                 // labeled line in the description.
@@ -217,8 +217,10 @@ describe("Calendar page", () => {
         // Location sits in its own meta row (icon + text).
         expect(dlg.getByText("Holden Auditorium", { selector: ".event-modal__meta-row" })).toBeInTheDocument();
 
-        // Discord **bold** markdown renders as <strong>.
-        expect(dlg.getByText("Holden Auditorium", { selector: "strong" })).toBeInTheDocument();
+        // The extracted location is stripped from the description body, so it
+        // appears only in the meta row -- no leftover <strong> duplicate.
+        expect(dlg.getByText(/Team meeting open to all/)).toBeInTheDocument();
+        expect(dlg.queryByText("Holden Auditorium", { selector: "strong" })).not.toBeInTheDocument();
 
         // Physical locations render an embedded map with a marker.
         await waitFor(() => expect(dlg.getByTestId("map-container")).toBeInTheDocument());

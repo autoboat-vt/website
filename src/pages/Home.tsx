@@ -62,14 +62,8 @@ export default function Home() {
                     </p>
                     <div className="subteam-grid my-6 grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
                         {SUBTEAMS.map((s) => (
-                            <Link
-                                key={s.id}
-                                to={`/ourteam#${s.id}`}
-                                className={`subteam-badge subteam-badge--home flex items-center gap-3 rounded-lg border border-black/5 bg-black/3 px-4 py-3 text-base font-semibold text-fontcolor no-underline transition-[background,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-black/10 hover:bg-black/6 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-fontcolor dark:hover:border-white/10 dark:hover:bg-white/6 subteam-card--${s.dot}`}
-                            >
-                                <span
-                                    className={`subteam-badge__dot subteam-badge__dot--${s.dot} h-2.5 w-2.5 rounded-full`}
-                                ></span>
+                            <Link key={s.id} to={`/ourteam#${s.id}`} className="subteam-badge--home">
+                                <span className={`subteam-badge__dot subteam-badge__dot--${s.dot}`}></span>
                                 {s.label}
                             </Link>
                         ))}

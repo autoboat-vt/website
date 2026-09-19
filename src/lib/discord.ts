@@ -140,36 +140,62 @@ function isCalendarEvent(value: unknown): value is CalendarEvent {
 
 /**
  * Extract a human-readable physical location from the free-text Discord
- * event description. Used because the team's events are structured as
- * voice-channel events (so role scoping can be applied during signup), which
- * leaves Discord's native `entity_metadata.location` empty; the physical
- * meetup location is written into the description instead.
+ * event description, and remove the matched text from the description so the
+ * location isn't rendered twice (once in the event modal's location row and
+ * again in the description body). Used because the team's events are
+ * structured as voice-channel events (so role scoping can be applied during
+ * signup), which leaves Discord's native `entity_metadata.location` empty;
+ * the physical meetup location is written into the description instead.
  *
  * Heuristics, in priority order:
- *  1. A line labeled `Location:` or `Where:` (case-insensitive).
- *  2. The first bold span (`**...**`) — the team's convention is to bold the
- *     venue on the first line of the description.
+ *  1. A line labeled `Location:` or `Where:` (case-insensitive) -- the whole
+ *     line is removed from the description.
+ *  2. The first bold span (`**...**`) -- the team's convention is to bold
+ *     the venue; just the span is removed.
  *
- * Returns the trimmed location string, or null when no pattern matches (the
- * caller then keeps "No location specified" and renders no map).
+ * Returns `{ location, description }`. `location` is null when no pattern
+ * matches (the caller then keeps "No location specified" and renders no
+ * map). `description` is null when nothing meaningful remains after removal.
  */
-export function extractLocationFromDescription(description: string | null): string | null {
-    if (!description) return null;
+export function extractLocationFromDescription(description: string | null): {
+    location: string | null;
+    description: string | null;
+} {
+    if (!description) return { location: null, description };
 
     // Strip Discord bold/underline markers (``**x**``, ``__x__``) so the
     // result is a clean string for display and geocoding.
     const clean = (s: string) => s.replace(/\*\*|__/g, "").trim();
 
-    for (const line of description.split(/\r?\n/)) {
-        const m = line.match(/^\s*(?:location|where)\s*[:\u2013\u2014-]\s*(.+)$/i);
-        const value = m?.[1] ? clean(m[1]) : "";
-        if (value) return value;
+    const lines = description.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+        const m = (lines[i] ?? "").match(/^\s*(?:location|where)\s*[:\u2013\u2014-]\s*(.+)$/i);
+        if (m?.[1]) {
+            const value = clean(m[1]);
+            const rest = lines
+                .filter((_, j) => j !== i)
+                .join("\n")
+                .replace(/\n{3,}/g, "\n\n")
+                .trim();
+            return { location: value, description: rest || null };
+        }
     }
 
     const bold = description.match(/\*\*([^*\n]+)\*\*/);
-    const value = bold?.[1] ? clean(bold[1]) : "";
+    if (bold?.[1]) {
+        const value = clean(bold[1]);
+        // Remove just the bold span, then tidy leftover double spaces and
+        // spaces stranded before punctuation.
+        const stripped = description
+            .replace(bold[0], "")
+            .replace(/[ \t]{2,}/g, " ")
+            .replace(/[ \t]+([.,!?;:])/g, "$1")
+            .replace(/\n{3,}/g, "\n\n")
+            .trim();
+        return { location: value, description: stripped || null };
+    }
 
-    return value || null;
+    return { location: null, description };
 }
 
 /**
@@ -183,14 +209,11 @@ export function extractLocationFromDescription(description: string | null): stri
 export async function fetchEvents(signal?: AbortSignal): Promise<CalendarEvent[]> {
     const data = await fetchJson<unknown>(`${EVENTS_URL}/events`, signal);
     if (!Array.isArray(data)) return [];
-    return data.filter(isCalendarEvent).map((ev) =>
-        ev.location != null
-            ? ev
-            : {
-                  ...ev,
-                  location: extractLocationFromDescription(ev.description),
-              },
-    );
+    return data.filter(isCalendarEvent).map((ev) => {
+        if (ev.location != null) return ev;
+        const { location, description } = extractLocationFromDescription(ev.description);
+        return { ...ev, location, description };
+    });
 }
 
 /** Build the Discord URL for an event chip's "View in Discord" link. */

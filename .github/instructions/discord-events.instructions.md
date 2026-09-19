@@ -41,7 +41,8 @@ Discord incoming webhooks are POST-only on a channel -- they cannot *pull* guild
 
 - `EVENTS_URL` — base Worker URL (from `globalThis.__VITE_EVENTS_URL__` or a placeholder default; override with the `VITE_EVENTS_URL` env var).
 - `DISCORD_GUILD_ID` — public guild id used to deep-link chips to Discord. Keep in sync with `DISCORD_GUILD_ID` in `worker/wrangler.jsonc`.
-- `fetchEvents(signal?)` — one-shot GET, returns `CalendarEvent[]`. Structural-invalid payloads degrade to `[]` rather than throwing; HTTP/network errors throw `DiscordError`.
+- `fetchEvents(signal?)` — one-shot GET, returns `CalendarEvent[]`. Structural-invalid payloads degrade to `[]` rather than throwing; HTTP/network errors throw `DiscordError`. When the API `location` is null, the event is enriched via `extractLocationFromDescription` (team events are voice-channel events for role-scoped signup, so Discord's `entity_metadata.location` is always empty and the physical location lives in the description).
+- `extractLocationFromDescription(description)` — returns `{ location, description }`: pulls the location out (labeled `Location:`/`Where:` line, else first bold span) and strips the matched text from the description so the modal doesn't render it twice.
 - `expandRecurrences(events, from, to)` — expands every RRULE event into concrete occurrences inside `[from, to]`. Malformed RRULEs fall back to a single occurrence at the base start.
 - `discordEventUrl(event)` — `https://discord.com/channels/<guildId>/<eventId>`.
 
