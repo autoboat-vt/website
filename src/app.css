@@ -616,6 +616,14 @@
     }
 
     /* --- Calendar month grid --- */
+    /* The section is capped at the site max (max-w-275); let the calendar page
+       use more of a wide viewport instead of wasting it on margins. !important
+       because the `max-w-275` utility lives in the later `utilities` layer and
+       otherwise always wins. */
+    .section:has(> .calendar-wrapper:only-child) {
+        max-width: 100rem !important;
+    }
+
     .calendar-wrapper {
         /* Card's `p-8` utility always applies; we just let the grid fill it. */
         overflow: hidden;
@@ -953,6 +961,13 @@
     .event-map__directions:hover {
         color: var(--color-fontcolor);
         text-decoration: underline;
+    }
+
+    @media (min-width: 1440px) {
+        /* Cells stay proportionate once the grid is this wide. */
+        .calendar-day {
+            min-height: 8.5rem;
+        }
     }
 
     @media (max-width: 620px) {

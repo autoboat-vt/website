@@ -241,7 +241,9 @@ export default function Calendar() {
             )}
 
             {!isLoading && !error && (
-                <Card className="calendar-wrapper">
+                // Card caps its own width at min(1100px, 90%); w-full max-w-none lets
+                // the grid fill the section instead on wide viewports.
+                <Card className="calendar-wrapper w-full max-w-none">
                     <div className="calendar-header">
                         <button
                             type="button"
