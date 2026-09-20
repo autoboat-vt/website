@@ -94,18 +94,25 @@ describe("discord events client", () => {
     });
 
     describe("webcalUrl", () => {
-        it("swaps the scheme to webcal:// so the OS hands it to a calendar app", () => {
-            expect(webcalUrl()).toBe(EVENTS_ICS_URL.replace(/^https:\/\//, "webcal://"));
-            expect(webcalUrl().startsWith("webcal://")).toBe(true);
+        it("uses the webcals:// scheme so the OS hands it to a calendar app", () => {
+            // `webcal://` (no s) is increasingly rejected; `webcals://` is the
+            // secure form and is what actually opens the OS calendar handler.
+            expect(webcalUrl()).toBe(EVENTS_ICS_URL.replace(/^https?:\/\//, "webcals://"));
+            expect(webcalUrl()).toBe(`webcals://${EVENTS_URL.replace(/^https?:\/\//, "")}/calendar.ics`);
+            expect(webcalUrl().startsWith("webcals://")).toBe(true);
         });
     });
 
     describe("googleCalendarSubscribeUrl", () => {
-        it("encodes the https feed URL as the cid parameter", () => {
+        it("opens Google's Add-by-URL dialog rather than the unreliable cid link", () => {
             const url = googleCalendarSubscribeUrl();
-            expect(url.startsWith("https://calendar.google.com/calendar/render?cid=")).toBe(true);
-            // The feed URL must be percent-encoded, not interpolated raw.
-            expect(url).toContain(encodeURIComponent(EVENTS_ICS_URL));
+            // The classic `calendar/render?cid=<feed>` deep link is broken for
+            // external feeds (Google's regexp shows "Unable to add calendar"
+            // for URLs that work fine via the manual dialog). We link straight
+            // to the dialog instead.
+            expect(url).toBe("https://calendar.google.com/calendar/r/settings/addbyurl");
+            expect(url).not.toContain("cid=");
+            expect(url).not.toContain("render");
         });
     });
 

@@ -45,11 +45,11 @@ describe("CalendarSubscribe", () => {
         expect(screen.queryByText(/Add the AutoBoat calendar/i)).not.toBeInTheDocument();
     });
 
-    it("links the OS-calendar button to the webcal:// URL", () => {
+    it("links the OS-calendar button to the webcals:// URL", () => {
         render(<CalendarSubscribe />);
         fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
         expect(screen.getByTestId("subscribe-webcal")).toHaveAttribute("href", webcalUrl());
-        expect(webcalUrl().startsWith("webcal://")).toBe(true);
+        expect(webcalUrl().startsWith("webcals://")).toBe(true);
     });
 
     it("links Google and Outlook to their add-by-URL endpoints", () => {
@@ -63,6 +63,18 @@ describe("CalendarSubscribe", () => {
 
         const outlook = screen.getByRole("link", { name: /Outlook Web/i });
         expect(outlook).toHaveAttribute("href", outlookSubscribeUrl());
+    });
+
+    it("copies the feed URL when the Google link is clicked", async () => {
+        // Google's Add-by-URL dialog can't be pre-filled, so the link copies
+        // the feed URL on the way out and the user pastes it on the next page.
+        const writeText = jest.fn(() => Promise.resolve());
+        setClipboard({ writeText });
+        render(<CalendarSubscribe />);
+        fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
+
+        fireEvent.click(screen.getByRole("link", { name: /Google Calendar/i }));
+        await waitFor(() => expect(writeText).toHaveBeenCalledWith(EVENTS_ICS_URL));
     });
 
     it("offers the raw .ics feed as a direct download", () => {

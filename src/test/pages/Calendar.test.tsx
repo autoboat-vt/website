@@ -138,7 +138,7 @@ describe("Calendar page", () => {
         // The Subscribe toggle sits in the calendar header; expanding it
         // reveals the provider links and the raw feed URL.
         fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
-        expect(screen.getByTestId("subscribe-webcal")).toHaveAttribute("href", expect.stringContaining("webcal://"));
+        expect(screen.getByTestId("subscribe-webcal")).toHaveAttribute("href", expect.stringContaining("webcals://"));
         expect(screen.getByText(EVENTS_ICS_URL)).toBeInTheDocument();
     });
 

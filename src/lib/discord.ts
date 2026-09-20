@@ -233,22 +233,35 @@ export function discordEventUrl(event: CalendarEvent): string {
 export const EVENTS_ICS_URL = `${EVENTS_URL}/calendar.ics`;
 
 /**
- * The feed URL rewritten to the `webcal://` scheme. Clicking a `webcal://`
+ * The feed URL rewritten to the `webcals://` scheme. Clicking a `webcals://`
  * link hands the URL to the OS's registered calendar app (Apple Calendar,
  * Outlook on Windows/macOS) instead of the browser downloading the file.
- * Derived from `EVENTS_ICS_URL` so both stay in sync automatically.
+ *
+ * Uses the secure `webcals://` form, not `webcal://`: the plain form is
+ * increasingly rejected by OS handlers and apps. Derived from
+ * `EVENTS_ICS_URL` so both stay in sync automatically.
  */
 export function webcalUrl(): string {
     return EVENTS_ICS_URL.replace(/^https?:\/\//, "webcals://");
 }
 
 /**
- * "Add by URL" deep link for Google Calendar. Google accepts either the
- * `https://` or `webcal://` form in `cid`; we pass the https URL so the link
- * keeps working in contexts that strip unknown schemes.
+ * Deep link to Google Calendar's "Add by URL" dialog.
+ *
+ * Deliberately NOT the classic `calendar/render?cid=<feedUrl>` form. Google's
+ * `cid` handler is unreliable for external feeds: it commonly reports "Unable
+ * to add calendar. Check the URL" (or subscribes with no events) for a feed
+ * that the identical URL adds fine via Settings > Add calendar > From URL.
+ * Multiple users reported this in Google's support forum starting Sept 2025,
+ * across `cid=https://` and `cid=webcal://` forms alike, and the manual dialog
+ * remained the only reliable path.
+ *
+ * So we open that dialog directly and let the user paste the feed URL.
+ * `CalendarSubscribe` copies the URL to the clipboard when this link is
+ * clicked so it is ready to paste on the next screen.
  */
 export function googleCalendarSubscribeUrl(): string {
-    return `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(EVENTS_ICS_URL)}`;
+    return "https://calendar.google.com/calendar/r/settings/addbyurl";
 }
 
 /**
