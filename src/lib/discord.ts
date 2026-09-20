@@ -239,7 +239,7 @@ export const EVENTS_ICS_URL = `${EVENTS_URL}/calendar.ics`;
  * Derived from `EVENTS_ICS_URL` so both stay in sync automatically.
  */
 export function webcalUrl(): string {
-    return EVENTS_ICS_URL.replace(/^https?:\/\//, "webcal://");
+    return EVENTS_ICS_URL.replace(/^https?:\/\//, "webcals://");
 }
 
 /**
