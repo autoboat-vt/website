@@ -90,8 +90,8 @@ export default function CalendarSubscribe() {
         {
             key: "webcal",
             href: webcalUrl(),
-            label: "Apple / Outlook",
-            hint: "Add to this device",
+            label: "Open in your calendar app",
+            hint: "Outlook, Thunderbird, Apple Calendar, etc.",
             icon: FaCalendar,
             testId: "subscribe-webcal",
         },
