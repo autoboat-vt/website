@@ -246,37 +246,6 @@ export function webcalUrl(): string {
 }
 
 /**
- * Deep link to Google Calendar's "Add by URL" dialog.
- *
- * Deliberately NOT the classic `calendar/render?cid=<feedUrl>` form. Google's
- * `cid` handler is unreliable for external feeds: it commonly reports "Unable
- * to add calendar. Check the URL" (or subscribes with no events) for a feed
- * that the identical URL adds fine via Settings > Add calendar > From URL.
- * Multiple users reported this in Google's support forum starting Sept 2025,
- * across `cid=https://` and `cid=webcal://` forms alike, and the manual dialog
- * remained the only reliable path.
- *
- * So we open that dialog directly and let the user paste the feed URL.
- * `CalendarSubscribe` copies the URL to the clipboard when this link is
- * clicked so it is ready to paste on the next screen.
- */
-export function googleCalendarSubscribeUrl(): string {
-    return "https://calendar.google.com/calendar/r/settings/addbyurl";
-}
-
-/**
- * "Subscribe from web" deep link for Outlook on the web. The desktop and
- * mobile Outlook apps read the same feed via the `webcal://` URL.
- */
-export function outlookSubscribeUrl(): string {
-    const params = new URLSearchParams({
-        url: EVENTS_ICS_URL,
-        name: "AutoBoat at Virginia Tech",
-    });
-    return `https://outlook.live.com/calendar/0/addfromweb?${params.toString()}`;
-}
-
-/**
  * Expand Discord events into concrete occurrences intersecting `[from, to]`.
  *
  * Non-recurring events produce a single occurrence (the event itself) when

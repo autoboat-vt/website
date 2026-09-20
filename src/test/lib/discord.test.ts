@@ -8,8 +8,6 @@ import {
     expandRecurrences,
     extractLocationFromDescription,
     fetchEvents,
-    googleCalendarSubscribeUrl,
-    outlookSubscribeUrl,
     webcalUrl,
 } from "../../lib/discord";
 
@@ -100,29 +98,6 @@ describe("discord events client", () => {
             expect(webcalUrl()).toBe(EVENTS_ICS_URL.replace(/^https?:\/\//, "webcals://"));
             expect(webcalUrl()).toBe(`webcals://${EVENTS_URL.replace(/^https?:\/\//, "")}/calendar.ics`);
             expect(webcalUrl().startsWith("webcals://")).toBe(true);
-        });
-    });
-
-    describe("googleCalendarSubscribeUrl", () => {
-        it("opens Google's Add-by-URL dialog rather than the unreliable cid link", () => {
-            const url = googleCalendarSubscribeUrl();
-            // The classic `calendar/render?cid=<feed>` deep link is broken for
-            // external feeds (Google's regexp shows "Unable to add calendar"
-            // for URLs that work fine via the manual dialog). We link straight
-            // to the dialog instead.
-            expect(url).toBe("https://calendar.google.com/calendar/r/settings/addbyurl");
-            expect(url).not.toContain("cid=");
-            expect(url).not.toContain("render");
-        });
-    });
-
-    describe("outlookSubscribeUrl", () => {
-        it("passes the feed URL and a display name as query parameters", () => {
-            const url = outlookSubscribeUrl();
-            expect(url.startsWith("https://outlook.live.com/calendar/0/addfromweb?")).toBe(true);
-            const params = new URL(url).searchParams;
-            expect(params.get("url")).toBe(EVENTS_ICS_URL);
-            expect(params.get("name")).toBe("AutoBoat at Virginia Tech");
         });
     });
 

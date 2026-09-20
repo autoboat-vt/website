@@ -48,7 +48,14 @@ Key decisions in `worker/src/ics.ts`:
 - `CALENDAR_NAME` var (default "AutoBoat at Virginia Tech") sets `X-WR-CALNAME`. `REFRESH-INTERVAL` / `X-PUBLISHED-TTL` advertise the KV TTL.
 - Malformed events (unparseable `DTSTART`) are skipped individually so one bad record can't break the feed.
 
-Client-side URL helpers live in `src/lib/discord.ts`: `EVENTS_ICS_URL` (the `https://` feed URL), `webcalUrl()` (same URL with the scheme swapped to `webcal://`, which hands it to the OS calendar app), `googleCalendarSubscribeUrl()` (Google's `calendar/render?cid=` deep link), and `outlookSubscribeUrl()` (Outlook on the web's `addfromweb` deep link). `CalendarSubscribe.tsx` renders the disclosure control in the calendar header offering all of these plus "copy feed URL" and a direct `.ics` download.
+Client-side URL helpers live in `src/lib/discord.ts`: `EVENTS_ICS_URL` (the `https://` feed URL) and `webcalUrl()` (same URL with the scheme swapped to `webcals://`, which hands it to the OS calendar app). `CalendarSubscribe.tsx` renders the disclosure control in the calendar header, offering the `webcals://` button plus "copy feed URL" and a direct `.ics` download.
+
+⚠️ There is deliberately **no Google Calendar or Outlook deep link**. Do not re-add one:
+
+- Google's classic `calendar/render?cid=<feedUrl>` handler is broken for external feeds. Google support staff confirmed the regression (thread 376167890, Sept 2025) and told users to add via **Settings > Add calendar > From URL** instead; day-to-day reports of `cid=https://` returning "Unable to add calendar. Check the URL" continued through Nov 2025. The `calendar/r/settings/addbyurl` route is not a substitute either -- signed out, it 302s to the Workspace marketing page.
+- Outlook's `addfromweb` endpoint is similarly unreliable.
+
+Users of those apps are directed to the manual "Add calendar from URL" flow, with the feed URL shown in the panel for copying. Verified with the live feed: it returns 200 / `text/calendar; charset=utf-8` with 4 events and **zero RRULEs**, so the feed itself is not the cause (RRULE is a known-but-inapplicable Google trigger here).
 
 ⚠️ The subscribe panel is an **absolutely positioned dropdown** anchored to `.calendar-header` (which sets `position: relative`), NOT to the toggle. It was originally in normal flow taking a full header row; that stretched the panel to the card's full width (~1250px) for what is only three provider rows plus a URL. Consequences to preserve:
 
@@ -86,7 +93,7 @@ Discord incoming webhooks are POST-only on a channel -- they cannot *pull* guild
 
 - `EVENTS_URL` — base Worker URL (from `globalThis.__VITE_EVENTS_URL__` or a placeholder default; override with the `VITE_EVENTS_URL` env var).
 - `EVENTS_ICS_URL` — `${EVENTS_URL}/calendar.ics`, the subscribable feed URL.
-- `webcalUrl()`, `googleCalendarSubscribeUrl()`, `outlookSubscribeUrl()` — provider deep links built from `EVENTS_ICS_URL`.
+- `webcalUrl()` — the `webcals://` form of `EVENTS_ICS_URL`.
 - `DISCORD_GUILD_ID` — public guild id used to deep-link chips to Discord. Keep in sync with `DISCORD_GUILD_ID` in `worker/wrangler.jsonc`.
 - `fetchEvents(signal?)` — GET with `cache: "no-store"`, returns `CalendarEvent[]`. Structural-invalid payloads degrade to `[]` rather than throwing; HTTP/network errors throw `DiscordError`. When the API `location` is null, the event is enriched via `extractLocationFromDescription` (team events are voice-channel events for role-scoped signup, so Discord's `entity_metadata.location` is always empty and the physical location lives in the description).
 - `extractLocationFromDescription(description)` — returns `{ location, description }`: pulls the location out (labeled `Location:`/`Where:` line, else first bold span) and strips the matched text from the description so the modal doesn't render it twice.
@@ -140,7 +147,7 @@ The `rrule` package handles the full RFC 5545 grammar, so all of the above varia
 
 ## Tests
 
-- `src/test/lib/discord.test.ts` — `fetchEvents` (happy/error/malformed/abort cases, mock fetch with duck-typed responses), `expandRecurrences` (weekly, daily, UNTIL clip, malformed-RRULE fallback, duration shift, sort order), and the subscribe URL helpers (`EVENTS_ICS_URL`, `webcalUrl`, `googleCalendarSubscribeUrl`, `outlookSubscribeUrl`).
+- `src/test/lib/discord.test.ts` — `fetchEvents` (happy/error/malformed/abort cases, mock fetch with duck-typed responses), `expandRecurrences` (weekly, daily, UNTIL clip, malformed-RRULE fallback, duration shift, sort order), and the subscribe URL helpers (`EVENTS_ICS_URL`, `webcalUrl`).
 - `src/test/pages/Calendar.test.tsx` — page render states (loading, success, error, empty), chip rendering with real Discord URL, recurrence expansion, month nav, error-card behavior, the subscribe control, plus a "mobile branch" describe block (matchMedia stubbed to `matches: true`) covering day-cell buttons, dots, the agenda swap, agenda->modal, and selection-on-month-nav.
 - `src/test/components/CalendarSubscribe.test.tsx` — panel open/close, provider URLs, `.ics` download, and clipboard copy (async Clipboard API, `execCommand` fallback, and rejection handling).
 - `src/test/worker/ics.test.ts` — the ICS serializer: VCALENDAR envelope + CRLF endings, UTC/tz-offset timestamps, stable UIDs, zero-duration and null-end defaults, `STATUS:CANCELLED`, TEXT escaping, octet-based line folding (including multi-byte characters), RRULE passthrough + malformed-rule rejection, and unparseable-date skipping. **Imports `worker/src/ics.ts` by relative path** (`../../../worker/src/ics`) because the Worker lives outside `src/` — Jest's `testMatch` only picks up files under `src/`, so a test must live here to run.

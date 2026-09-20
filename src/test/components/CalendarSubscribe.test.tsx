@@ -1,7 +1,7 @@
 import { afterEach } from "@jest/globals";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import CalendarSubscribe from "../../components/CalendarSubscribe";
-import { EVENTS_ICS_URL, googleCalendarSubscribeUrl, outlookSubscribeUrl, webcalUrl } from "../../lib/discord";
+import { EVENTS_ICS_URL, webcalUrl } from "../../lib/discord";
 
 /**
  * Tests for the calendar "Subscribe" control. Verifies the panel is closed
@@ -50,32 +50,7 @@ describe("CalendarSubscribe", () => {
         fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
         expect(screen.getByTestId("subscribe-webcal")).toHaveAttribute("href", webcalUrl());
         expect(webcalUrl().startsWith("webcals://")).toBe(true);
-    });
-
-    it("links Google and Outlook to their add-by-URL endpoints", () => {
-        render(<CalendarSubscribe />);
-        fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
-
-        const google = screen.getByRole("link", { name: /Google Calendar/i });
-        expect(google).toHaveAttribute("href", googleCalendarSubscribeUrl());
-        expect(google).toHaveAttribute("target", "_blank");
-        expect(google).toHaveAttribute("rel", "noopener noreferrer");
-
-        const outlook = screen.getByRole("link", { name: /Outlook Web/i });
-        expect(outlook).toHaveAttribute("href", outlookSubscribeUrl());
-    });
-
-    it("copies the feed URL when the Google link is clicked", async () => {
-        // Google's Add-by-URL dialog can't be pre-filled, so the link copies
-        // the feed URL on the way out and the user pastes it on the next page.
-        const writeText = jest.fn(() => Promise.resolve());
-        setClipboard({ writeText });
-        render(<CalendarSubscribe />);
-        fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
-
-        fireEvent.click(screen.getByRole("link", { name: /Google Calendar/i }));
-        await waitFor(() => expect(writeText).toHaveBeenCalledWith(EVENTS_ICS_URL));
-    });
+    }); 
 
     it("offers the raw .ics feed as a direct download", () => {
         render(<CalendarSubscribe />);

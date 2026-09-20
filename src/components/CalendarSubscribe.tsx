@@ -1,41 +1,37 @@
 import { CalendarPlus, Check, ChevronDown, Copy, Link as LinkIcon } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
-import { FaApple, FaGoogle, FaMicrosoft } from "react-icons/fa6";
-import { EVENTS_ICS_URL, googleCalendarSubscribeUrl, outlookSubscribeUrl, webcalUrl } from "../lib/discord";
+import { FaCalendar } from "react-icons/fa6";
+import { EVENTS_ICS_URL, webcalUrl } from "../lib/discord";
 
 /**
  * "Subscribe" affordance for the calendar page.
  *
- * The events themselves come from Discord, but there's no way to add a
- * Discord scheduled-events list to a personal calendar. The Worker publishes
- * the same events as an iCalendar feed (`GET /calendar.ics`), and this
- * component surfaces the three ways to consume it:
+ * The events come from Discord, but there's no way to add a Discord
+ * scheduled-events list to a personal calendar. The Worker publishes the same
+ * events as an iCalendar feed (`GET /calendar.ics`), and this panel offers
+ * the two ways to consume it:
  *
  *  - `webcals://` -> hands the URL to the OS calendar app (Apple Calendar,
- *                    Outlook desktop). This is a true *subscription*: the
- *                    app re-fetches the feed on its own schedule.
- *  - Google Calendar "Add by URL" deep link.
- *  - Outlook on the web "add from web" deep link.
+ *                    Outlook desktop). This is a true *subscription*: the app
+ *                    re-fetches the feed on its own schedule.
+ *  - Copy / download the feed URL, for every other client (Google Calendar,
+ *                    Thunderbird, Fastmail, Proton, ...) that takes a URL.
  *
- * A "copy feed URL" button covers every other client (Thunderbird, Fastmail,
- * Proton, ...) that takes a URL, and a direct `.ics` link lets a user import
- * a one-time snapshot instead of subscribing.
+ * There is deliberately no Google or Outlook deep link: Google's
+ * `calendar/render?cid=` handler is broken for external feeds (Google support
+ * confirmed users must add via Settings > Add calendar > From URL instead),
+ * and Outlook's addfromweb endpoint is similarly unreliable. Users of those
+ * apps paste the feed URL from the row below instead.
  */
 
-/** One provider card. `icon` is a brand glyph; the label is split into a
- * primary action and a hint describing what the link actually does. */
+/** The single provider card: the OS calendar handler. */
 interface Provider {
     key: string;
     href: string;
     label: string;
     hint: string;
     icon: React.ComponentType<{ size?: number }>;
-    /** External links open in a new tab; `webcals://` must NOT (a new tab
-     * would linger as a blank page after the OS handler takes over). */
-    external: boolean;
     testId?: string;
-    /** Optional click hook (used to pre-copy the feed URL for Google). */
-    onClick?: () => void;
 }
 
 export default function CalendarSubscribe() {
@@ -51,12 +47,8 @@ export default function CalendarSubscribe() {
     }, []);
 
     /**
-     * Copy the feed URL to the clipboard.
-     *
-     * Also used as the click handler for the Google link: Google's "Add by
-     * URL" dialog has no query-param way to pre-fill the feed, so we copy it
-     * on the way out and the user just pastes. Returns whether the copy
-     * succeeded so callers can decide whether to react.
+     * Copy the feed URL to the clipboard. Returns whether the copy succeeded
+     * so the caller can decide whether to show the "Copied" confirmation.
      */
     const copyFeedUrl = async (): Promise<boolean> => {
         try {
@@ -94,41 +86,14 @@ export default function CalendarSubscribe() {
         if (await copyFeedUrl()) flashCopied();
     };
 
-    // Google's add-by-URL dialog can't be pre-filled via query params, so copy
-    // the feed URL on click; it's already on the clipboard for the next screen.
-    // No preventDefault -- let the navigation proceed.
-    const handleGoogleClick = async () => {
-        if (await copyFeedUrl()) flashCopied();
-    };
-
-    const webcal = webcalUrl();
-
     const providers: Provider[] = [
         {
             key: "webcal",
-            href: webcal,
+            href: webcalUrl(),
             label: "Apple / Outlook",
             hint: "Add to this device",
-            icon: FaApple,
-            external: false,
+            icon: FaCalendar,
             testId: "subscribe-webcal",
-        },
-        {
-            key: "google",
-            href: googleCalendarSubscribeUrl(),
-            label: "Google Calendar",
-            hint: "Opens Add by URL (link copied)",
-            icon: FaGoogle,
-            external: true,
-            onClick: handleGoogleClick,
-        },
-        {
-            key: "outlook",
-            href: outlookSubscribeUrl(),
-            label: "Outlook Web",
-            hint: "Subscribe from the web",
-            icon: FaMicrosoft,
-            external: true,
         },
     ];
 
@@ -165,8 +130,6 @@ export default function CalendarSubscribe() {
                                     className="calendar-subscribe__provider"
                                     href={p.href}
                                     data-testid={p.testId}
-                                    onClick={p.onClick}
-                                    {...(p.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                                 >
                                     <span className="calendar-subscribe__provider-icon" aria-hidden="true">
                                         <Icon size={17} />
@@ -175,7 +138,6 @@ export default function CalendarSubscribe() {
                                         <span className="calendar-subscribe__provider-label">{p.label}</span>
                                         <span className="calendar-subscribe__provider-hint">{p.hint}</span>
                                     </span>
-                                    {p.external && <span className="sr-only"> (opens in a new tab)</span>}
                                 </a>
                             );
                         })}
@@ -204,9 +166,8 @@ export default function CalendarSubscribe() {
                             Download .ics
                         </a>
                         <p className="calendar-subscribe__hint">
-                            Google Calendar can't be pre-filled from a link, so the button above copies this URL and
-                            opens Google's "Add by URL" dialog. In any other app, look for "Add calendar from URL" and
-                            paste it there.
+                            In Google Calendar, Thunderbird, or another app, choose "Add calendar from URL" (Google:
+                            Settings &gt; Add calendar &gt; From URL) and paste this link.
                         </p>
                     </div>
                 </div>

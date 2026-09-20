@@ -332,7 +332,7 @@ export default function Calendar() {
                             >
                                 <ChevronRight size={18} />
                             </button>
-                            <button type="button" className="calendar-nav-btn" onClick={goToToday}>
+                            <button type="button" className="btn btn--sm" onClick={goToToday}>
                                 Today
                             </button>
                             {/* Renders the toggle inline here; its panel is
