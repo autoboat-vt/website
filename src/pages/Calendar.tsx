@@ -1,5 +1,6 @@
 import { AlertCircle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import CalendarSubscribe from "../components/CalendarSubscribe";
 import Card from "../components/Card";
 import EventModal from "../components/EventModal";
 import { type CalendarEvent, type ExpandedOccurrence, expandRecurrences, fetchEvents } from "../lib/discord";
@@ -334,6 +335,7 @@ export default function Calendar() {
                             <button type="button" className="btn btn--outline btn-sm" onClick={goToToday}>
                                 Today
                             </button>
+                            <CalendarSubscribe />
                         </div>
                     </div>
 

@@ -3,10 +3,14 @@ import {
     DISCORD_GUILD_ID,
     DiscordError,
     discordEventUrl,
+    EVENTS_ICS_URL,
     EVENTS_URL,
     expandRecurrences,
     extractLocationFromDescription,
     fetchEvents,
+    googleCalendarSubscribeUrl,
+    outlookSubscribeUrl,
+    webcalUrl,
 } from "../../lib/discord";
 
 /**
@@ -79,6 +83,39 @@ describe("discord events client", () => {
         it("builds a discord.com/channels URL from guild id + event id", () => {
             const ev = sampleEvent({ id: "111", name: "X", start: "2026-03-04T19:00:00Z" });
             expect(discordEventUrl(ev)).toBe(`https://discord.com/channels/${DISCORD_GUILD_ID}/111`);
+        });
+    });
+
+    describe("EVENTS_ICS_URL", () => {
+        it("points at the worker's /calendar.ics route", () => {
+            expect(EVENTS_ICS_URL).toBe(`${EVENTS_URL}/calendar.ics`);
+            expect(EVENTS_ICS_URL).toMatch(/^https:\/\/.+\/calendar\.ics$/);
+        });
+    });
+
+    describe("webcalUrl", () => {
+        it("swaps the scheme to webcal:// so the OS hands it to a calendar app", () => {
+            expect(webcalUrl()).toBe(EVENTS_ICS_URL.replace(/^https:\/\//, "webcal://"));
+            expect(webcalUrl().startsWith("webcal://")).toBe(true);
+        });
+    });
+
+    describe("googleCalendarSubscribeUrl", () => {
+        it("encodes the https feed URL as the cid parameter", () => {
+            const url = googleCalendarSubscribeUrl();
+            expect(url.startsWith("https://calendar.google.com/calendar/render?cid=")).toBe(true);
+            // The feed URL must be percent-encoded, not interpolated raw.
+            expect(url).toContain(encodeURIComponent(EVENTS_ICS_URL));
+        });
+    });
+
+    describe("outlookSubscribeUrl", () => {
+        it("passes the feed URL and a display name as query parameters", () => {
+            const url = outlookSubscribeUrl();
+            expect(url.startsWith("https://outlook.live.com/calendar/0/addfromweb?")).toBe(true);
+            const params = new URL(url).searchParams;
+            expect(params.get("url")).toBe(EVENTS_ICS_URL);
+            expect(params.get("name")).toBe("AutoBoat at Virginia Tech");
         });
     });
 

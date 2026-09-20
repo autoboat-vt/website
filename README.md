@@ -18,7 +18,10 @@ React + TypeScript + Vite site for Virginia Tech's AutoBoat team, styled with Ta
 
 The `/calendar` page reads events from a Cloudflare Worker in `worker/`
 (proxies Discord's guild scheduled-events API without exposing the bot
-token). See `worker/README.md` for the one-time setup.
+token). It also serves a subscribable iCalendar feed at
+`GET /calendar.ics`, so the calendar can be added to Google Calendar, Apple
+Calendar, or Outlook; the page's **Subscribe** control links to it. See
+`worker/README.md` for the one-time setup.
 
 ## Environment variables
 

@@ -19,7 +19,10 @@
         // deployed Worker from localhost; prefer `wrangler dev` for that instead.
         "ALLOWED_ORIGIN": "https://autoboat.aoe.vt.edu",
         // How long to cache the Discord events payload in KV, in seconds.
-        "CACHE_TTL_SECONDS": "60"
+        "CACHE_TTL_SECONDS": "60",
+        // Display name subscribers see in Google/Apple/Outlook Calendar for
+        // the /calendar.ics feed. Public, non-secret.
+        "CALENDAR_NAME": "AutoBoat at Virginia Tech"
     },
     // KV namespace for the events cache. Create the real IDs with:
     //     wrangler kv namespace create EVENTS_KV

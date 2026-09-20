@@ -226,6 +226,44 @@ export function discordEventUrl(event: CalendarEvent): string {
 }
 
 /**
+ * Absolute URL of the Worker's iCalendar feed (`GET /calendar.ics`). This is
+ * the URL users subscribe to from a calendar app, and the one the
+ * subscription buttons on the calendar page point at.
+ */
+export const EVENTS_ICS_URL = `${EVENTS_URL}/calendar.ics`;
+
+/**
+ * The feed URL rewritten to the `webcal://` scheme. Clicking a `webcal://`
+ * link hands the URL to the OS's registered calendar app (Apple Calendar,
+ * Outlook on Windows/macOS) instead of the browser downloading the file.
+ * Derived from `EVENTS_ICS_URL` so both stay in sync automatically.
+ */
+export function webcalUrl(): string {
+    return EVENTS_ICS_URL.replace(/^https?:\/\//, "webcal://");
+}
+
+/**
+ * "Add by URL" deep link for Google Calendar. Google accepts either the
+ * `https://` or `webcal://` form in `cid`; we pass the https URL so the link
+ * keeps working in contexts that strip unknown schemes.
+ */
+export function googleCalendarSubscribeUrl(): string {
+    return `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(EVENTS_ICS_URL)}`;
+}
+
+/**
+ * "Subscribe from web" deep link for Outlook on the web. The desktop and
+ * mobile Outlook apps read the same feed via the `webcal://` URL.
+ */
+export function outlookSubscribeUrl(): string {
+    const params = new URLSearchParams({
+        url: EVENTS_ICS_URL,
+        name: "AutoBoat at Virginia Tech",
+    });
+    return `https://outlook.live.com/calendar/0/addfromweb?${params.toString()}`;
+}
+
+/**
  * Expand Discord events into concrete occurrences intersecting `[from, to]`.
  *
  * Non-recurring events produce a single occurrence (the event itself) when

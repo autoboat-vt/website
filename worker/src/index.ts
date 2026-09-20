@@ -3,15 +3,24 @@
  *
  * Serves a normalized JSON list of Discord guild scheduled events to the
  * AutoBoat website, without exposing the Discord bot token in the browser.
+ * Also serves the same events as an iCalendar (.ics) feed so the team
+ * calendar can be subscribed to from Google Calendar / Apple Calendar /
+ * Outlook.
  *
- * Flow per request:
- *   1. Preflight (`OPTIONS /events`)  -> 204 with CORS headers.
- *   2. Cache hit (KV)                -> 200 cached body, X-Cache: HIT.
+ * Routes:
+ *   GET /events        -- normalized JSON for the website's month grid.
+ *   GET /calendar.ics  -- the same events as an iCalendar feed, so the
+ *                         calendar can be subscribed to from Google
+ *                         Calendar / Apple Calendar / Outlook.
+ *
+ * Flow per request (shared by both routes):
+ *   1. Preflight (`OPTIONS`)         -> 204 with CORS headers.
+ *   2. Cache hit (KV)                -> render from the cached events.
  *   3. Cache miss                    -> fetch
  *      GET https://discord.com/api/v10/guilds/{DISCORD_GUILD_ID}/scheduled-events?with_user_count=true
  *      with `Authorization: Bot ${DISCORD_BOT_TOKEN}`, normalize the
- *      payload into CalendarEvent[], write to KV (waitUntil), respond 200
- *      with X-Cache: MISS.
+ *      payload into CalendarEvent[], write to KV (waitUntil).
+ *   JSON responses report X-Cache: HIT|MISS.
  *
  * Discord upstream errors are returned as a generic 502 with CORS headers
  * intact; the bot token is never logged, echoed, or included in responses.
@@ -19,13 +28,19 @@
  * CORS: the only allowed origin is ALLOWED_ORIGIN (default
  * https://autoboat.aoe.vt.edu). Non-matching browsers are blocked at the
  * browser level; server-side/curl clients can still hit the URL directly.
+ * Calendar clients fetching the .ics are not browsers and ignore CORS
+ * entirely, so the feed works regardless of the origin lockdown.
  */
+
+import { buildCalendar } from "./ics";
 
 interface Env {
     DISCORD_BOT_TOKEN: string;
     DISCORD_GUILD_ID: string;
     ALLOWED_ORIGIN: string;
     CACHE_TTL_SECONDS: string;
+    /** Display name subscribers see in their calendar app. Optional. */
+    CALENDAR_NAME?: string;
     EVENTS_KV: KVNamespace;
 }
 
@@ -70,6 +85,13 @@ const WORKER_USER_AGENT = "autoboat-website-worker/1.0";
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 const DISCORD_CDN_BASE = "https://cdn.discordapp.com";
 const DISCORD_UPSTREAM_TIMEOUT_MS = 5_000;
+
+/** Default display name for the .ics feed when CALENDAR_NAME is unset. */
+const DEFAULT_CALENDAR_NAME = "AutoBoat at Virginia Tech";
+/** XML/JSON-ish content type for the feed. Some clients key off the
+ * `text/calendar` type; the charset is explicit because SUMMARY/LOCATION
+ * can contain non-ASCII characters. */
+const ICS_CONTENT_TYPE = "text/calendar; charset=utf-8";
 
 const STATUS_BY_CODE: Record<number, CalendarEvent["status"]> = {
     1: "scheduled",
@@ -163,54 +185,105 @@ function jsonResponse(body: unknown, init: ResponseInit, env: Env): Response {
     return new Response(JSON.stringify(body), { ...init, headers });
 }
 
-async function handleGetEvents(env: Env, ctx: ExecutionContext): Promise<Response> {
+/**
+ * Load the normalized events, serving from the KV cache when warm and
+ * fetching + repopulating it on a miss. Shared by the JSON and .ics routes
+ * so the two formats can never drift apart.
+ *
+ * Throws when Discord is unreachable and the cache is cold; callers map that
+ * to a 502.
+ */
+async function loadEvents(
+    env: Env,
+    ctx: ExecutionContext,
+): Promise<{ events: CalendarEvent[]; cache: "HIT" | "MISS" }> {
     const ttl = parseTtlSeconds(env);
 
     const cached = await env.EVENTS_KV.get(KV_KEY, { type: "json", cacheTtl: ttl });
-    if (cached !== null) {
-        return jsonResponse(
-            cached,
-            {
-                status: 200,
-                headers: {
-                    "X-Cache": "HIT",
-                    "Cache-Control": `public, max-age=${ttl}`,
-                },
-            },
-            env,
-        );
+    if (cached !== null && Array.isArray(cached)) {
+        return { events: cached as CalendarEvent[], cache: "HIT" };
     }
 
-    let events: CalendarEvent[];
-    try {
-        events = await fetchDiscordEvents(env);
-    } catch (err) {
-        // Never include the upstream error message -- it could echo headers
-        // or the token in some Discord error bodies.
-        const message =
-            err instanceof Error && err.message.startsWith("discord upstream returned")
-                ? "discord upstream unavailable"
-                : "discord upstream unavailable";
-        return jsonResponse(
-            { error: message },
-            {
-                status: 502,
-                headers: { "Cache-Control": "no-store" },
-            },
-            env,
-        );
-    }
-
+    const events = await fetchDiscordEvents(env);
     // Fire-and-forget KV write -- do not block the response on it.
     ctx.waitUntil(env.EVENTS_KV.put(KV_KEY, JSON.stringify(events), { expirationTtl: ttl }));
+    return { events, cache: "MISS" };
+}
+
+/** Generic 502 for a cold cache plus a Discord upstream failure. The real
+ * error is never echoed -- it could carry headers or the token. */
+function upstreamUnavailable(env: Env): Response {
+    return jsonResponse(
+        { error: "discord upstream unavailable" },
+        { status: 502, headers: { "Cache-Control": "no-store" } },
+        env,
+    );
+}
+
+async function handleGetEvents(env: Env, ctx: ExecutionContext): Promise<Response> {
+    const ttl = parseTtlSeconds(env);
+    let loaded: { events: CalendarEvent[]; cache: "HIT" | "MISS" };
+    try {
+        loaded = await loadEvents(env, ctx);
+    } catch {
+        return upstreamUnavailable(env);
+    }
 
     return jsonResponse(
-        events,
+        loaded.events,
         {
             status: 200,
             headers: {
-                "X-Cache": "MISS",
+                "X-Cache": loaded.cache,
                 "Cache-Control": `public, max-age=${ttl}`,
+            },
+        },
+        env,
+    );
+}
+
+function icsResponse(body: string, init: ResponseInit, env: Env): Response {
+    const headers = new Headers(corsHeaders(env));
+    if (init.headers) {
+        for (const [k, v] of new Headers(init.headers)) {
+            headers.set(k, v);
+        }
+    }
+    headers.set("Content-Type", ICS_CONTENT_TYPE);
+    return new Response(body, { ...init, headers });
+}
+
+/**
+ * `GET /calendar.ics` -- the subscribable feed.
+ *
+ * Responses are cacheable for the KV TTL so calendar clients polling the URL
+ * don't hammer the Worker. `Content-Disposition: inline` keeps browsers from
+ * force-downloading the file when someone opens the URL directly (a download
+ * prompt is what makes users think "subscribe" is broken).
+ */
+async function handleGetIcs(env: Env, ctx: ExecutionContext): Promise<Response> {
+    const ttl = parseTtlSeconds(env);
+    let loaded: { events: CalendarEvent[]; cache: "HIT" | "MISS" };
+    try {
+        loaded = await loadEvents(env, ctx);
+    } catch {
+        return upstreamUnavailable(env);
+    }
+
+    const body = buildCalendar(loaded.events, {
+        calendarName: env.CALENDAR_NAME?.trim() || DEFAULT_CALENDAR_NAME,
+        guildId: env.DISCORD_GUILD_ID,
+        refreshIntervalSeconds: ttl,
+    });
+
+    return icsResponse(
+        body,
+        {
+            status: 200,
+            headers: {
+                "X-Cache": loaded.cache,
+                "Cache-Control": `public, max-age=${ttl}`,
+                "Content-Disposition": 'inline; filename="autoboat.ics"',
             },
         },
         env,
@@ -224,10 +297,12 @@ function handlePreflight(env: Env): Response {
 export default {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
         const url = new URL(request.url);
-        const { pathname } = url;
+        // Normalize a trailing slash so /events/ and /calendar.ics/ work too
+        // (calendar clients and users paste URLs with either form).
+        const pathname = url.pathname.replace(/\/+$/, "") || "/";
         const method = request.method.toUpperCase();
 
-        if (pathname !== "/events") {
+        if (pathname !== "/events" && pathname !== "/calendar.ics") {
             return jsonResponse({ error: "not found" }, { status: 404 }, env);
         }
 
@@ -235,7 +310,7 @@ export default {
             return handlePreflight(env);
         }
         if (method === "GET") {
-            return handleGetEvents(env, ctx);
+            return pathname === "/calendar.ics" ? handleGetIcs(env, ctx) : handleGetEvents(env, ctx);
         }
         return jsonResponse({ error: "method not allowed" }, { status: 405 }, env);
     },

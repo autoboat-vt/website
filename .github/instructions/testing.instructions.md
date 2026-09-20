@@ -10,6 +10,8 @@ applyTo: "src/test/**, jest.config.js"
 - `src/test/setup.ts` polyfills `TextEncoder`/`TextDecoder` (needed by react-router's dev bundle) and `window.matchMedia`
 - Mocks in `src/test/__mocks__/`: CSS → `styleMock.js`, images → `fileMock.js`, `leaflet.ts`, `react-leaflet.tsx`, `BoatMarker.tsx`
 - **The VS Code `runTests` tool does NOT pick up `jest.config.js`** — it runs in a node env and fails with `document is not defined`. Run tests via `bun run test` or `npx jest` in a terminal instead.
+- ⚠️ Jest's default cache directory resolves under `.vscode/tmp` in this environment, which the terminal sandbox blocks: `EPERM: operation not permitted, realpath '/Users/<you>/.vscode/tmp/...'`. When `bun run test` fails that way, run `npx jest --cache-directory "$TMPDIR/jest-cache"` instead.
+- Tests importing Worker code (`worker/src/**`, which lives outside `src/`) use a **relative path** — e.g. `import { buildCalendar } from "../../../worker/src/ics"` from `src/test/worker/`. `testMatch` is `<rootDir>/src/**/*.{test,spec}.{ts,tsx}`, so the test file itself must live under `src/test/`; the imported source can be anywhere.
 - Footer links render a visible `<span>{label}</span>` (icon + visible label text; external links also get an sr-only "(opens in a new tab)" span). Query with `getByText(label)`.
 - Components using `<Link>` from `react-router-dom` must be wrapped in `<MemoryRouter>` in tests.
 

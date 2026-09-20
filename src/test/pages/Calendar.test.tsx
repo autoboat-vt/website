@@ -1,7 +1,7 @@
 import { afterEach } from "@jest/globals";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import type { CalendarEvent } from "../../lib/discord";
+import { type CalendarEvent, EVENTS_ICS_URL } from "../../lib/discord";
 
 /**
  * Tests for the Calendar page. Mirrors the LiveMap pattern: mock global
@@ -126,6 +126,20 @@ describe("Calendar page", () => {
 
         // No events -> empty-state message visible.
         expect(screen.getByText(/No events are scheduled yet/i)).toBeInTheDocument();
+    });
+
+    it("exposes a subscribe control that links to the .ics feed", async () => {
+        mockFetchOnce([]);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        // The Subscribe toggle sits in the calendar header; expanding it
+        // reveals the provider links and the raw feed URL.
+        fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
+        expect(screen.getByTestId("subscribe-webcal")).toHaveAttribute("href", expect.stringContaining("webcal://"));
+        expect(screen.getByText(EVENTS_ICS_URL)).toBeInTheDocument();
     });
 
     it("aligns day numbers with the correct weekday column", async () => {
