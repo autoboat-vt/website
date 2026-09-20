@@ -323,7 +323,7 @@ export default function Calendar() {
                             <ChevronLeft size={18} />
                         </button>
                         <h2 className="calendar-month-label">{monthLabel}</h2>
-                        <div className="flex items-center gap-2">
+                        <div className="calendar-header__controls">
                             <button
                                 type="button"
                                 className="calendar-nav-btn"
@@ -335,6 +335,9 @@ export default function Calendar() {
                             <button type="button" className="btn btn--outline btn-sm" onClick={goToToday}>
                                 Today
                             </button>
+                            {/* Renders the toggle inline here; its panel is
+                                absolutely positioned so it can't stretch this
+                                nowrap group (see .calendar-subscribe__panel). */}
                             <CalendarSubscribe />
                         </div>
                     </div>

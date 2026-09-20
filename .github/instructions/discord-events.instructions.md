@@ -50,9 +50,20 @@ Key decisions in `worker/src/ics.ts`:
 
 Client-side URL helpers live in `src/lib/discord.ts`: `EVENTS_ICS_URL` (the `https://` feed URL), `webcalUrl()` (same URL with the scheme swapped to `webcal://`, which hands it to the OS calendar app), `googleCalendarSubscribeUrl()` (Google's `calendar/render?cid=` deep link), and `outlookSubscribeUrl()` (Outlook on the web's `addfromweb` deep link). `CalendarSubscribe.tsx` renders the disclosure control in the calendar header offering all of these plus "copy feed URL" and a direct `.ics` download.
 
-⚠️ The subscribe panel is rendered **in normal flow**, not as an absolutely-positioned dropdown, because `.calendar-wrapper` sets `overflow: hidden` which would clip it. When open, `.calendar-subscribe--open` takes `flex-basis: 100%` in the (now wrapping) `.calendar-header` flex container so the panel claims a full row.
+⚠️ The subscribe panel is an **absolutely positioned dropdown** anchored to `.calendar-header` (which sets `position: relative`), NOT to the toggle. It was originally in normal flow taking a full header row; that stretched the panel to the card's full width (~1250px) for what is only three provider rows plus a URL. Consequences to preserve:
+
+- `.calendar-wrapper` must keep `overflow: visible` (it used to be `hidden`) or the dropdown is clipped. The month grid clips its own rounded corners via `.calendar` instead.
+- `.calendar-header` must keep `position: relative` — it is the panel's containing block.
+- The panel widths with `min(25rem, 100%)`: at desktop it caps at a readable 25rem; on mobile `100%` resolves against the header so it can never overflow the viewport. Anchoring to the *toggle* instead fails on mobile, where the toggle sits mid-row and a left-extending panel runs off screen.
+- `.calendar-subscribe` is `display: inline-flex` so it sits inline in the nowrap `.calendar-header__controls` group without stretching it.
+
+⚠️ The panel's typography rules are written as `.calendar-subscribe__panel .calendar-subscribe__title` (0,2,0) on purpose. The panel renders inside `Card`, and `.card h3` / `.card p` (0,1,1) otherwise beat a bare single-class rule (0,1,0) — the title rendered at 36px and body text at 20px instead of ~17px/14px. Keep the doubled-up selectors when adding text styles here.
+
+⚠️ The provider list is an explicit single-column grid (`grid-template-columns: 1fr`), not `auto-fit`. At the 25rem cap auto-fit always resolves to one column anyway, and being explicit avoids a lopsided 2+1 split at the one width where a second column would technically fit.
 
 ⚠️ `navigator.clipboard` is undefined on insecure origins and in jsdom, so the copy button falls back to a hidden `<textarea>` + `document.execCommand("copy")`. Keep that fallback.
+
+⚠️ To view the calendar locally, the Worker's CORS (`ALLOWED_ORIGIN`) is locked to `https://autoboat.aoe.vt.edu`, so `localhost:3000` requests are blocked. Stub the `/events` response in devtools/Playwright, or temporarily point `ALLOWED_ORIGIN` at localhost.
 
 Real subscriptions only work against the **deployed** Worker URL -- `wrangler dev` is local-only, so a calendar app on another machine can't reach it.
 

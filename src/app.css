@@ -625,11 +625,19 @@
     }
 
     .calendar-wrapper {
-        /* Card's `p-8` utility always applies; we just let the grid fill it. */
-        overflow: hidden;
+        /* Card's `p-8` utility always applies; we just let the grid fill it.
+           NOT `overflow: hidden`: the subscribe panel is an absolutely
+           positioned dropdown, and clipping here would cut it off. The grid
+           clips its own rounded corners (`.calendar` sets overflow: hidden). */
+        overflow: visible;
     }
 
+    /* Positioned so the subscribe panel can anchor to the header's bottom
+       edge rather than to the toggle. Anchoring to the toggle fails on
+       mobile: the toggle sits mid-row, so a panel extending left from it runs
+       off the side of the viewport. */
     .calendar-header {
+        position: relative;
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -646,6 +654,16 @@
         font-weight: 800;
         text-align: center;
         flex: 1;
+    }
+
+    /* Right-hand header controls (next-month + Today). The subscribe control
+       deliberately sits OUTSIDE this group as a direct child of the header, so
+       its open panel can take a full row instead of stretching this nowrap
+       group to the panel's width. */
+    .calendar-header__controls {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
     }
 
     .calendar-nav-btn {
@@ -677,56 +695,183 @@
     }
 
     /* --- Calendar subscribe ---
-       The panel is in normal flow (not absolutely positioned) because
-       .calendar-wrapper sets overflow: hidden, which would clip a dropdown.
-       When open, the wrapper takes a full row of the wrapping flex header. */
+       The panel is a dropdown. It anchors to `.calendar-header` (which sets
+       position: relative), NOT to this element: on mobile the toggle sits
+       mid-row, so a panel extending left from the toggle ran off the side of
+       the viewport. Anchoring to the header lets it align to the header's
+       right edge and size against the header's width. */
     .calendar-subscribe {
-        display: flex;
-        justify-content: flex-end;
-    }
-    .calendar-subscribe--open {
-        flex-basis: 100%;
+        /* inline-flex shrink-wraps this to the toggle so it sits inline in the
+           nowrap controls group without stretching it. */
+        display: inline-flex;
     }
 
     .calendar-subscribe__toggle {
         white-space: nowrap;
     }
 
-    .calendar-subscribe__panel {
-        width: 100%;
-        margin-top: 0.75rem;
-        padding: 1rem 1.25rem;
-        border: 1px solid var(--color-cardborder);
-        border-radius: 0.75rem;
-        background-color: rgba(0, 0, 0, 0.02);
+    /* Chevron points down (collapsed); flips up when the panel is open. */
+    .calendar-subscribe__chevron {
+        transition: transform 200ms ease;
     }
-    .dark .calendar-subscribe__panel {
-        background-color: rgba(255, 255, 255, 0.03);
+    .calendar-subscribe--open .calendar-subscribe__chevron {
+        transform: rotate(180deg);
     }
 
-    .calendar-subscribe__intro {
-        margin: 0 0 0.75rem;
-        font-size: 0.9rem;
+    /* Anchored under the header's right edge, just below the toggle row.
+       `min(25rem, 100%)` caps it at a readable dropdown width (three provider
+       rows plus a URL -- spanning the full card left the content in a
+       mostly-empty box) while guaranteeing it never exceeds the header, so it
+       can't overflow the viewport on a phone. */
+    .calendar-subscribe__panel {
+        position: absolute;
+        top: calc(100% + 0.5rem);
+        right: 0;
+        z-index: 20;
+        width: min(25rem, 100%);
+        padding: 1.125rem 1.25rem 1rem;
+        border: 1px solid var(--color-cardborder);
+        border-radius: 0.875rem;
+        background-color: var(--color-bgcolor);
+        box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.35);
+    }
+    .dark .calendar-subscribe__panel {
+        background-color: #262523;
+        box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.8);
+    }
+
+    .calendar-subscribe__header {
+        margin-bottom: 1rem;
+    }
+
+    /* Doubled-up selector on purpose: the panel renders inside `Card`, and the
+       `.card h3` / `.card p` typography rules (0,1,1) otherwise beat a bare
+       single-class rule (0,1,0) and blow the title up to 36px. */
+    .calendar-subscribe__panel .calendar-subscribe__title {
+        margin: 0 0 0.25rem;
+        font-family: var(--font-heading);
+        font-size: 1.05rem;
+        font-weight: 700;
+        text-align: left;
+        color: var(--color-fontcolor);
+    }
+
+    .calendar-subscribe__panel .calendar-subscribe__intro {
+        margin: 0;
+        font-size: 0.875rem;
+        line-height: 1.45;
         color: var(--color-hovercolor);
     }
 
-    .calendar-subscribe__links {
-        display: flex;
-        flex-wrap: wrap;
+    /* Provider cards: one per calendar app. auto-fit keeps three across on
+       desktop and collapses to a single column on a phone without a media
+       query. */
+    /* Single-column list inside the compact panel. (auto-fit is deliberately
+       not used here: at max-width 25rem it always resolves to one column
+       anyway, and being explicit avoids a lopsided 2+1 split at the one
+       width where a second column would technically fit.) */
+    .calendar-subscribe__providers {
+        display: grid;
+        grid-template-columns: 1fr;
         gap: 0.5rem;
+        min-width: 0;
     }
 
-    /* The copy rows sits under the buttons: icon + the raw feed URL + the
-       copy button, wrapping on narrow screens. */
+    .calendar-subscribe__provider {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding: 0.625rem 0.75rem;
+        border: 1px solid var(--color-cardborder);
+        border-radius: 0.625rem;
+        background-color: var(--color-card);
+        color: var(--color-fontcolor);
+        text-decoration: none;
+        transition:
+            border-color 200ms,
+            background-color 200ms,
+            transform 200ms,
+            box-shadow 200ms;
+    }
+    .calendar-subscribe__provider:hover {
+        transform: translateY(-1px);
+        /* Brand-tinted border/glow on hover; maroon alpha via relative color
+           syntax rather than tinting the brand color itself. */
+        border-color: rgb(from var(--vt-maroon) r g b / 0.5);
+        background-color: rgb(from var(--vt-maroon) r g b / 0.06);
+        box-shadow: 0 4px 14px -8px rgb(from var(--vt-maroon) r g b / 0.5);
+    }
+    .dark .calendar-subscribe__provider:hover {
+        border-color: rgb(from var(--vt-burntOrange) r g b / 0.55);
+        background-color: rgb(from var(--vt-burntOrange) r g b / 0.1);
+        box-shadow: 0 4px 14px -8px rgb(from var(--vt-burntOrange) r g b / 0.6);
+    }
+
+    .calendar-subscribe__provider-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 0.5rem;
+        background-color: rgb(0 0 0 / 0.045);
+        color: var(--color-fontcolor);
+    }
+    .dark .calendar-subscribe__provider-icon {
+        background-color: rgb(255 255 255 / 0.07);
+    }
+
+    .calendar-subscribe__provider-text {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        line-height: 1.25;
+    }
+
+    .calendar-subscribe__provider-label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .calendar-subscribe__provider-hint {
+        font-size: 0.72rem;
+        color: var(--color-hovercolor);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* "or add it by URL" rule: a hairline with the label centered on it. */
+    .calendar-subscribe__divider {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin: 1.125rem 0 0.75rem;
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--color-hovercolor);
+    }
+    .calendar-subscribe__divider::before,
+    .calendar-subscribe__divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background-color: var(--color-cardborder);
+    }
+
+    /* The copy row: link icon + the raw feed URL + the copy button. */
     .calendar-subscribe__url-row {
         display: flex;
         align-items: center;
         gap: 0.5rem;
-        margin-top: 0.875rem;
         padding: 0.5rem 0.625rem;
         border: 1px solid var(--color-cardborder);
         border-radius: 0.5rem;
-        background-color: var(--color-card);
+        background-color: var(--color-bgcolor);
         min-width: 0;
     }
 
@@ -772,9 +917,38 @@
         color: var(--color-bgcolor);
     }
 
-    .calendar-subscribe__hint {
-        margin: 0.75rem 0 0;
+    /* Stacked, not side-by-side: the panel is only ~400px wide, so a
+       space-between row would squeeze the hint against the download link. */
+    .calendar-subscribe__footer {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.35rem;
+        margin-top: 0.75rem;
+    }
+
+    .calendar-subscribe__download {
+        flex-shrink: 0;
         font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--vt-impactOrange);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+    .calendar-subscribe__download:hover {
+        text-decoration-thickness: 2px;
+    }
+    .dark .calendar-subscribe__download {
+        /* Impact Orange is tuned for light backgrounds; the lighter burnt
+           orange keeps AA contrast on the dark surface. */
+        color: var(--vt-burntOrange);
+    }
+
+    /* Scoped past `.card p` (0,1,1), same reason as the title above. */
+    .calendar-subscribe__panel .calendar-subscribe__hint {
+        margin: 0;
+        font-size: 0.78rem;
+        line-height: 1.4;
         color: var(--color-hovercolor);
     }
 
@@ -1187,14 +1361,11 @@
             height: 1.75rem;
         }
 
-        /* The subscribe panel's row of buttons would overflow a phone; stack
-           them instead. The default `align-items: stretch` makes each
-           inline-flex .btn fill the column, so no width rule is needed. */
+        /* The panel is already a single column capped at 25rem; just trim the
+           padding on a narrow phone. Its width is clamped with
+           `calc(100vw - 2rem)` so it never overflows the viewport. */
         .calendar-subscribe__panel {
-            padding: 0.75rem;
-        }
-        .calendar-subscribe__links {
-            flex-direction: column;
+            padding: 0.875rem 0.875rem 0.75rem;
         }
 
         .calendar-dow {

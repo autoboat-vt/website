@@ -1,5 +1,6 @@
-import { CalendarPlus, Check, Copy, Link as LinkIcon } from "lucide-react";
+import { CalendarPlus, Check, ChevronDown, Copy, Link as LinkIcon } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import { FaApple, FaGoogle, FaMicrosoft } from "react-icons/fa6";
 import { EVENTS_ICS_URL, googleCalendarSubscribeUrl, outlookSubscribeUrl, webcalUrl } from "../lib/discord";
 
 /**
@@ -20,6 +21,21 @@ import { EVENTS_ICS_URL, googleCalendarSubscribeUrl, outlookSubscribeUrl, webcal
  * Proton, ...) that takes a URL, and a direct `.ics` link lets a user import
  * a one-time snapshot instead of subscribing.
  */
+
+/** One provider card. `icon` is a brand glyph; the label is split into a
+ * primary action and a hint describing what the link actually does. */
+interface Provider {
+    key: string;
+    href: string;
+    label: string;
+    hint: string;
+    icon: React.ComponentType<{ size?: number }>;
+    /** External links open in a new tab; `webcal://` must NOT (a new tab
+     * would linger as a blank page after the OS handler takes over). */
+    external: boolean;
+    testId?: string;
+}
+
 export default function CalendarSubscribe() {
     const [open, setOpen] = useState(false);
     const [copied, setCopied] = useState(false);
@@ -62,6 +78,34 @@ export default function CalendarSubscribe() {
 
     const webcal = webcalUrl();
 
+    const providers: Provider[] = [
+        {
+            key: "webcal",
+            href: webcal,
+            label: "Apple / Outlook",
+            hint: "Add to this device",
+            icon: FaApple,
+            external: false,
+            testId: "subscribe-webcal",
+        },
+        {
+            key: "google",
+            href: googleCalendarSubscribeUrl(),
+            label: "Google Calendar",
+            hint: "Add by URL",
+            icon: FaGoogle,
+            external: true,
+        },
+        {
+            key: "outlook",
+            href: outlookSubscribeUrl(),
+            label: "Outlook Web",
+            hint: "Subscribe from the web",
+            icon: FaMicrosoft,
+            external: true,
+        },
+    ];
+
     return (
         <div className={`calendar-subscribe${open ? " calendar-subscribe--open" : ""}`}>
             <button
@@ -73,40 +117,45 @@ export default function CalendarSubscribe() {
             >
                 <CalendarPlus size={16} aria-hidden="true" />
                 Subscribe
+                <ChevronDown size={15} className="calendar-subscribe__chevron" aria-hidden="true" />
             </button>
 
             {open && (
                 <div className="calendar-subscribe__panel" id={panelId}>
-                    <p className="calendar-subscribe__intro">
-                        Add the AutoBoat calendar to your own calendar app. It updates automatically as events change in
-                        Discord.
-                    </p>
+                    <div className="calendar-subscribe__header">
+                        <h3 className="calendar-subscribe__title">Subscribe to this calendar</h3>
+                        <p className="calendar-subscribe__intro">
+                            Add the AutoBoat calendar to your own calendar app. It updates automatically as events
+                            change in Discord.
+                        </p>
+                    </div>
 
-                    <div className="calendar-subscribe__links">
-                        <a className="btn btn--sm" href={webcal} data-testid="subscribe-webcal">
-                            Apple / Outlook
-                        </a>
-                        <a
-                            className="btn btn--sm"
-                            href={googleCalendarSubscribeUrl()}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            Google Calendar
-                            <span className="sr-only"> (opens in a new tab)</span>
-                        </a>
-                        <a
-                            className="btn btn--sm"
-                            href={outlookSubscribeUrl()}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            Outlook Web
-                            <span className="sr-only"> (opens in a new tab)</span>
-                        </a>
-                        <a className="btn btn--sm" href={EVENTS_ICS_URL} download="autoboat.ics">
-                            Download .ics
-                        </a>
+                    <div className="calendar-subscribe__providers">
+                        {providers.map((p) => {
+                            const Icon = p.icon;
+                            return (
+                                <a
+                                    key={p.key}
+                                    className="calendar-subscribe__provider"
+                                    href={p.href}
+                                    data-testid={p.testId}
+                                    {...(p.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                                >
+                                    <span className="calendar-subscribe__provider-icon" aria-hidden="true">
+                                        <Icon size={17} />
+                                    </span>
+                                    <span className="calendar-subscribe__provider-text">
+                                        <span className="calendar-subscribe__provider-label">{p.label}</span>
+                                        <span className="calendar-subscribe__provider-hint">{p.hint}</span>
+                                    </span>
+                                    {p.external && <span className="sr-only"> (opens in a new tab)</span>}
+                                </a>
+                            );
+                        })}
+                    </div>
+
+                    <div className="calendar-subscribe__divider">
+                        <span>or add it by URL</span>
                     </div>
 
                     <div className="calendar-subscribe__url-row">
@@ -123,9 +172,14 @@ export default function CalendarSubscribe() {
                         </button>
                     </div>
 
-                    <p className="calendar-subscribe__hint">
-                        In another calendar app, look for "Add calendar from URL" and paste the link above.
-                    </p>
+                    <div className="calendar-subscribe__footer">
+                        <a className="calendar-subscribe__download" href={EVENTS_ICS_URL} download="autoboat.ics">
+                            Download .ics
+                        </a>
+                        <p className="calendar-subscribe__hint">
+                            In another calendar app, look for "Add calendar from URL" and paste the link above.
+                        </p>
+                    </div>
                 </div>
             )}
         </div>

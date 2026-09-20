@@ -142,6 +142,33 @@ describe("Calendar page", () => {
         expect(screen.getByText(EVENTS_ICS_URL)).toBeInTheDocument();
     });
 
+    it("keeps the subscribe control inside the header so its panel can anchor there", async () => {
+        // Regression guard for the panel's layout. The panel is an absolutely
+        // positioned dropdown anchored to `.calendar-header` (the nearest
+        // positioned ancestor, via `position: relative`), NOT to the toggle:
+        // on mobile the toggle sits mid-row, so a panel hanging off it ran off
+        // the side of the viewport. If the subscribe control ever moves out of
+        // the header, the panel loses its anchor and the `min(25rem, 100%)`
+        // width clamp no longer resolves against the header either.
+        mockFetchOnce([]);
+        const { container } = renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        const header = container.querySelector(".calendar-header");
+        expect(header).not.toBeNull();
+        expect(header?.querySelector(".calendar-subscribe")).not.toBeNull();
+
+        // The toggle and its panel live in the same wrapper, and aria-controls
+        // points at the panel it toggles.
+        fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
+        const toggle = container.querySelector(".calendar-subscribe__toggle");
+        const panel = container.querySelector(".calendar-subscribe__panel");
+        expect(panel).not.toBeNull();
+        expect(toggle?.getAttribute("aria-controls")).toBe(panel?.id);
+    });
+
     it("aligns day numbers with the correct weekday column", async () => {
         // Regression test: the grid starts on Sunday. The number of leading
         // other-month pad cells before the 1st must equal the 1st's getDay()
