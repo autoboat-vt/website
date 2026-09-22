@@ -7,9 +7,12 @@ export default function Gallery() {
 
     return (
         <>
-            <div className="mx-4 my-8 mt-6 mb-6 text-center">
-                <span className="kicker">In the Shop & On the Water</span>
-                <h3 className="font-heading text-[clamp(22px,3vw,36px)] font-extrabold">Gallery</h3>
+            {/* mt-14 (56px) puts the title at roughly the same distance below
+                the nav as the first Card on the sibling pages (~56-115px).
+                It sat at 24px with the old mt-6, which read as cramped against
+                the header. */}
+            <div className="mx-4 mt-14 mb-8 text-center">
+                <h2 className="font-heading text-[clamp(22px,3vw,36px)] font-extrabold">Gallery</h2>
             </div>
             {/* Two columns on mobile (matching the Our Team gallery) rather
                 than one: the list is ~38 photos, and a single full-width

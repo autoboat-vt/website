@@ -220,7 +220,8 @@ Tailwind v4's layer order is `theme, base, utilities`; `@layer components` in `s
 
 ### Image & asset conventions
 
-- Site images live in `public/images/` organized by page: `a_front_image/`, `gallery/`, `our_team_images/` (with subdirs per subteam: `electronics/`, `mechanical/`, `navarch/`, `sail/`, `software/`).
+- Site images live in `public/images/` organized by page: `a_front_image/`, `gallery/`, `our_team_images/` (with subdirs per subteam: `electronics/`, `mechanical/`, `navarch/`, `sail/`, `software/`), `sponsors/` (sponsor logos, referenced from the `SPONSORS` array in `src/pages/Sponsors.tsx`).
+- ⚠️ Sponsor logos render on a band that is hard-coded `bg-white` in both themes (sponsor marks are designed for light backgrounds), so a logo with a white or very light wordmark will be invisible. Check new logos against white. SVG is fine — the `webp-convert` CI job only globs `public/images/*.png|jpg|jpeg`.
 - Reference images from components/pages as absolute paths from `public/` (e.g., `/images/gallery/foo.jpg`). Vite serves `public/` at the root.
 - `BoatMarker` uses `/images/boat-icon.webp` (50px square, centered anchor) — keep this asset in `public/images/`.
 - Lazy-load gallery and below-the-fold images (`loading="lazy"`) — they shift layout, which is why the hash-link scroll effect re-scrolls on a decay schedule.

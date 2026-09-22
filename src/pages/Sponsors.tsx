@@ -15,6 +15,13 @@ const SPONSORS: Sponsor[] = [
         description:
             "Our foundational sponsor, providing lab space, resources, and ongoing support that makes everything we do possible.",
     },
+    {
+        name: "Polymaker",
+        logo: "/images/sponsors/polymaker.svg",
+        website: "https://polymaker.com",
+        description:
+            "Supplies the 3D printing filament we use for rapid prototyping and printed parts across the boat, from mounts and housings to fit-check jigs in the shop.",
+    },
 ];
 
 function SponsorCard({ sponsor }: { sponsor: Sponsor }) {

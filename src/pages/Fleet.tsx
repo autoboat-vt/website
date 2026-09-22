@@ -21,7 +21,33 @@ enum VesselStatus {
     Retired = "Retired",
 }
 
+/**
+ * Presentation per status. Retired is deliberately muted and does NOT pulse --
+ * the pulse reads as "live right now", which is wrong for a boat we no longer
+ * run.
+ */
+const STATUS_STYLES: Record<VesselStatus, { text: string; dot: string; pulse: boolean }> = {
+    [VesselStatus.Active]: { text: "text-emerald-600", dot: "bg-emerald-500", pulse: true },
+    [VesselStatus.InDevelopment]: { text: "text-amber-600", dot: "bg-amber-500", pulse: true },
+    [VesselStatus.Retired]: {
+        // 60% black/white, not the more obvious 45%: at this text size 45%
+        // measures only 3.27:1 against the page background, under the 4.5:1
+        // WCAG AA floor. 60% gives 5.48:1 light / 6.76:1 dark and still reads
+        // as visibly muted next to Active's emerald and In Development's amber.
+        text: "text-black/60 dark:text-white/60",
+        dot: "bg-black/45 dark:bg-white/45",
+        pulse: false,
+    },
+};
+
 interface Vessel {
+    /**
+     * Display name. ⚠️ Also used as the section anchor id
+     * (`id={name.toLowerCase()}`), so renaming a vessel changes its
+     * deep-link URL. `reverse` is a per-card flag, not derived from index --
+     * when you add or reorder vessels, re-balance the flags to keep the
+     * image-left / image-right zigzag alternating.
+     */
     name: string;
     subtitle: string;
     status: VesselStatus;
@@ -38,6 +64,22 @@ interface Vessel {
 
 const VESSELS: Vessel[] = [
     {
+        name: "Ducky",
+        subtitle: "Autonomous JetSki Project",
+        status: VesselStatus.Active,
+        image: "/images/gallery/16.webp",
+        imageAlt: "Autonomous JetSki - Ducky",
+        objectPosition: "center 40%",
+        // First card on the page -- eager + high priority so it can serve as
+        // the LCP element. Every other vessel is lazy.
+        loading: "eager",
+        description:
+            "Our newest engineering challenge: converting a standard JetSki hull into a fully autonomous, electric jet propulsion vessel. The team is currently designing custom semi-solid-state battery packs, a robust and safe electrical system to manage the immense power required to drive Ducky, and a jet impeller drive coupling.",
+        specs: [],
+        hotspots: [],
+        reverse: false,
+    },
+    {
         name: "Theseus",
         subtitle: "Autonomous Motorboat",
         status: VesselStatus.Active,
@@ -45,7 +87,7 @@ const VESSELS: Vessel[] = [
         imageAlt: "Autonomous Motorboat - Theseus",
         objectPosition: "75% 70%",
         imageZoom: 1.75,
-        loading: "eager",
+        loading: "lazy",
         description:
             "Theseus is our high speed autonomous electric motorboat built for Promoting Electric Propulsion (PEP) races and obstacle avoidance. It features a high power electric powertrain, hydrodynamic fittings to optimize hull speed, and real-time computer vision buoy/boat tracking systems.",
         specs: [
@@ -82,18 +124,20 @@ const VESSELS: Vessel[] = [
                 text: "GPS, Compass, Camera, and IMU sensors for autonomous pathfinding.",
             },
         ],
-        reverse: false,
+        // Flipped to keep the zigzag alternation (image-left, image-right,
+        // image-left) after Ducky moved into the first slot.
+        reverse: true,
     },
     {
         name: "Lumpy",
         subtitle: "Autonomous Sailboat",
-        status: VesselStatus.Active,
+        status: VesselStatus.Retired,
         image: "/images/gallery/13.webp",
         imageAlt: "Autonomous Sailboat - Lumpy",
         objectPosition: "35% 60%",
         loading: "lazy",
         description:
-            "Lumpy is our current autonomous sailing vessel, designed to compete in the International Robotic Sailing Regatta (also known as SailBOT). It features a fiberglass hull, custom-built rigging, and an extremely robust autonomous navigation software package that chooses optimal sailing routes and avoids obstacles in the water.",
+            "Lumpy was our autonomous sailing vessel, designed to compete in the International Robotic Sailing Regatta (also known as SailBOT). It features a fiberglass hull, custom-built rigging, and an extremely robust autonomous navigation software package that chose optimal sailing routes and avoided obstacles in the water. Lumpy has since been retired and is no longer actively sailed.",
         specs: [
             { label: "Length", value: "2 Meters" },
             { label: "Battery", value: "24V LiPo" },
@@ -133,20 +177,8 @@ const VESSELS: Vessel[] = [
                 text: "Anemometer, GPS, IMU, Compass, and Camera sensors for autonomous pathfinding.",
             },
         ],
-        reverse: true,
-    },
-    {
-        name: "JetSki",
-        subtitle: "Autonomous JetSki Project",
-        status: VesselStatus.InDevelopment,
-        image: "/images/gallery/16.webp",
-        imageAlt: "Autonomous Jetski - Concept Render",
-        objectPosition: "center 40%",
-        loading: "lazy",
-        description:
-            "Our newest engineering challenge: converting a standard JetSki hull into a fully autonomous, electric jet propulsion vessel. The team is currently designing custom semi-solid-state battery packs, a robust and safe electrical system to manage the immense power required to drive the JetSki, and a jet impeller drive coupling.",
-        specs: [],
-        hotspots: [],
+        // Flipped to keep the zigzag alternation (image-left, image-right,
+        // image-left) after Ducky moved into the first slot.
         reverse: false,
     },
 ];
@@ -403,6 +435,10 @@ export default function Fleet() {
 
     return (
         <section className="section mx-auto grid max-w-275 gap-4 px-4 py-6" id="fleet-section">
+            {/* Order is deliberate: active vessels first (Ducky, Theseus),
+                then the retired one (Lumpy). Because the id is derived from
+                the name, renaming a vessel silently changes its anchor --
+                see the note on the Vessel interface. */}
             {VESSELS.map((vessel, i) => (
                 <div key={vessel.name} className="contents">
                     <div
@@ -413,10 +449,10 @@ export default function Fleet() {
                         <h2 className="m-0! flex items-center gap-2.5 font-heading text-[clamp(18px,2.5vw,28px)] font-extrabold">
                             {vessel.name}
                             <span
-                                className={`inline-flex items-center gap-1.5 align-middle text-[0.5em] font-semibold uppercase tracking-wide ${vessel.status === "Active" ? "text-emerald-600" : "text-amber-600"}`}
+                                className={`inline-flex items-center gap-1.5 align-middle text-[0.5em] font-semibold uppercase tracking-wide ${STATUS_STYLES[vessel.status].text}`}
                             >
                                 <span
-                                    className={`fleet-status-dot inline-block h-2 w-2 rounded-full ${vessel.status === "Active" ? "bg-emerald-500" : "bg-amber-500"}`}
+                                    className={`inline-block h-2 w-2 rounded-full ${STATUS_STYLES[vessel.status].dot}${STATUS_STYLES[vessel.status].pulse ? " fleet-status-dot" : ""}`}
                                     aria-hidden="true"
                                 />
                                 {vessel.status}
