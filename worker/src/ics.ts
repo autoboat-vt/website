@@ -16,6 +16,8 @@
  * render those in the viewer's local timezone.
  */
 
+import { toExdateValue } from "./cancellations";
+
 /** The subset of the Worker's `CalendarEvent` this module needs. */
 export interface IcsEvent {
     id: string;
@@ -28,8 +30,14 @@ export interface IcsEvent {
     status: "scheduled" | "active" | "completed" | "canceled";
     location: string | null;
     isRecurring: boolean;
-    /** RFC 5545 RRULE body without the leading "RRULE:" prefix. */
+    /** RFC 5545 RRULE body without the leading `RRULE:` prefix. */
     recurrenceRule: string | null;
+    /**
+     * ISO `YYYY-MM-DD` dates whose occurrence is cancelled. Emitted as
+     * `EXDATE` so subscribers' calendar apps drop them. Optional: an event
+     * with no cancellations may omit the field entirely.
+     */
+    excludedDates?: string[];
 }
 
 export interface IcsOptions {
@@ -160,6 +168,23 @@ function buildEvent(event: IcsEvent, options: IcsOptions, now: Date): string[] {
     // a rule that makes clients reject the whole calendar.
     if (event.isRecurring && event.recurrenceRule && /^FREQ=/i.test(event.recurrenceRule)) {
         lines.push(prop("RRULE", event.recurrenceRule));
+    }
+
+    // Per-occurrence cancellations parsed from the description's `Cancelled:`
+    // convention. EXDATE only makes sense alongside an RRULE -- without one
+    // there are no generated occurrences to exclude -- so it is emitted in
+    // the same branch and deliberately not on one-off events.
+    //
+    // Each value borrows the event's own DTSTART time-of-day: clients match
+    // EXDATE against DTSTART by value, so a midnight timestamp would fail to
+    // exclude an evening meeting. Unparseable values are skipped rather than
+    // emitted, since a malformed EXDATE can make some clients reject the
+    // whole VEVENT.
+    if (event.isRecurring && event.recurrenceRule) {
+        const exdates = (event.excludedDates ?? [])
+            .map((d) => toExdateValue(d, event.start))
+            .filter((v): v is string => v !== null);
+        if (exdates.length > 0) lines.push(prop("EXDATE", exdates.join(",")));
     }
 
     lines.push("END:VEVENT");

@@ -64,6 +64,14 @@ export interface CalendarEvent {
     image: string | null;
     /** RFC 5545 RRULE body (without the leading "RRULE:" prefix), or null. */
     recurrenceRule: string | null;
+    /**
+     * ISO `YYYY-MM-DD` dates whose occurrence is cancelled, parsed by the
+     * Worker from the description's `Cancelled:` convention. Discord's API
+     * cannot express per-occurrence exceptions, so this is the team's
+     * workaround; `expandRecurrences` drops these from the month grid, and
+     * the `.ics` feed emits them as `EXDATE`. Always an array.
+     */
+    excludedDates: string[];
 }
 
 /** A concrete instance of a CalendarEvent within a specific time window. */
@@ -153,8 +161,24 @@ function isCalendarEvent(value: unknown): value is CalendarEvent {
         (e.end === null || typeof e.end === "string") &&
         typeof e.status === "string" &&
         typeof e.isRecurring === "boolean" &&
-        (e.recurrenceRule === null || (typeof e.recurrenceRule === "string" && /^FREQ=/i.test(e.recurrenceRule)))
+        (e.recurrenceRule === null || (typeof e.recurrenceRule === "string" && /^FREQ=/i.test(e.recurrenceRule))) &&
+        // Tolerate an absent field (older Worker) but reject a wrong-typed
+        // one, which would throw during expansion instead of degrading.
+        (e.excludedDates === undefined ||
+            (Array.isArray(e.excludedDates) && e.excludedDates.every((d) => typeof d === "string")))
     );
+}
+
+/**
+ * `YYYY-MM-DD` for a Date's **local** calendar day.
+ *
+ * Cancellation notes are written the way the grid displays them, so matching
+ * has to use local components -- `toISOString()` would shift an evening
+ * meeting onto the next day and silently miss the exclusion.
+ */
+function localDateKey(d: Date): string {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 /**
@@ -320,7 +344,14 @@ export function expandRecurrences(
                 // cancellation is worth seeing), later ones are not generated.
                 const cutoffMs = event.status === "canceled" ? Math.min(toMs, nowMs) : toMs;
                 if (cutoffMs < fromMs) continue;
+                // Occurrences listed in the description's `Cancelled:` notes
+                // are skipped. Discord has no per-occurrence exception field,
+                // so this text convention is the only way to express one; the
+                // Worker parses it into `excludedDates` so the site and the
+                // .ics feed agree.
+                const excluded = new Set(event.excludedDates ?? []);
                 for (const occurrenceStart of rule.between(from, new Date(cutoffMs), true)) {
+                    if (excluded.size > 0 && excluded.has(localDateKey(occurrenceStart))) continue;
                     out.push({
                         event,
                         start: occurrenceStart,

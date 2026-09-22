@@ -84,6 +84,7 @@ function sampleEvent(partial: Partial<CalendarEvent> & Pick<CalendarEvent, "id" 
         isRecurring: false,
         image: null,
         recurrenceRule: null,
+        excludedDates: [],
         ...partial,
     };
 }

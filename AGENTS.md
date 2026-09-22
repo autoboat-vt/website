@@ -93,6 +93,7 @@ worker/                 # Cloudflare Worker proxying Discord scheduled events fo
   wrangler.jsonc        # worker config (KV binding, env vars)
   src/index.ts          # /events (JSON) + /calendar.ics (iCal subscription feed) routes, KV cache, Discord REST fetch
   src/events.ts         # pure normalization of Discord payloads -> CalendarEvent (no bindings, unit-testable)
+  src/cancellations.ts  # parses the description's `Cancelled:` convention into excludedDates + EXDATE values
   src/ics.ts            # iCalendar (RFC 5545) serializer for the subscribable feed
   src/recurrence.ts     # Discord's structured recurrence_rule object -> RFC 5545 RRULE body
   README.md             # one-time setup: Discord bot + KV namespace + secrets

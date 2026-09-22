@@ -1,6 +1,6 @@
 ---
 description: "Use when working on the calendar page, the Discord events client, the subscription affordance, or the Cloudflare Worker that serves Discord guild scheduled events. Covers the no-webhook constraint, the Worker architecture, KV caching, VITE_EVENTS_URL, the /calendar.ics feed, and rrule recurrence expansion."
-applyTo: "src/lib/discord.ts, src/pages/Calendar.tsx, src/components/CalendarSubscribe.tsx, src/test/lib/discord.test.ts, src/test/pages/Calendar.test.tsx, src/test/components/CalendarSubscribe.test.tsx, src/test/worker/ics.test.ts, src/test/worker/recurrence.test.ts, src/test/worker/events.test.ts, worker/**"
+applyTo: "src/lib/discord.ts, src/pages/Calendar.tsx, src/components/CalendarSubscribe.tsx, src/test/lib/discord.test.ts, src/test/pages/Calendar.test.tsx, src/test/components/CalendarSubscribe.test.tsx, src/test/worker/ics.test.ts, src/test/worker/recurrence.test.ts, src/test/worker/events.test.ts, src/test/worker/cancellations.test.ts, worker/**"
 ---
 
 # Discord events + calendar
@@ -146,17 +146,49 @@ An unknown `frequency` or a non-positive `interval` rejects the whole rule (retu
 
 ⚠️ `rule.end` (Discord's "ending time of the recurrence interval") becomes **`UNTIL`**, emitted last because it must terminate the rule. The `end` field was previously declared on the interface but never read, so every series was treated as **infinite** -- the month grid rendered occurrences forever and the feed published a never-terminating `RRULE`. An unparseable `end` is dropped (an unbounded rule beats a malformed `UNTIL` that makes a client reject the whole RRULE). `UNTIL` is formatted as a UTC date-time (`20261103T190000Z`), which RFC 5545 requires when `DTSTART` is UTC -- and it always is here, since `ics.ts` serializes everything in UTC.
 
-Note: Discord's docs mark `end` as "cannot be set externally currently", which may mean it is also absent from responses. If it is absent, `formatUntil` returns null and the rule stays unbounded (the pre-existing behavior) -- so this is safe either way, but the bound only takes effect if Discord actually populates the field.
+Note: Discord's docs mark `end` as "cannot be set externally currently" — meaning clients cannot set it. **Verified against the live API on 2026-09-22: Discord sends `"end": null` for every recurring event in the guild.** Every other optional rule field is likewise present-but-null (`by_n_weekday`, `by_month`, `by_month_day`, `by_year_day`, `count`), so this is explicit null, not omission. The practical consequence: the `UNTIL` branch is **correct but currently unreachable** — `formatUntil` returns null and rules publish unbounded, which is why the live payload shows `FREQ=WEEKLY;INTERVAL=2;BYDAY=TU` with no `UNTIL`. Keep the branch (it is correct if Discord ever populates `end`, and it is covered by tests), but do not expect it to fire today.
 
 Every occurrence inside the current month grid becomes one chip; each occurrence's `end` is shifted by the base event's duration so multi-hour meetings keep their length.
 
 ### Cancelled events
 
-Discord has **no per-occurrence exception mechanism**. The recurrence rule object has no `EXDATE`-equivalent field (its fields are exactly `start`, `end`, `frequency`, `interval`, `by_weekday`, `by_n_weekday`, `by_month`, `by_month_day`, `by_year_day`, `count`), so "cancel one occurrence in a series, keep the rest" is not representable on the wire. Cancelling an occurrence in the Discord UI just moves or removes that date; it does not produce an exception record. There is nothing to parse, by design.
+Discord has **no per-occurrence exception mechanism**. The recurrence rule object has no `EXDATE`-equivalent field (its fields are exactly `start`, `end`, `frequency`, `interval`, `by_weekday`, `by_n_weekday`, `by_month`, `by_month_day`, `by_year_day`, `count`), so "cancel one occurrence in a series, keep the rest" cannot be sent through the API. `PATCH`/`DELETE /guilds/{id}/scheduled-events/{id}` take whole-event ids, and the occurrences of a series are not separate resources.
 
-**Whole-series cancellation is handled**, in two deliberately different ways:
+**The team's workaround is an in-description convention**, parsed by `worker/src/cancellations.ts`:
 
-- **Website (`expandRecurrences`)**: a `canceled` recurring event is clipped at `now` — occurrences that already happened still render (the cancellation is worth seeing), later ones are never generated. Without this the series would project struck-through chips into every future month forever, because `CANCELED` is terminal (the docs: "Once `status` is set to `COMPLETED` or `CANCELED`, the `status` can no longer be updated") and the RRULE carries no `UNTIL` (`end` is not settable). The clip is `Math.min(to, now)`; when the window is entirely in the past it resolves to `to`, so historical months still expand normally.
+```
+Location: **Lavery Hall 335**
+Cancelled: October 11th 2026
+```
+
+This is the ONLY way a single occurrence can be cancelled, so it is load-bearing — keep the parser and both consumers in sync:
+
+- **Label** matched: `Cancelled` / `Canceled` / `Skipped` / `No meeting`, case-insensitive, followed by `:`, `-`, or an en/em dash. The label is required on purpose: without it, ordinary prose ("We cancelled the October 11th launch, new date TBD") would be parsed as an exclusion.
+- **Date forms**: `October 11th 2026`, `Oct 11, 2026`, `September 3rd` (year omitted), or ISO `2026-10-11`. The year defaults to the **event's own start year**, not today — parsing is deterministic and a past-year series still parses.
+- **Lists on one line**: the team writes several dates in a single note, mixing a bare year with a comma-before-year across items:
+
+  ```
+  Cancelled: October 11th 2026, November 3rd, 2026
+  ```
+
+  Separators are not parsed specially — the month-name and ISO patterns are simply matched globally across the line, so commas, semicolons, and `and` all work, as does mixing month-name and ISO forms in one list. A year applies only to the item it trails; later items without one fall back to the reference year. Duplicates are collapsed, so repeating a date across items or lines is harmless.
+- **Validation**: impossible dates (Feb 30, month 13, non-leap Feb 29) are dropped individually rather than failing the whole line. Malformed input never throws; a bad note must not take down the calendar.
+- Output is deduplicated and sorted, so it is stable to assert on.
+
+**Consumed in two places, which must stay consistent:**
+
+1. **Website** (`expandRecurrences` in `src/lib/discord.ts`): occurrences whose **local** calendar day matches an entry are skipped. Local, not UTC — notes are written the way the grid displays them, so a 19:00Z meeting must be matched by its local date, not the UTC instant.
+2. **`.ics` feed** (`ics.ts`): emitted as a single comma-separated `EXDATE`, only when an RRULE is present (there are no generated occurrences to exclude without one, so one-off events never get an EXDATE even if they carry a note). Sorted, so the feed stays byte-identical between polls (KV caching / diffing).
+
+⚠️ `EXDATE` reuses the **event's own `DTSTART` time-of-day**, not midnight. RFC 5545 clients match `EXDATE` against `DTSTART` by value, so a midnight timestamp would fail to exclude an evening meeting. `toExdateValue(isoDate, event.start)` is the only correct way to build the value.
+
+⚠️ `toExdateValue` must validate with `Number.isInteger`, not `undefined`/truthiness checks. `"not-a-date".split("-").map(Number)` is `[NaN, NaN, NaN]` — destructured as `NaN`, which passes an `undefined` check and emits the corrupt literal `NaNNaNNaNT193000Z` straight into the feed. There is a regression test for exactly this.
+
+Discord's `status: "canceled"` is a *different* thing — that is the **whole series** being cancelled, handled as described below.
+
+**Whole-series cancellation** is handled in two deliberately different ways:
+
+- **Website (`expandRecurrences`)**: a `canceled` recurring event is clipped at `now` — occurrences that already happened still render (the cancellation is worth seeing), later ones are never generated. Without this the series would project struck-through chips into every future month forever, because `CANCELED` is terminal (the docs: "Once `status` is set to `COMPLETED` or `CANCELED`, the `status` can no longer be updated") and the RRULE carries no `UNTIL` (`end` is always null in practice — see below). The clip is `Math.min(to, now)`; when the window is entirely in the past it resolves to `to`, so historical months still expand normally.
 - **`.ics` feed (`ics.ts`)**: the event is kept, serialized as `STATUS:CANCELLED`, and **keeps its RRULE**. A subscriber sees the whole series marked cancelled rather than it silently vanishing. Do not "fix" this into a drop or an RRULE strip — both are worse for a subscriber than a visibly-cancelled event.
 
 `status: "completed"` gets a muted chip on the website but is **not** clipped: a completed event is not recurring (Discord only auto-completes an occurrence), so the status is inert for expansion.
@@ -169,6 +201,8 @@ Two edge cases the month-grid rendering handles on top of the recurrence expansi
 
 1. **Zero-duration events** (start == end, e.g. small announcements without an end time): the grid-cell date filter uses a half-open interval so an event whose start and end coincide with the day's start-of-day boundary still renders on that day. Without this guard the strict `end > dayStart` comparison would drop the chip entirely. See `buildMonthGrid` in `src/pages/Calendar.tsx`.
 2. **Variable-row month grids**: `cellCount` is derived from date values (`gridStartOffset + lastOfMonth.getDate() + daysFromSaturdayInMonth`), NOT from `(gridEnd - gridStart) / 86400_000`. Timestamp math crosses DST transitions (23- and 25-hour days) and rounds wrong, leaving the grid a few cells short. Iterate by date so each cell is exactly one calendar day.
+
+⚠️ **`recurrence_rule.start` can disagree with `scheduled_start_time`, and we currently ignore it.** Verified live on 2026-09-22: the "Software Team Meeting" event had `scheduled_start_time = 2026-09-27T17:30:00Z` while its `recurrence_rule.start = 2026-09-20T17:30:00Z` — Discord had already advanced the event's start to the next un-elapsed occurrence, while the rule still described the true series origin. `recurrence.ts` does not carry `start` through to the RRULE body, so the client feeds `scheduled_start_time` into `rrulestr` as `dtstart`. Measured effect on that event over a 2026-09-01..10-15 window: **dtstart=09-27 yields 3 occurrences (09-27, 10-04, 10-11); dtstart=09-20 yields 4 (09-20, 09-27, 10-04, 10-11).** The 09-20 occurrence is silently dropped. The `.ics` feed is unaffected for the same reason (clients anchor on `DTSTART`, so they simply never generate the earlier one). This is a real but low-severity data-loss-at-the-margin bug: it only bites for rules whose `INTERVAL`/`BYDAY` filter does not re-derive the dropped date, and only for series that started before the current period. Fixing it means threading `rule.start` into the payload and using it as `dtstart`, which changes the expanded set — do that deliberately, with tests, not incidentally. Note `General Body Meeting` had the two fields agreeing (`2026-09-29` both), so the disagreement is not universal — and an aligned `rule.start` coincides exactly with `scheduled_start_time`, suggesting `scheduled_start_time` marks the *next* occurrence while `rule.start` marks the series origin.
 
 Discord's RRULE subset (as of API v10 / 2026) is:
 
@@ -187,7 +221,8 @@ The `rrule` package handles the full RFC 5545 grammar, so all of the above varia
 - `src/test/components/CalendarSubscribe.test.tsx` — panel open/close, provider URLs, `.ics` download, and clipboard copy (async Clipboard API, `execCommand` fallback, and rejection handling).
 - `src/test/worker/ics.test.ts` — the ICS serializer: VCALENDAR envelope + CRLF endings, UTC/tz-offset timestamps, stable UIDs, zero-duration and null-end defaults, `STATUS:CANCELLED`, TEXT escaping, octet-based line folding (including multi-byte characters), RRULE passthrough + malformed-rule rejection, and unparseable-date skipping. **Imports `worker/src/ics.ts` by relative path** (`../../../worker/src/ics`) because the Worker lives outside `src/` — Jest's `testMatch` only picks up files under `src/`, so a test must live here to run.
 - `src/test/worker/recurrence.test.ts` — `formatRecurrenceRule`: weekly/daily/monthly-Nth-weekday/yearly conversion, every frequency code, null/unknown-frequency rejection, non-positive `interval` handling, out-of-range `by_weekday`/`by_month`/`by_month_day` dropping, `by_weekday`-over-`by_n_weekday` precedence, `UNTIL` from the rule's `end` (conversion, placement last, omission when absent, unparseable `end` dropped, and expansion actually bounded), and a round-trip asserting the emitted body expands correctly through `rrulestr`. Imports `worker/src/recurrence.ts` by relative path, same reason as `ics.test.ts`.
-- `src/test/worker/events.test.ts` — the **integration** suite: raw Discord payloads (documented snake_case shapes, numeric status/frequency, nested `entity_metadata`) -> `normalizeEvents` -> `buildCalendar` -> asserted RFC 5545 output, plus an `rrulestr` expansion. This is the only suite that exercises the seam between normalization and serialization; the two suites above test their units in isolation and cannot observe a break in between. It guards the original bug directly (a `recurrence_rule` read as the wrong type produced no `RRULE`); **verified by temporarily reintroducing the defect and confirming 5 of its 9 tests fail**, then restoring the fix.
+- `src/test/worker/events.test.ts` — the **integration** suite: raw Discord payloads (documented snake_case shapes, numeric status/frequency, nested `entity_metadata`) -> `normalizeEvents` -> `buildCalendar` -> asserted RFC 5545 output, plus an `rrulestr` expansion. This is the only suite that exercises the seam between normalization and serialization; the two suites above test their units in isolation and cannot observe a break in between. It guards the original bug directly (a `recurrence_rule` read as the wrong type produced no `RRULE`); **verified by temporarily reintroducing the defect and confirming 5 of its 9 tests fail**, then restoring the fix. It also covers the cancellation convention end-to-end (description -> `excludedDates` -> `EXDATE`), including that the EXDATE actually collides with a generated occurrence rather than merely appearing.
+- `src/test/worker/cancellations.test.ts` — `parseCancelledDates` (the documented two-line example, every label variant, multi-date/multi-line/dedup/sort, year resolution and explicit-year precedence, and the malformed cases: null input, unlabelled prose, `TBD`, Feb 30, month 13, day 32, non-leap Feb 29, non-month words) and `toExdateValue` (time-of-day borrowed from `DTSTART`, sub-second truncation, midnight fallback for an unparseable start, and the `NaNNaNNaN` malformed-date regression). Imports `worker/src/cancellations.ts` by relative path, same reason as `ics.test.ts`.
 
 Both follow the existing `LiveMap.test.tsx` patterns: `MemoryRouter` wrap, `mockFetchOnce` / `mockFetchSequence`, `flushMicrotasks()` to drain the `.then()` chain, restore `global.fetch` in `afterEach`.
 

@@ -10,8 +10,12 @@
  * Recurrence: Discord sends `recurrence_rule` as a structured object, not an
  * RRULE string. It is converted here (via `formatRecurrenceRule`) so the JSON
  * and .ics representations can never disagree about whether an event recurs.
+ *
+ * Per-occurrence cancellations are parsed from the description (see
+ * `cancellations.ts`) because Discord's API cannot express them.
  */
 
+import { parseCancelledDates } from "./cancellations";
 import { type DiscordRecurrenceRule, formatRecurrenceRule } from "./recurrence";
 
 /** One event in the payload the website consumes. */
@@ -28,6 +32,12 @@ export interface CalendarEvent {
     image: string | null; // fully-qualified CDN url, or null
     /** RFC 5545 RRULE body (without the leading "RRULE:"), or null. */
     recurrenceRule: string | null;
+    /**
+     * ISO `YYYY-MM-DD` dates whose occurrence is cancelled, parsed from the
+     * description's `Cancelled:` convention. Always an array (empty when the
+     * event has none) so consumers never have to null-check.
+     */
+    excludedDates: string[];
 }
 
 /** Shape of a Discord Guild Scheduled Event (only the fields we read). */
@@ -76,11 +86,17 @@ export function toCalendarEvent(e: DiscordGuildScheduledEvent): CalendarEvent {
     // returns null for anything unusable. isRecurring is derived from the
     // converted rule, so a rule we cannot express never claims recurs.
     const rule = formatRecurrenceRule(e.recurrence_rule);
+    const start = e.scheduled_start_time;
+    // The description may carry a `Cancelled:` line listing skipped dates.
+    // The event's own start year is the reference for dates written without
+    // one, so parsing does not depend on today's date.
+    const startYear = new Date(start).getUTCFullYear();
+    const excludedDates = parseCancelledDates(e.description, Number.isNaN(startYear) ? null : startYear);
     return {
         id: e.id,
         name: e.name,
         description: e.description ?? null,
-        start: e.scheduled_start_time,
+        start,
         end: e.scheduled_end_time ?? null,
         status: mapStatus(e.status),
         location: e.entity_metadata?.location ?? null,
@@ -88,6 +104,7 @@ export function toCalendarEvent(e: DiscordGuildScheduledEvent): CalendarEvent {
         isRecurring: rule !== null,
         image: buildCdnImageUrl(e),
         recurrenceRule: rule,
+        excludedDates,
     };
 }
 
