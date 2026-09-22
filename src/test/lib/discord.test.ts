@@ -9,6 +9,7 @@ import {
     expandRecurrences,
     extractLocationFromDescription,
     fetchEvents,
+    isLocationUrl,
     webcalUrl,
 } from "../../lib/discord";
 
@@ -317,6 +318,21 @@ describe("discord events client", () => {
             });
         });
 
+        it("reads a URL value from the labeled line", () => {
+            expect(extractLocationFromDescription("Standup.\nLocation: https://us02web.zoom.us/j/123456789")).toEqual({
+                location: "https://us02web.zoom.us/j/123456789",
+                description: "Standup.",
+            });
+        });
+
+        it("accepts a labeled line whose value is bolded", () => {
+            // The team's actual convention: `Location: **Lavery Hall 335**`.
+            expect(extractLocationFromDescription("Location: **Lavery Hall 335**")).toEqual({
+                location: "Lavery Hall 335",
+                description: null,
+            });
+        });
+
         it("returns a null description when the labeled line was the only content", () => {
             expect(extractLocationFromDescription("Location: Holden Auditorium")).toEqual({
                 location: "Holden Auditorium",
@@ -324,18 +340,65 @@ describe("discord events client", () => {
             });
         });
 
-        it("falls back to the first bold span and removes just the span", () => {
-            expect(extractLocationFromDescription("Meet at **Newman Library** for the build night.")).toEqual({
-                location: "Newman Library",
-                description: "Meet at for the build night.",
+        it("ignores an UNLABELED bold span entirely", () => {
+            // A bare bold span is never a location. It used to be, which meant
+            // emphasis like the first line below was rendered as the venue
+            // (and geocoded) while being deleted from the description.
+            const desc = `**This event is completely optional.**
+
+Pulaski County High School is coming to tour the Ware Lab and we need a few volunteers to come and talk about what we do.`;
+            expect(extractLocationFromDescription(desc)).toEqual({
+                location: null,
+                description: desc,
             });
         });
 
-        it("returns the description unchanged when no location pattern matches", () => {
+        it.each([
+            // Bolded emphasis.
+            ["This event is completely optional."],
+            ["This event is completely optional.", "Pulaski County High School is coming to tour."],
+            ["VOLUNTEERS NEEDED"],
+            ["Sign up here"],
+            ["Thanks everyone!"],
+            // A real venue, but UNLABELED -- still not a location.
+            ["Lavery Hall 335"],
+            ["Newman Library"],
+            ["1830 Alumni Mall"],
+        ])("treats unlabeled bold %j as having no location", (span) => {
+            const desc = `**${span}**\n\nCome help out.`;
+            const result = extractLocationFromDescription(desc);
+            expect(result.location).toBeNull();
+            expect(result.description).toBe(desc);
+        });
+
+        it("returns the description unchanged when no labeled line is present", () => {
             expect(extractLocationFromDescription("Zoom link in Discord.")).toEqual({
                 location: null,
                 description: "Zoom link in Discord.",
             });
+        });
+    });
+
+    describe("isLocationUrl", () => {
+        it.each([
+            "https://us02web.zoom.us/j/123456789",
+            "http://example.com/room",
+            "https://example.com/path?query=1#frag",
+            "  https://example.com  ", // trimmed
+        ])("treats %j as a URL", (v) => {
+            expect(isLocationUrl(v)).toBe(true);
+        });
+
+        it.each([
+            "Lavery Hall 335",
+            "1830 Alumni Mall",
+            "Holden Auditorium, Room 101",
+            "www.example.com", // no scheme -> treated as a place, not a link
+            "Zoom",
+            "https://", // no host
+            "see https://example.com", // not the whole value
+        ])("treats %j as a place, not a URL", (v) => {
+            expect(isLocationUrl(v)).toBe(false);
         });
     });
 

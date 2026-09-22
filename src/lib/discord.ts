@@ -191,23 +191,38 @@ function localDateKey(d: Date): string {
 }
 
 /**
- * Extract a human-readable physical location from the free-text Discord
- * event description, and remove the matched text from the description so the
- * location isn't rendered twice (once in the event modal's location row and
- * again in the description body). Used because the team's events are
- * structured as voice-channel events (so role scoping can be applied during
- * signup), which leaves Discord's native `entity_metadata.location` empty;
- * the physical meetup location is written into the description instead.
+ * True when a location value is a URL rather than a physical place.
  *
- * Heuristics, in priority order:
- *  1. A line labeled `Location:` or `Where:` (case-insensitive) -- the whole
- *     line is removed from the description.
- *  2. The first bold span (`**...**`) -- the team's convention is to bold
- *     the venue; just the span is removed.
+ * The team's `Location:` line holds either a place ("Lavery Hall 335") or a
+ * link (a Zoom room, a Discord voice channel, a Google Maps pin). Links get
+ * rendered as a clickable anchor instead of being geocoded -- Nominatim can
+ * never resolve them, so geocoding would burn a request per modal open and
+ * render nothing.
+ */
+export function isLocationUrl(location: string): boolean {
+    return /^https?:\/\/\S+$/i.test(location.trim());
+}
+
+/**
+ * Extract the physical location from the free-text Discord event description,
+ * and remove the matched line from the description so the location isn't
+ * rendered twice (once in the event modal's location row, again in the body).
  *
- * Returns `{ location, description }`. `location` is null when no pattern
- * matches (the caller then keeps "No location specified" and renders no
- * map). `description` is null when nothing meaningful remains after removal.
+ * Used because the team's events are structured as voice-channel events (so
+ * role scoping can be applied during signup), which leaves Discord's native
+ * `entity_metadata.location` empty; the meetup location is written into the
+ * description instead.
+ *
+ * ⚠️ The ONLY accepted form is a labeled line: `Location: <value>`, or
+ * `Where:` as a synonym. `<value>` is either a place or a URL. Anything else
+ * means the event has no location -- do NOT reintroduce a "first bold span"
+ * or similar guess. The team bolds emphasis too
+ * (`**This event is completely optional.**`), and inferring from an
+ * unlabeled span rendered that sentence as the venue (and mapped it).
+ *
+ * Returns `{ location, description }`. `location` is null when no labeled
+ * line is present. `description` is null when nothing meaningful remains
+ * after the line is removed.
  */
 export function extractLocationFromDescription(description: string | null): {
     location: string | null;
@@ -229,22 +244,8 @@ export function extractLocationFromDescription(description: string | null): {
                 .join("\n")
                 .replace(/\n{3,}/g, "\n\n")
                 .trim();
-            return { location: value, description: rest || null };
+            return { location: value || null, description: rest || null };
         }
-    }
-
-    const bold = description.match(/\*\*([^*\n]+)\*\*/);
-    if (bold?.[1]) {
-        const value = clean(bold[1]);
-        // Remove just the bold span, then tidy leftover double spaces and
-        // spaces stranded before punctuation.
-        const stripped = description
-            .replace(bold[0], "")
-            .replace(/[ \t]{2,}/g, " ")
-            .replace(/[ \t]+([.,!?;:])/g, "$1")
-            .replace(/\n{3,}/g, "\n\n")
-            .trim();
-        return { location: value, description: stripped || null };
     }
 
     return { location: null, description };

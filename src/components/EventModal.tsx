@@ -1,6 +1,6 @@
-import { Ban, CalendarDays, MapPin, Repeat, X } from "lucide-react";
+import { Ban, CalendarDays, ExternalLink, MapPin, Repeat, X } from "lucide-react";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
-import { describeRecurrence, type ExpandedOccurrence } from "../lib/discord";
+import { describeRecurrence, type ExpandedOccurrence, isLocationUrl } from "../lib/discord";
 import EventMap from "./EventMap";
 
 interface EventModalProps {
@@ -129,11 +129,31 @@ export default function EventModal({ occurrence, onClose }: EventModalProps) {
                         )}
                         <span className="event-modal__meta-row">
                             <MapPin size={15} className="event-modal__meta-icon" aria-hidden="true" />
-                            {event.location ?? "No location specified"}
+                            {event.location == null ? (
+                                "No location specified"
+                            ) : isLocationUrl(event.location) ? (
+                                // A link (Zoom room, Discord channel, Maps pin).
+                                // Rendering it as an anchor beats geocoding it,
+                                // which could never resolve.
+                                <a
+                                    href={event.location}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="event-modal__location-link"
+                                >
+                                    {event.location}
+                                    <ExternalLink size={12} aria-hidden="true" />
+                                    <span className="sr-only"> (opens in a new tab)</span>
+                                </a>
+                            ) : (
+                                event.location
+                            )}
                         </span>
                     </div>
 
-                    {event.location && <EventMap location={event.location} />}
+                    {/* Only a physical place gets a map; a link renders as an
+                        anchor in the row above instead. */}
+                    {event.location && !isLocationUrl(event.location) && <EventMap location={event.location} />}
 
                     {event.description && (
                         <p className="event-modal__description">{renderDiscordMarkdown(event.description)}</p>

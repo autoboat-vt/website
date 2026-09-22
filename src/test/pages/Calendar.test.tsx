@@ -336,6 +336,40 @@ describe("Calendar page", () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
+    it("renders a URL-valued location as a link instead of a map", async () => {
+        // `Location:` holds either a place or a link. A link must not be
+        // geocoded -- Nominatim can't resolve it, so it would fire a request
+        // per modal open and render nothing.
+        const url = "https://us02web.zoom.us/j/123456789";
+        const events = [
+            sampleEvent({
+                id: "evt-url",
+                name: "Remote Standup",
+                description: `Standup.\nLocation: ${url}`,
+                start: currentMonth(10),
+                location: url,
+            }),
+        ];
+        mockFetchOnce(events);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        fireEvent.click(screen.getByRole("button", { name: /Remote Standup/i }));
+
+        const dlg = within(screen.getByRole("dialog"));
+        const link = dlg.getByRole("link", { name: new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) });
+        expect(link).toHaveAttribute("href", url);
+        expect(link).toHaveAttribute("target", "_blank");
+        expect(link).toHaveAttribute("rel", "noopener noreferrer");
+
+        // No map, and therefore no geocode request beyond the events fetch.
+        expect(dlg.queryByTestId("map-container")).not.toBeInTheDocument();
+        const fetchMock = global.fetch as FetchMock;
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it("shows when a recurring event repeats, under the date and time", async () => {
         // A monthly Nth-weekday rule so the month grid renders exactly one
         // chip -- a weekly rule would produce several with the same name.

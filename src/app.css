@@ -1344,12 +1344,45 @@
         align-items: center;
         gap: 0.5rem;
     }
+    /* A URL-valued location. Long links (Zoom rooms, Maps pins) must be able
+       to wrap rather than overflow the modal, so the anchor is allowed to
+       break mid-string. Deliberately inline text rather than a flex row: as
+       a flex row the trailing external-link glyph stayed vertically centred
+       on the whole block, so on a two-line URL it floated into the gap
+       between the lines instead of riding the end of the text. */
+    .event-modal__location-link {
+        display: inline;
+        color: var(--color-fontcolor);
+        text-decoration: underline;
+        text-decoration-color: var(--color-accent);
+        text-underline-offset: 3px;
+        overflow-wrap: anywhere;
+    }
+    .event-modal__location-link:hover {
+        color: var(--color-hovercolor);
+        text-decoration-color: var(--color-accent-2);
+    }
+    .event-modal__location-link svg {
+        display: inline-block;
+        vertical-align: -0.15em;
+    }
+    /* A linked location can wrap, so the row must top-align and the pin has to
+       be nudged onto the FIRST line -- left centred by the row's default
+       `align-items: center` it drifts a full line down (12px at two lines).
+       The offset is half the leading: first line box is `1lh`, pin is 15px.
+       Declared last among the icon rules so specificity stays ascending. */
     .event-modal__meta-icon {
         flex-shrink: 0;
         color: var(--color-accent);
     }
     .dark .event-modal__meta-icon {
         color: #b8345c;
+    }
+    .event-modal__meta-row:has(.event-modal__location-link) {
+        align-items: flex-start;
+    }
+    .event-modal__meta-row:has(.event-modal__location-link) .event-modal__meta-icon {
+        margin-top: calc((1lh - 15px) / 2);
     }
     .event-modal__description {
         margin: 0 0 1.25rem;
