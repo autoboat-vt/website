@@ -1,6 +1,7 @@
 import { rrulestr } from "rrule";
 import { type DiscordGuildScheduledEvent, normalizeEvents } from "../../../worker/src/events";
 import { buildCalendar } from "../../../worker/src/ics";
+import { type CalendarEvent, describeRecurrence } from "../../lib/discord";
 
 /**
  * Integration tests for the full Discord-payload -> calendar-feed path.
@@ -194,5 +195,49 @@ describe("Discord payload -> .ics feed", () => {
         expect(lines.filter((l) => l === "BEGIN:VEVENT")).toHaveLength(2);
         expect(lines.filter((l) => l.startsWith("RRULE"))).toHaveLength(1);
         expect(lines).toContain("RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=WE");
+    });
+
+    it("bounds a series that ends, via UNTIL from the rule's end date", () => {
+        const lines = feedFrom([
+            discordEvent({
+                recurrence_rule: {
+                    start: "2026-10-06T19:00:00.000Z",
+                    end: "2026-11-03T19:00:00.000Z",
+                    frequency: 2, // WEEKLY
+                    interval: 1,
+                    by_weekday: [1], // TUESDAY
+                },
+            }),
+        ]);
+        expect(lines).toContain("RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=TU;UNTIL=20261103T190000Z");
+    });
+
+    it("leaves a series without an end date unbounded", () => {
+        const lines = feedFrom([
+            discordEvent({
+                recurrence_rule: { start: "2026-10-06T19:00:00.000Z", frequency: 2, interval: 1, by_weekday: [1] },
+            }),
+        ]);
+        const rrule = lines.find((l) => l.startsWith("RRULE"));
+        expect(rrule).toBe("RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=TU");
+        expect(rrule).not.toContain("UNTIL");
+    });
+
+    it("reports the ending series in the recurrence description", () => {
+        const [event] = normalizeEvents([
+            discordEvent({
+                recurrence_rule: {
+                    start: "2026-10-06T19:00:00.000Z",
+                    end: "2026-11-03T19:00:00.000Z",
+                    frequency: 2,
+                    interval: 1,
+                    by_weekday: [1],
+                },
+            }),
+        ]);
+        // describeRecurrence (client-side) renders this; assert the converted
+        // body is what feeds it.
+        expect(event?.recurrenceRule).toContain("UNTIL=20261103T190000Z");
+        expect(describeRecurrence(event as CalendarEvent)).toContain("until November 3, 2026");
     });
 });

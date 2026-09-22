@@ -88,6 +88,44 @@ describe("formatRecurrenceRule", () => {
         );
     });
 
+    it("converts the rule's end date into a UTC UNTIL", () => {
+        expect(formatRecurrenceRule(rule({ by_weekday: [1], end: "2026-11-03T19:00:00.000Z" }))).toBe(
+            "FREQ=WEEKLY;INTERVAL=1;BYDAY=TU;UNTIL=20261103T190000Z",
+        );
+    });
+
+    it("places UNTIL last so it terminates the rule", () => {
+        const body = formatRecurrenceRule(
+            rule({ frequency: 0, interval: 1, by_month: [7], by_month_day: [24], end: "2027-07-24T19:00:00.000Z" }),
+        );
+        expect(body?.endsWith(";UNTIL=20270724T190000Z")).toBe(true);
+        // Exactly one UNTIL, at the end.
+        expect(body?.match(/UNTIL=/g)).toHaveLength(1);
+    });
+
+    it("omits UNTIL when there is no end date", () => {
+        expect(formatRecurrenceRule(rule({ by_weekday: [1] }))).not.toContain("UNTIL");
+        expect(formatRecurrenceRule(rule({ by_weekday: [1], end: null }))).not.toContain("UNTIL");
+    });
+
+    it("drops an unparseable end date rather than emitting a bad UNTIL", () => {
+        // An unbounded rule is a better failure than a malformed UNTIL that
+        // makes clients reject the entire RRULE.
+        expect(formatRecurrenceRule(rule({ by_weekday: [1], end: "not-a-date" }))).toBe(
+            "FREQ=WEEKLY;INTERVAL=1;BYDAY=TU",
+        );
+    });
+
+    it("bounds expansion at UNTIL", () => {
+        const body = formatRecurrenceRule(rule({ by_weekday: [4], end: "2026-10-16T19:00:00.000Z" }));
+        const parsed = rrulestr(`RRULE:${body}`, { dtstart: new Date("2026-10-02T19:00:00.000Z") });
+        const dates = parsed
+            .between(new Date("2026-10-01T00:00:00.000Z"), new Date("2027-10-01T00:00:00.000Z"), true)
+            .map((d) => d.getUTCDate());
+        // Fridays Oct 2, 9, 16 -- then stop. Unbounded would run for a year.
+        expect(dates).toEqual([2, 9, 16]);
+    });
+
     it("produces rules the rrule package can parse and expand", () => {
         // The real contract: both consumers feed the result to rrulestr, so
         // an emitted body must be a valid RRULE rather than merely look right.

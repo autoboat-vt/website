@@ -301,6 +301,51 @@ describe("Calendar page", () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
+    it("shows when a recurring event repeats, under the date and time", async () => {
+        // A monthly Nth-weekday rule so the month grid renders exactly one
+        // chip -- a weekly rule would produce several with the same name.
+        const events = [
+            sampleEvent({
+                id: "rec-1",
+                name: "Monthly Review",
+                start: currentMonth(6),
+                isRecurring: true,
+                recurrenceRule: "FREQ=MONTHLY;INTERVAL=1;BYDAY=4WE",
+            }),
+        ];
+        mockFetchOnce(events);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        fireEvent.click(screen.getByRole("button", { name: /Monthly Review/i }));
+
+        const dlg = within(screen.getByRole("dialog"));
+        const rows = dlg.getAllByText(/./, { selector: ".event-modal__meta-row" });
+
+        // The repeat line sits directly after the date/time row.
+        const recurrenceRow = dlg.getByText("Every month on the 4th Wednesday");
+        expect(recurrenceRow).toHaveClass("event-modal__meta-row");
+        expect(rows[1]).toBe(recurrenceRow);
+    });
+
+    it("omits the repeat line for a one-off event", async () => {
+        const events = [sampleEvent({ id: "one-off", name: "Kickoff", start: currentMonth(6) })];
+        mockFetchOnce(events);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        fireEvent.click(screen.getByRole("button", { name: /Kickoff/i }));
+
+        const dlg = within(screen.getByRole("dialog"));
+        expect(dlg.queryByText(/^Every /)).not.toBeInTheDocument();
+        // The date/time row and the location row are the only meta rows.
+        expect(dlg.getAllByText(/./, { selector: ".event-modal__meta-row" })).toHaveLength(2);
+    });
+
     it("closes the modal on the close button, then reopens on the next click", async () => {
         const events = [
             sampleEvent({

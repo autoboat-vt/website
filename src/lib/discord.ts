@@ -323,3 +323,33 @@ export function expandRecurrences(events: CalendarEvent[], from: Date, to: Date)
     out.sort((a, b) => a.start.getTime() - b.start.getTime());
     return out;
 }
+
+/**
+ * Human-readable description of how often an event repeats, e.g.
+ * "Every week on Wednesday" or "Every 2 weeks on Wednesday". Returns null for
+ * a non-recurring event (or one whose rule is missing/unparseable), so callers
+ * can render a conditional line without re-checking `isRecurring`.
+ *
+ * The phrasing comes from the `rrule` package's own `toText()`, which already
+ * handles the whole grammar (intervals, ordinal weekdays, month+day, and the
+ * "every weekday" special case) and stays in sync with the expansion logic
+ * above rather than duplicating a translation table here. Its lowercase
+ * sentence is capitalized for display; the rule's punctuation is left alone.
+ */
+export function describeRecurrence(event: CalendarEvent): string | null {
+    if (!event.isRecurring || !event.recurrenceRule) return null;
+    // Require an explicit FREQ. `rrulestr` does not throw on a rule without
+    // one -- it silently defaults to YEARLY -- which would describe a
+    // malformed rule as "Every year" instead of admitting we don't know.
+    if (!/^FREQ=/i.test(event.recurrenceRule)) return null;
+    try {
+        const rule = rrulestr(`RRULE:${event.recurrenceRule}`, { dtstart: new Date(event.start) });
+        const text = rule.toText().trim();
+        if (!text) return null;
+        return text.charAt(0).toUpperCase() + text.slice(1);
+    } catch {
+        // Same posture as expandRecurrences: an unparseable rule degrades to
+        // "no description" rather than surfacing an error to the user.
+        return null;
+    }
+}

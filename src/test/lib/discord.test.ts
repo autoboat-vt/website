@@ -2,6 +2,7 @@ import {
     type CalendarEvent,
     DISCORD_GUILD_ID,
     DiscordError,
+    describeRecurrence,
     discordEventUrl,
     EVENTS_ICS_URL,
     EVENTS_URL,
@@ -414,6 +415,76 @@ describe("discord events client", () => {
             const starts = out.map((o) => o.start.getTime());
             const sorted = [...starts].sort((a, b) => a - b);
             expect(starts).toEqual(sorted);
+        });
+    });
+
+    describe("describeRecurrence", () => {
+        /** Build a recurring event around a fixed Wednesday base start. */
+        function recurring(rule: string | null, isRecurring = true): CalendarEvent {
+            return sampleEvent({
+                id: "rec",
+                name: "Weekly standup",
+                start: "2026-10-07T19:00:00.000Z", // A Wednesday
+                isRecurring,
+                recurrenceRule: rule,
+            });
+        }
+
+        it("describes a plain weekly rule", () => {
+            expect(describeRecurrence(recurring("FREQ=WEEKLY;INTERVAL=1;BYDAY=WE"))).toBe("Every week on Wednesday");
+        });
+
+        it("describes an every-other-week rule", () => {
+            expect(describeRecurrence(recurring("FREQ=WEEKLY;INTERVAL=2;BYDAY=WE"))).toBe("Every 2 weeks on Wednesday");
+        });
+
+        it("describes a weekday rule", () => {
+            expect(describeRecurrence(recurring("FREQ=DAILY;INTERVAL=1;BYDAY=MO,TU,WE,TH,FR"))).toBe("Every weekday");
+        });
+
+        it("describes a monthly Nth-weekday rule", () => {
+            expect(describeRecurrence(recurring("FREQ=MONTHLY;INTERVAL=1;BYDAY=4WE"))).toBe(
+                "Every month on the 4th Wednesday",
+            );
+        });
+
+        it("describes a yearly month-and-day rule", () => {
+            expect(describeRecurrence(recurring("FREQ=YEARLY;INTERVAL=1;BYMONTH=7;BYMONTHDAY=24"))).toBe(
+                "Every July on the 24th",
+            );
+        });
+
+        it("handles a bare frequency with no BYDAY", () => {
+            expect(describeRecurrence(recurring("FREQ=WEEKLY"))).toBe("Every week");
+        });
+
+        it("capitalizes only the first letter", () => {
+            const text = describeRecurrence(recurring("FREQ=DAILY;INTERVAL=1;BYDAY=SA,SU"));
+            // rrule's own phrasing is lowercase-first with capitalized weekday
+            // names, e.g. "every day on Saturday, Sunday".
+            expect(text?.startsWith("Every")).toBe(true);
+            expect(text).toBe("Every day on Saturday, Sunday");
+        });
+
+        it("returns null for a non-recurring event", () => {
+            expect(
+                describeRecurrence(sampleEvent({ id: "1", name: "One-off", start: "2026-10-07T19:00:00Z" })),
+            ).toBeNull();
+        });
+
+        it("returns null when the flag is set but no rule is present", () => {
+            expect(describeRecurrence(recurring(null))).toBeNull();
+        });
+
+        it("returns null for an unparseable rule rather than throwing", () => {
+            expect(describeRecurrence(recurring("NOT_AN_RRULE"))).toBeNull();
+        });
+
+        it("returns null for a rule with no recognizable frequency", () => {
+            // rrulestr defaults a missing FREQ to YEARLY rather than throwing,
+            // so this must be rejected explicitly to avoid claiming the event
+            // repeats yearly.
+            expect(describeRecurrence(recurring("INTERVAL=1"))).toBeNull();
         });
     });
 });

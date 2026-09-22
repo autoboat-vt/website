@@ -1,6 +1,6 @@
-import { CalendarDays, MapPin, X } from "lucide-react";
+import { CalendarDays, MapPin, Repeat, X } from "lucide-react";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
-import type { ExpandedOccurrence } from "../lib/discord";
+import { describeRecurrence, type ExpandedOccurrence } from "../lib/discord";
 import EventMap from "./EventMap";
 
 interface EventModalProps {
@@ -74,6 +74,7 @@ export default function EventModal({ occurrence, onClose }: EventModalProps) {
     if (!mounted || !occurrence) return null;
 
     const { event, start } = occurrence;
+    const recurrence = describeRecurrence(event);
 
     const handleBackdropClick = (e: MouseEvent<HTMLDivElement>) => {
         if (e.target === e.currentTarget) onClose();
@@ -108,6 +109,12 @@ export default function EventModal({ occurrence, onClose }: EventModalProps) {
                             <CalendarDays size={15} className="event-modal__meta-icon" aria-hidden="true" />
                             {formatLongDate(start)} at {formatTime(start)}
                         </span>
+                        {recurrence && (
+                            <span className="event-modal__meta-row">
+                                <Repeat size={15} className="event-modal__meta-icon" aria-hidden="true" />
+                                {recurrence}
+                            </span>
+                        )}
                         <span className="event-modal__meta-row">
                             <MapPin size={15} className="event-modal__meta-icon" aria-hidden="true" />
                             {event.location ?? "No location specified"}
