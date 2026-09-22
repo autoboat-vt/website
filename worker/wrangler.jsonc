@@ -24,6 +24,11 @@
         // the /calendar.ics feed. Public, non-secret.
         "CALENDAR_NAME": "AutoBoat at Virginia Tech"
     },
+    // Smart placement is recommended for Workers that are latency-sensitive and
+    // need to be close to users. This is the case for our Discord events API.
+    "placement": {
+        "mode": "smart"
+    },
     // KV namespace for the events cache. Create the real IDs with:
     //     wrangler kv namespace create EVENTS_KV
     //     wrangler kv namespace create EVENTS_KV --preview
