@@ -136,6 +136,35 @@ export function parseCancelledDates(description: string | null | undefined, refe
 }
 
 /**
+ * Remove `Cancelled:` note lines from a description, returning null when
+ * nothing meaningful remains.
+ *
+ * The dates are surfaced as cancelled chips on the calendar, so the raw note
+ * line is redundant (and reads as noise) in the modal body. Only *labelled*
+ * lines are removed -- the same `LABEL_RE` the parser uses, so the two can
+ * never disagree about what counts as a note.
+ *
+ * Mirrors `extractLocationFromDescription`'s tidying: collapse the blank-line
+ * runs and stray whitespace left behind by the removal.
+ */
+export function stripCancelledNote(description: string | null | undefined): string | null {
+    if (!description) return null;
+
+    const kept = description.split(/\r?\n/).filter((line) => !LABEL_RE.test(line));
+    if (kept.length === description.split(/\r?\n/).length) return description;
+
+    // Collapse any blank-line runs the removal left behind, plus stranded
+    // spaces before punctuation on the now-adjacent lines.
+    const cleaned = kept
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .replace(/[ \t]+$/gm, "")
+        .replace(/[ \t]{2,}/g, " ")
+        .trim();
+    return cleaned || null;
+}
+
+/**
  * Format an ISO date as an RFC 5545 UTC date-time, borrowing the time of day
  * from the event's own start so the `EXDATE` lands exactly on the generated
  * occurrence. Calendar clients match `EXDATE` against `DTSTART` by value, so

@@ -84,7 +84,7 @@ function sampleEvent(partial: Partial<CalendarEvent> & Pick<CalendarEvent, "id" 
         isRecurring: false,
         image: null,
         recurrenceRule: null,
-        excludedDates: [],
+        cancelledDates: [],
         ...partial,
     };
 }
@@ -329,6 +329,113 @@ describe("Calendar page", () => {
         const recurrenceRow = dlg.getByText("Every month on the 4th Wednesday");
         expect(recurrenceRow).toHaveClass("event-modal__meta-row");
         expect(rows[1]).toBe(recurrenceRow);
+    });
+
+    /**
+     * Per-occurrence cancellations (the description's `Cancelled:` notes,
+     * parsed by the Worker into `cancelledDates`). The occurrence is still
+     * SHOWN, styled as cancelled, so a visitor sees the change; the .ics feed
+     * is what omits it.
+     */
+    describe("per-occurrence cancellations", () => {
+        /** A weekly rule whose first occurrence is cancelled. */
+        function cancelledWeekly(id: string, name: string, cancelledDates: string[]) {
+            return sampleEvent({
+                id,
+                name,
+                start: currentMonth(6),
+                isRecurring: true,
+                recurrenceRule: "FREQ=WEEKLY;INTERVAL=1",
+                cancelledDates,
+            });
+        }
+
+        it("renders the cancelled occurrence with the cancelled chip style", async () => {
+            // Cancel the occurrence on the 6th, which is the one on screen.
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, "0");
+            const events = [cancelledWeekly("c1", "Standup", [`${y}-${m}-06`])];
+            mockFetchOnce(events);
+            const { container } = renderCalendar();
+            await act(async () => {
+                await flushMicrotasks();
+            });
+
+            // The chip is present (not dropped) and marked cancelled.
+            const chips = container.querySelectorAll(".calendar-event--canceled");
+            expect(chips.length).toBeGreaterThan(0);
+            expect(container.textContent).toContain("Standup");
+        });
+
+        it("does not mark a non-cancelled occurrence", async () => {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, "0");
+            // Cancel a date that is not rendered in this window.
+            const events = [cancelledWeekly("c2", "Standup", [`${y}-${m}-28`])];
+            mockFetchOnce(events);
+            const { container } = renderCalendar();
+            await act(async () => {
+                await flushMicrotasks();
+            });
+
+            const cancelled = container.querySelectorAll(".calendar-event--canceled");
+            const all = container.querySelectorAll(".calendar-event");
+            expect(all.length).toBeGreaterThan(0);
+            expect(cancelled.length).toBeLessThan(all.length);
+        });
+
+        it("shows a cancellation notice in the modal", async () => {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, "0");
+            const events = [cancelledWeekly("c3", "Cancelled Standup", [`${y}-${m}-06`])];
+            mockFetchOnce(events);
+            const { container } = renderCalendar();
+            await act(async () => {
+                await flushMicrotasks();
+            });
+
+            const chip = container.querySelector(".calendar-event--canceled");
+            expect(chip).not.toBeNull();
+            await act(async () => {
+                fireEvent.click(chip as Element);
+            });
+
+            const dlg = within(screen.getByRole("dialog"));
+            expect(dlg.getByText("This occurrence was cancelled")).toBeInTheDocument();
+        });
+
+        it("does not show a cancellation notice for a normal occurrence", async () => {
+            const events = [sampleEvent({ id: "ok", name: "Normal Meeting", start: currentMonth(6) })];
+            mockFetchOnce(events);
+            renderCalendar();
+            await act(async () => {
+                await flushMicrotasks();
+            });
+
+            fireEvent.click(screen.getByRole("button", { name: /Normal Meeting/i }));
+            const dlg = within(screen.getByRole("dialog"));
+            expect(dlg.queryByText(/was cancelled/)).not.toBeInTheDocument();
+        });
+
+        it("shows the series-level notice when the whole event is canceled", async () => {
+            // Distinct from a per-occurrence cancellation: Discord status
+            // canceled means the entire series is off.
+            const events = [
+                sampleEvent({ id: "dead", name: "Dead Series", start: currentMonth(6), status: "canceled" }),
+            ];
+            mockFetchOnce(events);
+            renderCalendar();
+            await act(async () => {
+                await flushMicrotasks();
+            });
+
+            fireEvent.click(screen.getByRole("button", { name: /Dead Series/i }));
+            const dlg = within(screen.getByRole("dialog"));
+            expect(dlg.getByText("This event was cancelled")).toBeInTheDocument();
+        });
     });
 
     it("omits the repeat line for a one-off event", async () => {

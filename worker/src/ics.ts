@@ -14,6 +14,13 @@
  *
  * Everything is serialized in UTC (`...Z` timestamps). Calendar clients
  * render those in the viewer's local timezone.
+ *
+ * Per-occurrence cancellations are handled by *omitting* them: the dates from
+ * the description's `Cancelled:` note become `EXDATE` entries, so a subscriber
+ * simply never sees those occurrences. The website takes the opposite view --
+ * it renders them as visibly-cancelled chips -- because a visitor scanning the
+ * month grid benefits from knowing a meeting was called off, whereas a
+ * subscribed calendar should stay clean.
  */
 
 import { toExdateValue } from "./cancellations";
@@ -34,10 +41,10 @@ export interface IcsEvent {
     recurrenceRule: string | null;
     /**
      * ISO `YYYY-MM-DD` dates whose occurrence is cancelled. Emitted as
-     * `EXDATE` so subscribers' calendar apps drop them. Optional: an event
+     * `EXDATE` so subscribers' calendar apps omit them. Optional: an event
      * with no cancellations may omit the field entirely.
      */
-    excludedDates?: string[];
+    cancelledDates?: string[];
 }
 
 export interface IcsOptions {
@@ -171,9 +178,11 @@ function buildEvent(event: IcsEvent, options: IcsOptions, now: Date): string[] {
     }
 
     // Per-occurrence cancellations parsed from the description's `Cancelled:`
-    // convention. EXDATE only makes sense alongside an RRULE -- without one
-    // there are no generated occurrences to exclude -- so it is emitted in
-    // the same branch and deliberately not on one-off events.
+    // convention. A subscriber should not see a meeting that was called off,
+    // so these dates are excluded rather than described. EXDATE only makes
+    // sense alongside an RRULE -- without one there are no generated
+    // occurrences to exclude -- so it is emitted in the same branch and
+    // deliberately not on one-off events.
     //
     // Each value borrows the event's own DTSTART time-of-day: clients match
     // EXDATE against DTSTART by value, so a midnight timestamp would fail to
@@ -181,7 +190,7 @@ function buildEvent(event: IcsEvent, options: IcsOptions, now: Date): string[] {
     // emitted, since a malformed EXDATE can make some clients reject the
     // whole VEVENT.
     if (event.isRecurring && event.recurrenceRule) {
-        const exdates = (event.excludedDates ?? [])
+        const exdates = (event.cancelledDates ?? [])
             .map((d) => toExdateValue(d, event.start))
             .filter((v): v is string => v !== null);
         if (exdates.length > 0) lines.push(prop("EXDATE", exdates.join(",")));

@@ -12,10 +12,11 @@
  * and .ics representations can never disagree about whether an event recurs.
  *
  * Per-occurrence cancellations are parsed from the description (see
- * `cancellations.ts`) because Discord's API cannot express them.
+ * `cancellations.ts`) because Discord's API cannot express them. The note
+ * line is stripped from the description here so it is not rendered twice.
  */
 
-import { parseCancelledDates } from "./cancellations";
+import { parseCancelledDates, stripCancelledNote } from "./cancellations";
 import { type DiscordRecurrenceRule, formatRecurrenceRule } from "./recurrence";
 
 /** One event in the payload the website consumes. */
@@ -34,10 +35,11 @@ export interface CalendarEvent {
     recurrenceRule: string | null;
     /**
      * ISO `YYYY-MM-DD` dates whose occurrence is cancelled, parsed from the
-     * description's `Cancelled:` convention. Always an array (empty when the
-     * event has none) so consumers never have to null-check.
+     * description's `Cancelled:` convention. The website renders these as
+     * cancelled chips (they are shown, not hidden) and the `.ics` feed omits
+     * them entirely. Always an array so consumers never have to null-check.
      */
-    excludedDates: string[];
+    cancelledDates: string[];
 }
 
 /** Shape of a Discord Guild Scheduled Event (only the fields we read). */
@@ -91,11 +93,15 @@ export function toCalendarEvent(e: DiscordGuildScheduledEvent): CalendarEvent {
     // The event's own start year is the reference for dates written without
     // one, so parsing does not depend on today's date.
     const startYear = new Date(start).getUTCFullYear();
-    const excludedDates = parseCancelledDates(e.description, Number.isNaN(startYear) ? null : startYear);
+    const cancelledDates = parseCancelledDates(e.description, Number.isNaN(startYear) ? null : startYear);
+    // Strip the note from the description: the dates are surfaced as chips on
+    // the calendar, so leaving the raw line in would render them twice and
+    // leak the convention into the modal body.
+    const description = stripCancelledNote(e.description ?? null);
     return {
         id: e.id,
         name: e.name,
-        description: e.description ?? null,
+        description,
         start,
         end: e.scheduled_end_time ?? null,
         status: mapStatus(e.status),
@@ -104,7 +110,7 @@ export function toCalendarEvent(e: DiscordGuildScheduledEvent): CalendarEvent {
         isRecurring: rule !== null,
         image: buildCdnImageUrl(e),
         recurrenceRule: rule,
-        excludedDates,
+        cancelledDates,
     };
 }
 

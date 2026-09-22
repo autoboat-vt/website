@@ -53,7 +53,7 @@ function sampleEvent(partial: Partial<CalendarEvent> & Pick<CalendarEvent, "id" 
         isRecurring: false,
         image: null,
         recurrenceRule: null,
-        excludedDates: [],
+        cancelledDates: [],
         ...partial,
     };
 }
@@ -192,7 +192,7 @@ describe("discord events client", () => {
             expect(result[0]?.recurrenceRule).toBe("FREQ=WEEKLY;INTERVAL=1;BYDAY=TH");
         });
 
-        it("accepts an event with a populated excludedDates list", async () => {
+        it("accepts an event with a populated cancelledDates list", async () => {
             mockFetchOnce([
                 sampleEvent({
                     id: "1",
@@ -200,14 +200,14 @@ describe("discord events client", () => {
                     start: "2026-10-01T19:00:00Z",
                     isRecurring: true,
                     recurrenceRule: "FREQ=WEEKLY;INTERVAL=1;BYDAY=TH",
-                    excludedDates: ["2026-10-08"],
+                    cancelledDates: ["2026-10-08"],
                 }),
             ]);
             const result = await fetchEvents();
-            expect(result[0]?.excludedDates).toEqual(["2026-10-08"]);
+            expect(result[0]?.cancelledDates).toEqual(["2026-10-08"]);
         });
 
-        it("drops an event whose excludedDates is not an array of strings", async () => {
+        it("drops an event whose cancelledDates is not an array of strings", async () => {
             // A wrong-typed value would throw inside expansion instead of
             // degrading, so it is rejected at the boundary.
             mockFetchOnce([
@@ -215,7 +215,7 @@ describe("discord events client", () => {
                     id: "1",
                     name: "Bad exclusions",
                     start: "2026-10-01T19:00:00Z",
-                    excludedDates: "2026-10-08" as unknown as string[],
+                    cancelledDates: "2026-10-08" as unknown as string[],
                 }),
                 sampleEvent({ id: "2", name: "Fine", start: "2026-10-02T19:00:00Z" }),
             ]);
@@ -223,11 +223,11 @@ describe("discord events client", () => {
             expect(result.map((e) => e.name)).toEqual(["Fine"]);
         });
 
-        it("tolerates a Worker that omits excludedDates entirely", async () => {
+        it("tolerates a Worker that omits cancelledDates entirely", async () => {
             // Forward/backward compatibility: an older Worker payload has no
             // such field, and that must not drop the event.
             const legacy = sampleEvent({ id: "1", name: "Legacy", start: "2026-10-01T19:00:00Z" });
-            const { excludedDates: _omitted, ...withoutField } = legacy;
+            const { cancelledDates: _omitted, ...withoutField } = legacy;
             mockFetchOnce([withoutField]);
             const result = await fetchEvents();
             expect(result.map((e) => e.name)).toEqual(["Legacy"]);
@@ -505,84 +505,106 @@ describe("discord events client", () => {
 
         // Discord's API cannot express a per-occurrence exception, so the team
         // writes skipped dates into the description and the Worker parses them
-        // into `excludedDates`. These assert the grid actually drops them.
-        describe("per-occurrence exclusions (excludedDates)", () => {
-            function weeklyWednesday(excludedDates: string[] = []): CalendarEvent {
+        // into `cancelledDates`. Cancelled occurrences are still RENDERED (so
+        // the change is visible) but flagged `isCancelled` for styling; the
+        // .ics feed is what omits them.
+        describe("per-occurrence cancellations (cancelledDates)", () => {
+            function weeklyWednesday(cancelledDates: string[] = []): CalendarEvent {
                 return sampleEvent({
                     id: "ex",
                     name: "Weekly standup",
                     start: "2026-03-04T19:00:00.000Z", // a Wednesday
                     isRecurring: true,
                     recurrenceRule: "FREQ=WEEKLY;INTERVAL=1;BYDAY=WE",
-                    excludedDates,
+                    cancelledDates,
                 });
             }
 
-            it("drops the excluded occurrence and keeps the rest", () => {
-                // March 2026 Wednesdays: 4, 11, 18, 25. Exclude the 18th.
+            it("flags the cancelled occurrence and keeps the rest unflagged", () => {
+                // March 2026 Wednesdays: 4, 11, 18, 25. Cancel the 18th.
                 const out = expandRecurrences([weeklyWednesday(["2026-03-18"])], from, to);
-                expect(out.map((o) => o.start.getUTCDate())).toEqual([4, 11, 25]);
+                expect(out.map((o) => o.start.getUTCDate())).toEqual([4, 11, 18, 25]);
+                expect(out.map((o) => o.isCancelled)).toEqual([false, false, true, false]);
             });
 
-            it("drops several excluded occurrences", () => {
+            it("flags several cancelled occurrences", () => {
                 const out = expandRecurrences([weeklyWednesday(["2026-03-11", "2026-03-25"])], from, to);
-                expect(out.map((o) => o.start.getUTCDate())).toEqual([4, 18]);
+                expect(out.map((o) => o.start.getUTCDate())).toEqual([4, 11, 18, 25]);
+                expect(out.map((o) => o.isCancelled)).toEqual([false, true, false, true]);
             });
 
-            it("drops a contiguous run from a comma-separated-style list", () => {
+            it("flags a contiguous run from a comma-separated-style list", () => {
                 // Mirrors what the Worker produces for
-                // "Cancelled: October 13th 2026, November 10th, 2026" --
-                // several parsed dates with adjacent months spanning the
-                // window, so the grid loses exactly the listed occurrences.
+                // "Cancelled: October 13th 2026, November 10th, 2026".
                 const out = expandRecurrences([weeklyWednesday(["2026-03-04", "2026-03-11", "2026-03-18"])], from, to);
-                expect(out.map((o) => o.start.getUTCDate())).toEqual([25]);
+                expect(out.map((o) => o.isCancelled)).toEqual([true, true, true, false]);
             });
 
-            it("can exclude every occurrence in the window", () => {
+            it("can flag every occurrence in the window", () => {
                 const all = ["2026-03-04", "2026-03-11", "2026-03-18", "2026-03-25"];
-                expect(expandRecurrences([weeklyWednesday(all)], from, to)).toHaveLength(0);
+                const out = expandRecurrences([weeklyWednesday(all)], from, to);
+                expect(out).toHaveLength(4);
+                expect(out.every((o) => o.isCancelled)).toBe(true);
             });
 
-            it("ignores an excluded date that matches no occurrence", () => {
+            it("ignores a cancelled date that matches no occurrence", () => {
                 // A note for a date the rule does not generate (a Thursday)
-                // must not remove anything or throw.
+                // must not flag anything or throw.
                 const out = expandRecurrences([weeklyWednesday(["2026-03-19"])], from, to);
                 expect(out).toHaveLength(4);
+                expect(out.some((o) => o.isCancelled)).toBe(false);
             });
 
-            it("tolerates an empty or absent excludedDates list", () => {
-                expect(expandRecurrences([weeklyWednesday([])], from, to)).toHaveLength(4);
-                const noField = { ...weeklyWednesday(), excludedDates: [] };
-                expect(expandRecurrences([noField], from, to)).toHaveLength(4);
+            it("tolerates an empty or absent cancelledDates list", () => {
+                expect(expandRecurrences([weeklyWednesday([])], from, to).every((o) => !o.isCancelled)).toBe(true);
+                const noField = { ...weeklyWednesday(), cancelledDates: [] };
+                expect(expandRecurrences([noField], from, to).every((o) => !o.isCancelled)).toBe(true);
             });
 
             it("matches on the local calendar day, not the UTC instant", () => {
                 // An evening UTC time can fall on the next local day; the note
                 // is written the way the grid displays it, so the match must
-                // use local components. A 19:00Z start is 15:00 in US/Eastern
-                // and still the same local day, so this must exclude.
+                // use local components. A 23:00Z start is still the same local
+                // day in US/Eastern, so the 11th must be flagged.
                 const ev = sampleEvent({
                     id: "tz",
                     name: "Evening meeting",
                     start: "2026-03-04T23:00:00.000Z",
                     isRecurring: true,
                     recurrenceRule: "FREQ=WEEKLY;INTERVAL=1;BYDAY=WE",
-                    excludedDates: ["2026-03-11"],
+                    cancelledDates: ["2026-03-11"],
                 });
                 const out = expandRecurrences([ev], from, to);
-                const days = out.map((o) => o.start.getUTCDate());
-                expect(days).not.toContain(11);
+                const flagged = out.filter((o) => o.isCancelled).map((o) => o.start.getUTCDate());
+                expect(flagged).toEqual([11]);
             });
 
-            it("does not affect a non-recurring event", () => {
-                // Exclusions only apply where occurrences are generated.
+            it("does not flag a non-recurring event", () => {
+                // Cancellations only apply where occurrences are generated;
+                // a one-off has no rule to index into.
                 const oneOff = sampleEvent({
                     id: "one",
                     name: "One-off",
                     start: "2026-03-10T19:00:00.000Z",
-                    excludedDates: ["2026-03-10"],
+                    cancelledDates: ["2026-03-10"],
                 });
-                expect(expandRecurrences([oneOff], from, to)).toHaveLength(1);
+                const out = expandRecurrences([oneOff], from, to);
+                expect(out).toHaveLength(1);
+                expect(out[0]?.isCancelled).toBe(false);
+            });
+
+            it("always sets isCancelled to a boolean, never undefined", () => {
+                // The styling reads this directly, so a missing field would
+                // silently render a cancelled occurrence as normal.
+                const out = expandRecurrences(
+                    [
+                        weeklyWednesday(["2026-03-11"]),
+                        sampleEvent({ id: "o", name: "One-off", start: "2026-03-05T19:00:00Z" }),
+                    ],
+                    from,
+                    to,
+                );
+                expect(out.every((o) => typeof o.isCancelled === "boolean")).toBe(true);
             });
         });
     });

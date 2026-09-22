@@ -30,6 +30,7 @@ Theme tokens live in `src/app.css` under `@theme` (light) and `.dark` (dark over
 - `--color-hovercolor` — hover text (`#3a3836` light / `#d8d4c8` dark)
 - `--color-accent` — aliases `--vt-maroon` (Chicago Maroon `#861f41`)
 - `--color-accent-2` — aliases `--vt-burntOrange` (Burnt Orange `#e5751f`)
+- `--color-cancelled` — aliases `--vt-impactOrange` (Impact Orange `#ca4f00`). Used for the calendar's cancelled-event treatment (chip, mobile dot, modal notice). Impact Orange is the brand's designated digital-text orange and has the contrast to read on these surfaces; it is deliberately distinct from `--color-accent` so a cancelled meeting never looks like a normal event, and distinct from the muted `--color-hovercolor` grey used by `calendar-event--completed` so the two states are not confusable.
 
 **VT brand vars** (`:root`, do NOT change between light/dark — brand rules permit shading but not tinting of maroon/orange):
 - `--vt-maroon` (`#861f41`), `--vt-burntOrange` (`#e5751f`), `--vt-hokieStone` (`#75787b`), `--vt-white` (`#ffffff`), `--vt-impactOrange` (`#ca4f00` — use for digital text instead of burnt orange, WCAG AA)

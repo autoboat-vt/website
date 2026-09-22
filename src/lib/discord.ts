@@ -68,10 +68,11 @@ export interface CalendarEvent {
      * ISO `YYYY-MM-DD` dates whose occurrence is cancelled, parsed by the
      * Worker from the description's `Cancelled:` convention. Discord's API
      * cannot express per-occurrence exceptions, so this is the team's
-     * workaround; `expandRecurrences` drops these from the month grid, and
-     * the `.ics` feed emits them as `EXDATE`. Always an array.
+     * workaround; `expandRecurrences` flags these occurrences as cancelled so
+     * the grid can style them, and the `.ics` feed omits them. Always an
+     * array.
      */
-    excludedDates: string[];
+    cancelledDates: string[];
 }
 
 /** A concrete instance of a CalendarEvent within a specific time window. */
@@ -82,6 +83,14 @@ export interface ExpandedOccurrence {
     start: Date;
     /** End of this specific occurrence (start + event duration, or same as start). */
     end: Date;
+    /**
+     * True when this specific occurrence appears in the event's
+     * `cancelledDates` note. Distinct from `event.status === "canceled"`,
+     * which marks the *whole series*. Cancelled occurrences are still
+     * rendered (styled as cancelled) rather than omitted; the `.ics` feed
+     * drops them via `EXDATE`.
+     */
+    isCancelled: boolean;
 }
 
 /** Errors raised by this module's network calls. */
@@ -164,8 +173,8 @@ function isCalendarEvent(value: unknown): value is CalendarEvent {
         (e.recurrenceRule === null || (typeof e.recurrenceRule === "string" && /^FREQ=/i.test(e.recurrenceRule))) &&
         // Tolerate an absent field (older Worker) but reject a wrong-typed
         // one, which would throw during expansion instead of degrading.
-        (e.excludedDates === undefined ||
-            (Array.isArray(e.excludedDates) && e.excludedDates.every((d) => typeof d === "string")))
+        (e.cancelledDates === undefined ||
+            (Array.isArray(e.cancelledDates) && e.cancelledDates.every((d) => typeof d === "string")))
     );
 }
 
@@ -303,6 +312,12 @@ export function webcalUrl(): string {
  *
  * The output is sorted by occurrence start time.
  *
+ * Per-occurrence cancellations (the description's `Cancelled:` notes) are
+ * emitted like any other occurrence but with `isCancelled: true`. They are
+ * NOT dropped here: a called-off meeting is worth showing, styled so the
+ * change is obvious. The `.ics` feed takes the opposite approach and omits
+ * them.
+ *
  * Cancelled series are clipped at `now` (see the note in the recurring branch).
  * `now` is injectable so that clip is deterministic under test; callers that
  * already track a clock should pass theirs rather than let the default drift.
@@ -345,28 +360,30 @@ export function expandRecurrences(
                 const cutoffMs = event.status === "canceled" ? Math.min(toMs, nowMs) : toMs;
                 if (cutoffMs < fromMs) continue;
                 // Occurrences listed in the description's `Cancelled:` notes
-                // are skipped. Discord has no per-occurrence exception field,
-                // so this text convention is the only way to express one; the
-                // Worker parses it into `excludedDates` so the site and the
-                // .ics feed agree.
-                const excluded = new Set(event.excludedDates ?? []);
+                // are still emitted, but flagged. Discord has no
+                // per-occurrence exception field, so this text convention is
+                // the only way to express one; the Worker parses it into
+                // `cancelledDates`. The grid styles these as cancelled so the
+                // change is visible, while the .ics feed drops them via
+                // EXDATE (a subscriber should not see a called-off meeting).
+                const cancelled = new Set(event.cancelledDates ?? []);
                 for (const occurrenceStart of rule.between(from, new Date(cutoffMs), true)) {
-                    if (excluded.size > 0 && excluded.has(localDateKey(occurrenceStart))) continue;
                     out.push({
                         event,
                         start: occurrenceStart,
                         end: new Date(occurrenceStart.getTime() + durationMs),
+                        isCancelled: cancelled.size > 0 && cancelled.has(localDateKey(occurrenceStart)),
                     });
                 }
             } catch {
                 // Malformed RRULE -- fall back to a single occurrence at the
                 // base start time so the event at least shows up once.
                 if (baseStart.getTime() <= toMs && baseEnd.getTime() >= fromMs) {
-                    out.push({ event, start: baseStart, end: baseEnd });
+                    out.push({ event, start: baseStart, end: baseEnd, isCancelled: false });
                 }
             }
         } else if (baseStart.getTime() <= toMs && baseEnd.getTime() >= fromMs) {
-            out.push({ event, start: baseStart, end: baseEnd });
+            out.push({ event, start: baseStart, end: baseEnd, isCancelled: false });
         }
     }
 

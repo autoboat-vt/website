@@ -1,4 +1,4 @@
-import { CalendarDays, MapPin, Repeat, X } from "lucide-react";
+import { Ban, CalendarDays, MapPin, Repeat, X } from "lucide-react";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { describeRecurrence, type ExpandedOccurrence } from "../lib/discord";
 import EventMap from "./EventMap";
@@ -75,6 +75,12 @@ export default function EventModal({ occurrence, onClose }: EventModalProps) {
 
     const { event, start } = occurrence;
     const recurrence = describeRecurrence(event);
+    // Two independent notions of cancelled: this occurrence alone (from the
+    // description's `Cancelled:` note) vs. the whole series (Discord status).
+    // Both deserve a notice so the modal never shows a cancelled meeting as
+    // if it were still on.
+    const isCancelled = occurrence.isCancelled || event.status === "canceled";
+    const cancelLabel = event.status === "canceled" ? "This event was cancelled" : "This occurrence was cancelled";
 
     const handleBackdropClick = (e: MouseEvent<HTMLDivElement>) => {
         if (e.target === e.currentTarget) onClose();
@@ -104,6 +110,12 @@ export default function EventModal({ occurrence, onClose }: EventModalProps) {
 
                 <div className="event-modal__body">
                     <h3 className="event-modal__title">{event.name}</h3>
+                    {isCancelled && (
+                        <p className="event-modal__cancelled" role="status">
+                            <Ban size={15} aria-hidden="true" />
+                            {cancelLabel}
+                        </p>
+                    )}
                     <div className="event-modal__meta">
                         <span className="event-modal__meta-row">
                             <CalendarDays size={15} className="event-modal__meta-icon" aria-hidden="true" />

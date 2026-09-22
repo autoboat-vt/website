@@ -160,7 +160,7 @@ describe("Discord payload -> .ics feed", () => {
             isRecurring: false,
             image: `https://cdn.discordapp.com/guild-events/1000000000000000001/abc123.png?size=512`,
             recurrenceRule: null,
-            excludedDates: [],
+            cancelledDates: [],
         });
     });
 
@@ -244,7 +244,7 @@ describe("Discord payload -> .ics feed", () => {
 
     // Discord has no per-occurrence exception mechanism; the team writes
     // skipped dates into the description. These cover the whole path:
-    // description text -> parsed excludedDates -> EXDATE in the feed.
+    // description text -> parsed cancelledDates -> EXDATE in the feed.
     describe("cancellation notes in the description", () => {
         const recurringTuesday = (description: string) =>
             discordEvent({
@@ -319,16 +319,43 @@ describe("Discord payload -> .ics feed", () => {
             expect(lines.some((l) => l.startsWith("EXDATE"))).toBe(false);
         });
 
-        it("exposes excludedDates on the normalized event", () => {
+        it("exposes cancelledDates on the normalized event", () => {
             const [event] = normalizeEvents([
                 recurringTuesday("Location: **Lavery Hall 335**\nCancelled: October 11th 2026"),
             ]);
-            expect(event?.excludedDates).toEqual(["2026-10-11"]);
+            expect(event?.cancelledDates).toEqual(["2026-10-11"]);
         });
 
-        it("defaults excludedDates to an empty array with no note", () => {
+        // The dates surface as chips on the calendar, so the raw convention
+        // must not reach the modal body.
+        it("strips the Cancelled: line from the description", () => {
+            const [event] = normalizeEvents([
+                recurringTuesday("Location: **Lavery Hall 335**\nCancelled: October 11th 2026"),
+            ]);
+            expect(event?.description).toBe("Location: **Lavery Hall 335**");
+            expect(event?.description).not.toContain("Cancelled");
+        });
+
+        it("strips a list-style note, leaving the rest of the description", () => {
+            const [event] = normalizeEvents([
+                recurringTuesday("Agenda: bring laptops.\nCancelled: October 13th 2026, November 10th, 2026"),
+            ]);
+            expect(event?.description).toBe("Agenda: bring laptops.");
+        });
+
+        it("nulls the description when the note was its only content", () => {
+            const [event] = normalizeEvents([recurringTuesday("Cancelled: October 11th 2026")]);
+            expect(event?.description).toBeNull();
+        });
+
+        it("leaves a description with no note untouched", () => {
+            const [event] = normalizeEvents([recurringTuesday("Standing sync.")]);
+            expect(event?.description).toBe("Standing sync.");
+        });
+
+        it("defaults cancelledDates to an empty array with no note", () => {
             const [event] = normalizeEvents([discordEvent({ description: "Nothing here" })]);
-            expect(event?.excludedDates).toEqual([]);
+            expect(event?.cancelledDates).toEqual([]);
         });
 
         it("produces an EXDATE that actually excludes the occurrence from the RRULE", () => {
@@ -344,7 +371,7 @@ describe("Discord payload -> .ics feed", () => {
                 .between(new Date("2026-10-01T00:00:00Z"), new Date("2026-10-31T00:00:00Z"), true)
                 .map((d) => d.toISOString().slice(0, 10));
             expect(generated).toContain("2026-10-13");
-            expect(event?.excludedDates).toContain("2026-10-13");
+            expect(event?.cancelledDates).toContain("2026-10-13");
         });
     });
 });

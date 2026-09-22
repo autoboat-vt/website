@@ -1,4 +1,4 @@
-import { parseCancelledDates, toExdateValue } from "../../../worker/src/cancellations";
+import { parseCancelledDates, stripCancelledNote, toExdateValue } from "../../../worker/src/cancellations";
 
 /**
  * Tests for the in-description cancellation convention:
@@ -271,5 +271,66 @@ describe("toExdateValue", () => {
     it("produces an RFC 5545 UTC date-time shape", () => {
         const out = toExdateValue("2026-10-11", "2026-10-04T19:30:00.000Z");
         expect(out).toMatch(/^\d{8}T\d{6}Z$/);
+    });
+});
+
+/**
+ * The dates are surfaced as cancelled chips on the calendar, so the raw note
+ * line is stripped from the description before it reaches the modal -- it
+ * would otherwise render the convention verbatim to visitors.
+ */
+describe("stripCancelledNote", () => {
+    it("removes the note line from the documented example", () => {
+        const desc = "Location: **Lavery Hall 335**\nCancelled: October 11th 2026";
+        expect(stripCancelledNote(desc)).toBe("Location: **Lavery Hall 335**");
+    });
+
+    it("removes a note line in the middle of a description", () => {
+        const desc = "Agenda below.\nCancelled: October 11th 2026\nBring laptops.";
+        expect(stripCancelledNote(desc)).toBe("Agenda below.\nBring laptops.");
+    });
+
+    it("removes several note lines", () => {
+        const desc = "Cancelled: October 11th 2026\nReal content\nCancelled: November 3rd, 2026";
+        expect(stripCancelledNote(desc)).toBe("Real content");
+    });
+
+    it("returns null when the note was the only content", () => {
+        expect(stripCancelledNote("Cancelled: October 11th 2026")).toBeNull();
+    });
+
+    it("collapses the blank-line run left behind", () => {
+        const desc = "Before\n\nCancelled: October 11th 2026\n\nAfter";
+        expect(stripCancelledNote(desc)).toBe("Before\n\nAfter");
+    });
+
+    it("removes every label variant the parser accepts", () => {
+        // The two must agree on what counts as a note, or a line could be
+        // parsed as a cancellation and still be shown to users.
+        for (const label of ["Cancelled", "Canceled", "Skipped", "No meeting", "cancelled", "CANCELLED"]) {
+            expect(stripCancelledNote(`Real\n${label}: October 11th 2026`)).toBe("Real");
+        }
+    });
+
+    it("leaves a description with no note untouched", () => {
+        const desc = "Just a normal description.";
+        expect(stripCancelledNote(desc)).toBe(desc);
+    });
+
+    it("leaves unlabelled prose mentioning a date untouched", () => {
+        // Only labelled lines are stripped, so this must survive intact.
+        const desc = "We cancelled the October 11th launch, new date TBD";
+        expect(stripCancelledNote(desc)).toBe(desc);
+    });
+
+    it("handles null and undefined", () => {
+        expect(stripCancelledNote(null)).toBeNull();
+        expect(stripCancelledNote(undefined)).toBeNull();
+        expect(stripCancelledNote("")).toBeNull();
+    });
+
+    it("trims trailing whitespace left on the surviving lines", () => {
+        const desc = "Real content   \nCancelled: October 11th 2026";
+        expect(stripCancelledNote(desc)).toBe("Real content");
     });
 });

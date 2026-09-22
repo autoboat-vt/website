@@ -95,9 +95,21 @@ function formatOccurrenceTime(occ: ExpandedOccurrence): string {
     return `${start} - ${occ.end.toLocaleTimeString(undefined, opts)}`;
 }
 
-function eventChipClassName(event: CalendarEvent): string {
+/**
+ * Class list for an event chip.
+ *
+ * Two independent notions of "cancelled" meet here:
+ *  - `occurrence.isCancelled` -- THIS occurrence was cancelled individually
+ *    via the description's `Cancelled:` note.
+ *  - `event.status === "canceled"` -- the whole series was cancelled in
+ *    Discord. Every occurrence of it is cancelled.
+ * Both render with the same treatment, since to a reader they mean the same
+ * thing: this meeting is not happening.
+ */
+function eventChipClassName(occurrence: ExpandedOccurrence): string {
+    const { event, isCancelled } = occurrence;
     let cls = "calendar-event";
-    if (event.status === "canceled") cls += " calendar-event--canceled";
+    if (isCancelled || event.status === "canceled") cls += " calendar-event--canceled";
     else if (event.status === "completed") cls += " calendar-event--completed";
     if (event.isRecurring) cls += " calendar-event--recurring";
     return cls;
@@ -115,8 +127,8 @@ function EventChip({
     return (
         <button
             type="button"
-            className={eventChipClassName(event)}
-            title={`${event.name} (${time})`}
+            className={eventChipClassName(occurrence)}
+            title={`${event.name} (${time})${occurrence.isCancelled ? " - cancelled" : ""}`}
             onClick={() => onClick(occurrence)}
         >
             <span className="calendar-event__time">{time}</span>
@@ -143,8 +155,8 @@ function AgendaRow({
         <li>
             <button
                 type="button"
-                className={eventChipClassName(event)}
-                title={event.name}
+                className={eventChipClassName(occurrence)}
+                title={occurrence.isCancelled ? `${event.name} - cancelled` : event.name}
                 onClick={() => onClick(occurrence)}
             >
                 <span className="calendar-event__time">{time}</span>
@@ -392,7 +404,7 @@ export default function Calendar() {
                                             <span className="calendar-day-dots" aria-hidden="true">
                                                 {cell.occurrences.slice(0, 3).map((occ, i) => {
                                                     let dotCls = "calendar-day-dot";
-                                                    if (occ.event.status === "canceled")
+                                                    if (occ.isCancelled || occ.event.status === "canceled")
                                                         dotCls += " calendar-day-dot--muted";
                                                     else if (occ.event.status === "completed")
                                                         dotCls += " calendar-day-dot--muted";
