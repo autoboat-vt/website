@@ -5,15 +5,19 @@
  *   GET /guilds/{guild_id}/scheduled-events
  * because that endpoint requires a bot token and doesn't support CORS.
  * This module fetches the Worker's single `GET /events` route and expands
- * Discord `recurrence_rule` RRULEs into concrete occurrences for a given
- * time window (used by the calendar month grid).
+ * Discord recurrences into concrete occurrences for a given time window (used
+ * by the calendar month grid). The Worker converts Discord's structured
+ * `recurrence_rule` object into an RRULE body (see `worker/src/recurrence.ts`);
+ * this module only has to expand the resulting rule.
  *
  * Wire format notes:
  *  - The Worker returns `CalendarEvent[]` (a small, normalized shape --
  *    not Discord's raw GuildScheduledEvent).
  *  - Dates are ISO-8601 strings.
  *  - Events carry a `recurrenceRule` string in RFC 5545 RRULE form (without
- *    the leading `RRULE:` prefix) when the Discord event is recurring.
+ *    the leading `RRULE:` prefix) when the Discord event is recurring. That
+ *    is the Worker's converted value, not Discord's raw `recurrence_rule`
+ *    field (which is a structured object).
  *  - Discord event `status` arrives pre-mapped to a lowercase string.
  */
 
@@ -129,6 +133,16 @@ async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
     }
 }
 
+/**
+ * Guard for one element of the Worker's `GET /events` payload.
+ *
+ * `recurrenceRule` is validated as well as its type: the Worker sends an
+ * RFC 5545 RRULE body without the `RRULE:` prefix, so anything that doesn't
+ * start with `FREQ=` is not a usable rule. Accepting it here would put a
+ * value into `CalendarEvent` that `rrulestr` then throws on, which
+ * `expandRecurrences` swallows into a single-occurrence fallback -- a silent
+ * wrong result rather than a visibly broken event.
+ */
 function isCalendarEvent(value: unknown): value is CalendarEvent {
     if (typeof value !== "object" || value === null) return false;
     const e = value as Record<string, unknown>;
@@ -138,7 +152,8 @@ function isCalendarEvent(value: unknown): value is CalendarEvent {
         typeof e.start === "string" &&
         (e.end === null || typeof e.end === "string") &&
         typeof e.status === "string" &&
-        typeof e.isRecurring === "boolean"
+        typeof e.isRecurring === "boolean" &&
+        (e.recurrenceRule === null || (typeof e.recurrenceRule === "string" && /^FREQ=/i.test(e.recurrenceRule)))
     );
 }
 
@@ -209,11 +224,20 @@ export function extractLocationFromDescription(description: string | null): {
  * than throwing) so the calendar can fall back to its "no events" state.
  * Throws `DiscordError` on network/HTTP errors so the page can surface a
  * specific message.
+ *
+ * `isRecurring` is derived from `recurrenceRule` rather than trusted: the two
+ * are redundant, and a payload where they disagree (or where a rule survives
+ * the guard but is still unparseable) would otherwise render event chips as
+ * recurring while their occurrences silently collapse to a single one.
  */
 export async function fetchEvents(signal?: AbortSignal): Promise<CalendarEvent[]> {
     const data = await fetchJson<unknown>(`${EVENTS_URL}/events`, signal);
     if (!Array.isArray(data)) return [];
-    return data.filter(isCalendarEvent).map((ev) => {
+    return data.filter(isCalendarEvent).map((raw) => {
+        const ev =
+            raw.isRecurring === (raw.recurrenceRule !== null)
+                ? raw
+                : { ...raw, isRecurring: raw.recurrenceRule !== null };
         if (ev.location != null) return ev;
         const { location, description } = extractLocationFromDescription(ev.description);
         return { ...ev, location, description };
@@ -270,8 +294,10 @@ export function expandRecurrences(events: CalendarEvent[], from: Date, to: Date)
 
         if (event.isRecurring && event.recurrenceRule) {
             try {
-                // Discord's recurrence_rule is the RRULE body without the
-                // leading "RRULE:" prefix; rrulestr expects the full value.
+                // `event.recurrenceRule` is the RRULE body the Worker already
+                // derived from Discord's structured `recurrence_rule` object
+                // (see worker/src/recurrence.ts); rrulestr expects the full
+                // value, so prepend the property name.
                 const rule = rrulestr(`RRULE:${event.recurrenceRule}`, {
                     dtstart: baseStart,
                 });

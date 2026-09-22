@@ -1,6 +1,6 @@
 ---
 description: "Use when working on the calendar page, the Discord events client, the subscription affordance, or the Cloudflare Worker that serves Discord guild scheduled events. Covers the no-webhook constraint, the Worker architecture, KV caching, VITE_EVENTS_URL, the /calendar.ics feed, and rrule recurrence expansion."
-applyTo: "src/lib/discord.ts, src/pages/Calendar.tsx, src/components/CalendarSubscribe.tsx, src/test/lib/discord.test.ts, src/test/pages/Calendar.test.tsx, src/test/components/CalendarSubscribe.test.tsx, src/test/worker/ics.test.ts, worker/**"
+applyTo: "src/lib/discord.ts, src/pages/Calendar.tsx, src/components/CalendarSubscribe.tsx, src/test/lib/discord.test.ts, src/test/pages/Calendar.test.tsx, src/test/components/CalendarSubscribe.test.tsx, src/test/worker/ics.test.ts, src/test/worker/recurrence.test.ts, src/test/worker/events.test.ts, worker/**"
 ---
 
 # Discord events + calendar
@@ -96,6 +96,8 @@ Discord incoming webhooks are POST-only on a channel -- they cannot *pull* guild
 - `webcalUrl()` — the `webcals://` form of `EVENTS_ICS_URL`.
 - `DISCORD_GUILD_ID` — public guild id used to deep-link chips to Discord. Keep in sync with `DISCORD_GUILD_ID` in `worker/wrangler.jsonc`.
 - `fetchEvents(signal?)` — GET with `cache: "no-store"`, returns `CalendarEvent[]`. Structural-invalid payloads degrade to `[]` rather than throwing; HTTP/network errors throw `DiscordError`. When the API `location` is null, the event is enriched via `extractLocationFromDescription` (team events are voice-channel events for role-scoped signup, so Discord's `entity_metadata.location` is always empty and the physical location lives in the description).
+- `isCalendarEvent` validates **both** `recurrenceRule`'s type and its content: it must be null or a string matching `/^FREQ=/i`. A rule that fails this is dropped along with its event, because the alternative is a value `rrulestr` throws on — and `expandRecurrences` catches that and silently falls back to a single occurrence, i.e. a wrong result rather than a visible failure.
+- `fetchEvents` **derives `isRecurring` from `recurrenceRule`** rather than trusting the flag. The two fields are redundant, so a payload where they disagree would otherwise render an event chip as recurring while its occurrences collapse to one. Don't "simplify" this back to reading `isRecurring` directly.
 - `extractLocationFromDescription(description)` — returns `{ location, description }`: pulls the location out (labeled `Location:`/`Where:` line, else first bold span) and strips the matched text from the description so the modal doesn't render it twice.
 - `expandRecurrences(events, from, to)` — expands every RRULE event into concrete occurrences inside `[from, to]`. Malformed RRULEs fall back to a single occurrence at the base start.
 - `discordEventUrl(event)` — `https://discord.com/channels/<guildId>/<eventId>`.
@@ -128,7 +130,21 @@ Drop any of the four and the route breaks in a different way (client-side vs S3 
 
 ## Recurrence expansion
 
-Discord's `recurrence_rule` is an RFC 5545 RRULE body (no leading `RRULE:` prefix). The client prepends `RRULE:` and calls `rrulestr` with `dtstart` set to the event's base `scheduled_start_time`. Every occurrence inside the current month grid becomes one chip; each occurrence's `end` is shifted by the base event's duration so multi-hour meetings keep their length.
+`worker/src/events.ts` normalizes Discord's raw payloads into the `CalendarEvent` shape both formats consume (`toCalendarEvent` / `normalizeEvents`). It is deliberately pure -- no bindings, no `fetch`, no KV -- so the raw-payload -> feed path is unit-testable without Cloudflare's ambient types; `index.ts` owns the HTTP/KV/caching concerns and imports the types from here.
+
+⚠️ Discord's `recurrence_rule` is a **structured object**, NOT a pre-serialized RRULE string:
+
+```
+{ start, end?, frequency, interval, by_weekday?, by_n_weekday?, by_month?, by_month_day? }
+```
+
+`worker/src/recurrence.ts` (`formatRecurrenceRule`) converts it into an RFC 5545 RRULE *body* (no leading `RRULE:`) once, at the Worker boundary, so the website (`expandRecurrences`, which prepends `RRULE:` and calls `rrulestr` with the event's base `scheduled_start_time`) and the `.ics` feed share one conversion and cannot drift apart. The client's `CalendarEvent.recurrenceRule` is that already-converted string.
+
+This was previously implemented as `typeof e.recurrence_rule === "string"`, which silently produced `null` for every event (Discord's object is not a string), so `isRecurring` was always `false` and the `.ics` feed never emitted an `RRULE`. Do not revert to reading the raw Discord field as a string.
+
+An unknown `frequency` or a non-positive `interval` rejects the whole rule (returns `null`); out-of-range values inside an otherwise valid rule (a `by_weekday` of `9`, `by_month` of `13`) are dropped individually. `by_weekday` wins if both by-day fields are present. `by_year_day` and `count` are never read -- Discord documents them as not settable by clients, so they don't appear in API responses.
+
+Every occurrence inside the current month grid becomes one chip; each occurrence's `end` is shifted by the base event's duration so multi-hour meetings keep their length.
 
 Two edge cases the month-grid rendering handles on top of the recurrence expansion:
 
@@ -147,10 +163,12 @@ The `rrule` package handles the full RFC 5545 grammar, so all of the above varia
 
 ## Tests
 
-- `src/test/lib/discord.test.ts` — `fetchEvents` (happy/error/malformed/abort cases, mock fetch with duck-typed responses), `expandRecurrences` (weekly, daily, UNTIL clip, malformed-RRULE fallback, duration shift, sort order), and the subscribe URL helpers (`EVENTS_ICS_URL`, `webcalUrl`).
+- `src/test/lib/discord.test.ts` — `fetchEvents` (happy/error/malformed/abort cases, mock fetch with duck-typed responses), the `isCalendarEvent` guard (a structured-object `recurrenceRule` and an unusable RRULE body are both rejected; a valid recurring event survives), `isRecurring`-vs-`recurrenceRule` reconciliation in both disagreement directions, `expandRecurrences` (weekly, daily, UNTIL clip, malformed-RRULE fallback, duration shift, sort order), and the subscribe URL helpers (`EVENTS_ICS_URL`, `webcalUrl`). Note its fixtures feed `expandRecurrences` already-converted `recurrenceRule` strings (the client-side shape) rather than raw Discord payloads — the raw-payload path is covered by `src/test/worker/events.test.ts`.
 - `src/test/pages/Calendar.test.tsx` — page render states (loading, success, error, empty), chip rendering with real Discord URL, recurrence expansion, month nav, error-card behavior, the subscribe control, plus a "mobile branch" describe block (matchMedia stubbed to `matches: true`) covering day-cell buttons, dots, the agenda swap, agenda->modal, and selection-on-month-nav.
 - `src/test/components/CalendarSubscribe.test.tsx` — panel open/close, provider URLs, `.ics` download, and clipboard copy (async Clipboard API, `execCommand` fallback, and rejection handling).
 - `src/test/worker/ics.test.ts` — the ICS serializer: VCALENDAR envelope + CRLF endings, UTC/tz-offset timestamps, stable UIDs, zero-duration and null-end defaults, `STATUS:CANCELLED`, TEXT escaping, octet-based line folding (including multi-byte characters), RRULE passthrough + malformed-rule rejection, and unparseable-date skipping. **Imports `worker/src/ics.ts` by relative path** (`../../../worker/src/ics`) because the Worker lives outside `src/` — Jest's `testMatch` only picks up files under `src/`, so a test must live here to run.
+- `src/test/worker/recurrence.test.ts` — `formatRecurrenceRule`: weekly/daily/monthly-Nth-weekday/yearly conversion, every frequency code, null/unknown-frequency rejection, non-positive `interval` handling, out-of-range `by_weekday`/`by_month`/`by_month_day` dropping, `by_weekday`-over-`by_n_weekday` precedence, and a round-trip asserting the emitted body actually expands correctly through `rrulestr`. Imports `worker/src/recurrence.ts` by relative path, same reason as `ics.test.ts`.
+- `src/test/worker/events.test.ts` — the **integration** suite: raw Discord payloads (documented snake_case shapes, numeric status/frequency, nested `entity_metadata`) -> `normalizeEvents` -> `buildCalendar` -> asserted RFC 5545 output, plus an `rrulestr` expansion. This is the only suite that exercises the seam between normalization and serialization; the two suites above test their units in isolation and cannot observe a break in between. It guards the original bug directly (a `recurrence_rule` read as the wrong type produced no `RRULE`); **verified by temporarily reintroducing the defect and confirming 5 of its 9 tests fail**, then restoring the fix.
 
 Both follow the existing `LiveMap.test.tsx` patterns: `MemoryRouter` wrap, `mockFetchOnce` / `mockFetchSequence`, `flushMicrotasks()` to drain the `.then()` chain, restore `global.fetch` in `afterEach`.
 

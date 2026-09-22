@@ -50,7 +50,7 @@ describe("CalendarSubscribe", () => {
         fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
         expect(screen.getByTestId("subscribe-webcal")).toHaveAttribute("href", webcalUrl());
         expect(webcalUrl().startsWith("webcals://")).toBe(true);
-    }); 
+    });
 
     it("offers the raw .ics feed as a direct download", () => {
         render(<CalendarSubscribe />);
@@ -87,8 +87,10 @@ describe("CalendarSubscribe", () => {
         fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
         fireEvent.click(screen.getByRole("button", { name: "Copy feed URL" }));
 
+        // Both assertions must wait: the click handler is async, so the
+        // "Copied" state flushes on a later microtask than execCommand runs.
         await waitFor(() => expect(execCommand).toHaveBeenCalledWith("copy"));
-        expect(screen.getByText("Copied")).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByText("Copied")).toBeInTheDocument());
     });
 
     it("stays usable when the clipboard write is rejected", async () => {

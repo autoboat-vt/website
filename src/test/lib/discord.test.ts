@@ -137,6 +137,84 @@ describe("discord events client", () => {
             expect(result[0]?.name).toBe("Good");
         });
 
+        it("drops an event whose recurrenceRule is not a string", async () => {
+            // The shape mismatch that broke the Worker originally: an RRULE
+            // arriving as Discord's structured object. Every other field is
+            // valid, so the rule is the only reason for rejection.
+            mockFetchOnce([
+                {
+                    id: "1",
+                    name: "Structured rule",
+                    description: null,
+                    start: "2026-10-01T19:00:00Z",
+                    end: null,
+                    status: "scheduled",
+                    location: null,
+                    userCount: null,
+                    isRecurring: true,
+                    image: null,
+                    recurrenceRule: { frequency: 2, interval: 1, by_weekday: [2] },
+                },
+                sampleEvent({ id: "2", name: "Fine", start: "2026-10-02T19:00:00Z" }),
+            ]);
+            const result = await fetchEvents();
+            expect(result.map((e) => e.name)).toEqual(["Fine"]);
+        });
+
+        it("drops an event whose recurrenceRule is not a usable RRULE body", async () => {
+            mockFetchOnce([
+                sampleEvent({
+                    id: "1",
+                    name: "Bad rule",
+                    start: "2026-10-01T19:00:00Z",
+                    isRecurring: true,
+                    recurrenceRule: "not-a-rule",
+                }),
+            ]);
+            expect(await fetchEvents()).toEqual([]);
+        });
+
+        it("keeps a valid recurring event", async () => {
+            mockFetchOnce([
+                sampleEvent({
+                    id: "1",
+                    name: "Weekly standup",
+                    start: "2026-10-01T19:00:00Z",
+                    isRecurring: true,
+                    recurrenceRule: "FREQ=WEEKLY;INTERVAL=1;BYDAY=TH",
+                }),
+            ]);
+            const result = await fetchEvents();
+            expect(result).toHaveLength(1);
+            expect(result[0]?.isRecurring).toBe(true);
+            expect(result[0]?.recurrenceRule).toBe("FREQ=WEEKLY;INTERVAL=1;BYDAY=TH");
+        });
+
+        it("derives isRecurring from the rule when the two disagree", async () => {
+            // The two fields are redundant; trusting the flag over the rule
+            // lets a chip render as recurring while its occurrences collapse
+            // to a single one.
+            mockFetchOnce([
+                sampleEvent({
+                    id: "1",
+                    name: "Rule but not flagged",
+                    start: "2026-10-01T19:00:00Z",
+                    isRecurring: false,
+                    recurrenceRule: "FREQ=DAILY",
+                }),
+                sampleEvent({
+                    id: "2",
+                    name: "Flagged but no rule",
+                    start: "2026-10-02T19:00:00Z",
+                    isRecurring: true,
+                    recurrenceRule: null,
+                }),
+            ]);
+            const result = await fetchEvents();
+            expect(result.find((e) => e.id === "1")?.isRecurring).toBe(true);
+            expect(result.find((e) => e.id === "2")?.isRecurring).toBe(false);
+        });
+
         it("throws DiscordError on HTTP 502", async () => {
             mockFetchOnce({ error: "upstream failed" }, { status: 502 });
             await expect(fetchEvents()).rejects.toThrow(DiscordError);

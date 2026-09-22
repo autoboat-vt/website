@@ -92,7 +92,9 @@ scripts/
 worker/                 # Cloudflare Worker proxying Discord scheduled events for /calendar
   wrangler.jsonc        # worker config (KV binding, env vars)
   src/index.ts          # /events (JSON) + /calendar.ics (iCal subscription feed) routes, KV cache, Discord REST fetch
+  src/events.ts         # pure normalization of Discord payloads -> CalendarEvent (no bindings, unit-testable)
   src/ics.ts            # iCalendar (RFC 5545) serializer for the subscribable feed
+  src/recurrence.ts     # Discord's structured recurrence_rule object -> RFC 5545 RRULE body
   README.md             # one-time setup: Discord bot + KV namespace + secrets
 external/cicd/          # vendored copy of VT S4 CI templates (owned upstream by s4-hosting-sites/cicd on code.vt.edu) — committed directly, updated via bump-cicd.sh
 public/                 # static assets, _redirects, images
@@ -136,7 +138,7 @@ Detailed, topic-specific guidance lives in `.github/instructions/*.instructions.
 | `vt-colors.instructions.md` | `src/lib/vtColors.ts`, `src/app.css`, `src/hooks/useTheme.ts` | VT brand palette, shading-vs-tinting rules, Impact Orange, WCAG AA, theme tokens, `useTheme`, FOUC prevention |
 | `testing.instructions.md` | `src/test/**`, `jest.config.js` | Jest config, `moduleNameMapper`, react-leaflet mock architecture, `setup.ts` polyfills, `runTests` tool gotcha, `MemoryRouter` wrapping |
 | `deploy.instructions.md` | `scripts/**`, `.github/**` | `deploy.sh`, `spa-fallback.mjs`, `bump-cicd.sh` (vendor-update), `build.yml`, vendored `external/cicd/` model, git workflow |
-| `discord-events.instructions.md` | `src/lib/discord.ts`, `src/pages/Calendar.tsx`, `src/components/CalendarSubscribe.tsx`, `src/test/lib/discord.test.ts`, `src/test/pages/Calendar.test.tsx`, `src/test/components/CalendarSubscribe.test.tsx`, `src/test/worker/ics.test.ts`, `worker/**` | Calendar architecture, no-webhook constraint, Worker + KV setup, `VITE_EVENTS_URL`, the `/calendar.ics` subscription feed, rrule expansion, 4-place route registration |
+| `discord-events.instructions.md` | `src/lib/discord.ts`, `src/pages/Calendar.tsx`, `src/components/CalendarSubscribe.tsx`, `src/test/lib/discord.test.ts`, `src/test/pages/Calendar.test.tsx`, `src/test/components/CalendarSubscribe.test.tsx`, `src/test/worker/ics.test.ts`, `src/test/worker/recurrence.test.ts`, `src/test/worker/events.test.ts`, `worker/**` | Calendar architecture, no-webhook constraint, Worker + KV setup, `VITE_EVENTS_URL`, the `/calendar.ics` subscription feed, Discord's recurrence_rule object -> RRULE conversion, rrule expansion, 4-place route registration |
 
 When adding a new instruction file, add a row to this table so it's discoverable.
 

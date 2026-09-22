@@ -32,6 +32,7 @@
  * entirely, so the feed works regardless of the origin lockdown.
  */
 
+import { type CalendarEvent, type DiscordGuildScheduledEvent, normalizeEvents } from "./events";
 import { buildCalendar } from "./ics";
 
 interface Env {
@@ -44,46 +45,9 @@ interface Env {
     EVENTS_KV: KVNamespace;
 }
 
-/** One event in the payload the website consumes. */
-interface CalendarEvent {
-    id: string;
-    name: string;
-    description: string | null;
-    start: string; // ISO-8601
-    end: string | null; // ISO-8601 or null
-    status: "scheduled" | "active" | "completed" | "canceled";
-    location: string | null;
-    userCount: number | null;
-    isRecurring: boolean;
-    image: string | null; // fully-qualified CDN url, or null
-    recurrenceRule: string | null; // RFC-5545 RRULE string (without the leading "RRULE:") or null
-}
-
-/** Shape of a Discord Guild Scheduled Event (only the fields we read). */
-interface DiscordGuildScheduledEvent {
-    id: string;
-    guild_id: string;
-    channel_id?: string | null;
-    creator_id?: string | null;
-    name: string;
-    description?: string | null;
-    scheduled_start_time: string;
-    scheduled_end_time?: string | null;
-    privacy_level: number;
-    status: number;
-    entity_type: number;
-    entity_id?: string | null;
-    entity_metadata?: { location?: string } | null;
-    creator?: unknown;
-    user_count?: number;
-    image?: string | null;
-    recurrence_rule?: string | null;
-}
-
 const KV_KEY = "events";
 const WORKER_USER_AGENT = "autoboat-website-worker/1.0";
 const DISCORD_API_BASE = "https://discord.com/api/v10";
-const DISCORD_CDN_BASE = "https://cdn.discordapp.com";
 const DISCORD_UPSTREAM_TIMEOUT_MS = 5_000;
 
 /** Default display name for the .ics feed when CALENDAR_NAME is unset. */
@@ -92,13 +56,6 @@ const DEFAULT_CALENDAR_NAME = "AutoBoat at Virginia Tech";
  * `text/calendar` type; the charset is explicit because SUMMARY/LOCATION
  * can contain non-ASCII characters. */
 const ICS_CONTENT_TYPE = "text/calendar; charset=utf-8";
-
-const STATUS_BY_CODE: Record<number, CalendarEvent["status"]> = {
-    1: "scheduled",
-    2: "active",
-    3: "completed",
-    4: "canceled",
-};
 
 /**
  * Build the CORS headers shared by every response. We always send
@@ -112,32 +69,6 @@ function corsHeaders(env: Env): HeadersInit {
         "Access-Control-Allow-Headers": "Content-Type",
         "Access-Control-Max-Age": "86400",
         Vary: "Origin",
-    };
-}
-
-function buildCdnImageUrl(event: DiscordGuildScheduledEvent): string | null {
-    if (!event.image) return null;
-    return `${DISCORD_CDN_BASE}/guild-events/${event.id}/${event.image}.png?size=512`;
-}
-
-function mapStatus(code: number): CalendarEvent["status"] {
-    return STATUS_BY_CODE[code] ?? "scheduled";
-}
-
-function toCalendarEvent(e: DiscordGuildScheduledEvent): CalendarEvent {
-    const rule = typeof e.recurrence_rule === "string" ? e.recurrence_rule : null;
-    return {
-        id: e.id,
-        name: e.name,
-        description: e.description ?? null,
-        start: e.scheduled_start_time,
-        end: e.scheduled_end_time ?? null,
-        status: mapStatus(e.status),
-        location: e.entity_metadata?.location ?? null,
-        userCount: typeof e.user_count === "number" ? e.user_count : null,
-        isRecurring: rule !== null,
-        image: buildCdnImageUrl(e),
-        recurrenceRule: rule,
     };
 }
 
@@ -163,7 +94,7 @@ async function fetchDiscordEvents(env: Env): Promise<CalendarEvent[]> {
         if (!Array.isArray(data)) {
             throw new Error("discord upstream returned a non-array payload");
         }
-        return (data as DiscordGuildScheduledEvent[]).map(toCalendarEvent);
+        return normalizeEvents(data as DiscordGuildScheduledEvent[]);
     } finally {
         clearTimeout(timer);
     }
