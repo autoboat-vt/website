@@ -137,14 +137,16 @@ For local `wrangler dev`, drop a `.dev.vars` file in `worker/` (gitignored). See
 
 ## Route wiring
 
-The `/calendar` route is registered in four places, all of which MUST stay in sync:
+For a new page, register the route in `src/App.tsx` and `scripts/spa-fallback.mjs` (see `deploy.instructions.md`). The `/calendar` route specifically is registered in four places, all of which MUST stay in sync:
 
 1. `src/App.tsx` — `<Route path="/calendar" element={<Calendar />} />`.
-2. `src/components/Header.tsx` — `NAV_LINKS` entry `{ to: "/calendar", label: "Calendar" }` (between Sponsors and Live Map).
-3. `scripts/spa-fallback.mjs` — `ROUTES` array includes `"/calendar"` so the S3 SPA fallback writes `dist/calendar/index.html`.
-4. `README.md` — routes table + `VITE_EVENTS_URL` env var description.
+2. `scripts/spa-fallback.mjs` — `ROUTES` array includes `"/calendar"` so the S3 SPA fallback writes `dist/calendar/index.html`.
+3. `README.md` — routes table + `VITE_EVENTS_URL` env var description.
+4. `src/pages/Index.tsx` — `FEATURE_PAGES` entry so the Index hub links to it.
 
-Drop any of the four and the route breaks in a different way (client-side vs S3 vs nav vs docs).
+⚠️ `/calendar` is deliberately **not** in `NAV_LINKS`. It's reachable directly at `/calendar` and from the `/index` hub. Adding it back to the nav would blow the five-link width budget (see `AGENTS.md`).
+
+Drop any of the four and the route breaks in a different way (client-side vs S3 vs hub vs docs).
 
 ## Recurrence expansion
 

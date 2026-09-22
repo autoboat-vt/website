@@ -14,8 +14,10 @@ const NAV_LINKS: NavLinkItem[] = [
     { to: "/ourteam", label: "Meet the Team" },
     { to: "/fleet", label: "Our Fleet" },
     { to: "/sponsors", label: "Sponsors" },
-    { to: "/calendar", label: "Calendar" },
-    { to: "/live", label: "Live Map" },
+    // Index is the entry point to the feature pages that don't get their own
+    // nav slot (/live, /calendar, /gallery). Those routes still exist and are
+    // reachable directly by URL -- this link is just how people find them.
+    { to: "/index", label: "Index" },
 ];
 
 export default function Header() {

@@ -109,16 +109,21 @@ public/                 # static assets, _redirects, images
 | `/`         | Home (About)  | "About"        |
 | `/ourteam`  | Our Team      | "Meet the Team" |
 | `/fleet`    | Our Fleet     | "Our Fleet"    |
-| `/live`     | Live Boat Map | "Live Map"     |
 | `/sponsors` | Sponsors      | "Sponsors"     |
-| `/calendar` | Calendar      | "Calendar"     |
+| `/index`    | Index         | "Index"        |
+| `/live`     | Live Boat Map | (not in nav)   |
+| `/calendar` | Calendar      | (not in nav)   |
 | `/gallery`  | Gallery       | (not in nav)   |
 
-NavLink items are defined in `src/components/Header.tsx` as `NAV_LINKS`. The home link uses `end: true` (react-router's `end` prop) so it's only active on exact `/`. `/gallery` is reachable from `Home` and `OurTeam`, not from the nav.
+NavLink items are defined in `src/components/Header.tsx` as `NAV_LINKS`. The home link uses `end: true` (react-router's `end` prop) so it's only active on exact `/`.
+
+The nav carries only the five primary pages. `/live`, `/calendar`, and `/gallery` are deliberately **out of the nav but still public routes** — they're reachable directly by URL and linked from `/index`, the hub page (`src/pages/Index.tsx`). `FEATURE_PAGES` in that file controls what the hub advertises; adding a feature means adding a `Route` + a `FEATURE_PAGES` entry + the `spa-fallback.mjs` listing + the README row. Don't add these back to `NAV_LINKS` without checking the width budget below.
 
 `/calendar` reads Discord guild scheduled events via a Cloudflare Worker in `worker/` (see `discord-events.instructions.md`). The Worker also serves the same events as a subscribable iCalendar feed at `GET /calendar.ics`, surfaced by the page's **Subscribe** control (`src/components/CalendarSubscribe.tsx`).
 
-If you add a route, update **all three**: `src/App.tsx`, `scripts/spa-fallback.mjs` route list, and the README routes table. The `scripts/spa-fallback.mjs` `ROUTES` array must mirror the routes in `App.tsx` exactly — S3 returns 404 for any route not listed.
+If you add a route, update **all four**: `src/App.tsx`, `scripts/spa-fallback.mjs` route list, the README routes table, and — if the page is a non-nav feature page — `FEATURE_PAGES` in `src/pages/Index.tsx` so the hub advertises it. The `scripts/spa-fallback.mjs` `ROUTES` array must mirror the routes in `App.tsx` exactly — S3 returns 404 for any route not listed.
+
+Don't add a feature page to `NAV_LINKS` unless you've checked the horizontal width budget. The nav row is a single non-wrapping flex line; at 500-1199px each extra link shrinks every button via the `max-[1099px]:` / `max-[999px]:` / `max-[749px]:` / `max-[599px]:` / `max-[499px]:` step-downs in `Header.tsx`, and below 500px the whole row falls back to the hamburger dropdown (`@media (max-width: 499px)` in `app.css`). Five links fit comfortably; six was already at the edge.
 
 ## Navigation constants
 
