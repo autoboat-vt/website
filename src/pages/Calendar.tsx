@@ -469,12 +469,6 @@ export default function Calendar() {
                             No events are scheduled yet. Check the team Discord for the latest updates.
                         </p>
                     )}
-
-                    {events?.some((e) => e.isRecurring) && (
-                        <p className="mt-6 text-center text-sm text-hovercolor">
-                            Recurring meetings are expanded into their individual occurrences.
-                        </p>
-                    )}
                 </Card>
             )}
 
