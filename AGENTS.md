@@ -83,7 +83,7 @@ src/
   components/           # shared UI (Header, Footer, Card, Gallery, etc.)
   pages/                # one component per route (Home, OurTeam, Fleet, ...)
   hooks/                # useBoatHistory, useTheme
-  lib/                  # telemetry.ts (REST client), vtColors.ts
+  lib/                  # telemetry.ts (REST client), discord.ts, vtColors.ts, galleryImages.ts (shared gallery data)
   test/                 # jest tests + __mocks__/
 scripts/
   deploy.sh             # manual deploy to VT GitLab (S4 → S3)
