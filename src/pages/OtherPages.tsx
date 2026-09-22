@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 /**
  * A feature page that isn't in the main navigation but is still public.
  * The route exists regardless of what's listed here -- this array only
- * controls what the Index page advertises.
+ * controls what the Other Pages page advertises.
  */
 interface FeaturePage {
     to: string;
@@ -37,12 +37,12 @@ const FEATURE_PAGES: FeaturePage[] = [
     },
 ];
 
-export default function Index() {
+export default function OtherPages() {
     return (
         <section className="section mx-auto grid max-w-275 gap-4 px-4 py-16">
             {/* The card grid is the whole page now -- keep an accessible page
                 heading for screen readers without rendering a visible intro. */}
-            <h1 className="sr-only">Index</h1>
+            <h1 className="sr-only">Other Pages</h1>
             <div className="grid gap-4 min-[700px]:grid-cols-2 min-[1000px]:grid-cols-3">
                 {FEATURE_PAGES.map((page) => {
                     const Icon = page.icon;

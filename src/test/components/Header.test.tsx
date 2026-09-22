@@ -3,9 +3,9 @@ import { MemoryRouter } from "react-router-dom";
 import Header from "../../components/Header";
 
 /**
- * Tests for the top nav. The five primary links plus the Index hub entry --
- * the feature pages (/live, /calendar, /gallery) deliberately live off-nav
- * and are only reachable by URL or through /index.
+ * Tests for the top nav. The five primary links plus the Other Pages hub entry
+ * -- the feature pages (/live, /calendar, /gallery) deliberately live off-nav
+ * and are only reachable by URL or through /other-pages.
  */
 
 function renderHeader() {
@@ -21,13 +21,13 @@ describe("Header", () => {
         renderHeader();
 
         const labels = Array.from(document.querySelectorAll(".nav__links .nav__link")).map((el) => el.textContent);
-        expect(labels).toEqual(["About", "Meet the Team", "Our Fleet", "Sponsors", "Index"]);
+        expect(labels).toEqual(["About", "Meet the Team", "Our Fleet", "Sponsors", "Other Pages"]);
     });
 
-    it("points the Index link at /index", () => {
+    it("points the Other Pages link at /other-pages", () => {
         renderHeader();
 
-        expect(screen.getByText("Index").closest("a")).toHaveAttribute("href", "/index");
+        expect(screen.getByText("Other Pages").closest("a")).toHaveAttribute("href", "/other-pages");
     });
 
     it("keeps the feature pages out of the nav", () => {

@@ -110,20 +110,27 @@ public/                 # static assets, _redirects, images
 | `/ourteam`  | Our Team      | "Meet the Team" |
 | `/fleet`    | Our Fleet     | "Our Fleet"    |
 | `/sponsors` | Sponsors      | "Sponsors"     |
-| `/index`    | Index         | "Index"        |
+| `/other-pages` | Other Pages | "Other Pages" |
 | `/live`     | Live Boat Map | (not in nav)   |
 | `/calendar` | Calendar      | (not in nav)   |
 | `/gallery`  | Gallery       | (not in nav)   |
 
 NavLink items are defined in `src/components/Header.tsx` as `NAV_LINKS`. The home link uses `end: true` (react-router's `end` prop) so it's only active on exact `/`.
 
-The nav carries only the five primary pages. `/live`, `/calendar`, and `/gallery` are deliberately **out of the nav but still public routes** — they're reachable directly by URL and linked from `/index`, the hub page (`src/pages/Index.tsx`). `FEATURE_PAGES` in that file controls what the hub advertises; adding a feature means adding a `Route` + a `FEATURE_PAGES` entry + the `spa-fallback.mjs` listing + the README row. Don't add these back to `NAV_LINKS` without checking the width budget below.
+The nav carries only the five primary pages. `/live`, `/calendar`, and `/gallery` are deliberately **out of the nav but still public routes** — they're reachable directly by URL and linked from `/other-pages`, the hub page (`src/pages/OtherPages.tsx`). `FEATURE_PAGES` in that file controls what the hub advertises; adding a feature means adding a `Route` + a `FEATURE_PAGES` entry + the `spa-fallback.mjs` listing + the README row. Don't add these back to `NAV_LINKS` without checking the width budget below.
 
 `/calendar` reads Discord guild scheduled events via a Cloudflare Worker in `worker/` (see `discord-events.instructions.md`). The Worker also serves the same events as a subscribable iCalendar feed at `GET /calendar.ics`, surfaced by the page's **Subscribe** control (`src/components/CalendarSubscribe.tsx`).
 
-If you add a route, update **all four**: `src/App.tsx`, `scripts/spa-fallback.mjs` route list, the README routes table, and — if the page is a non-nav feature page — `FEATURE_PAGES` in `src/pages/Index.tsx` so the hub advertises it. The `scripts/spa-fallback.mjs` `ROUTES` array must mirror the routes in `App.tsx` exactly — S3 returns 404 for any route not listed.
+If you add a route, update **all four**: `src/App.tsx`, `scripts/spa-fallback.mjs` route list, the README routes table, and — if the page is a non-nav feature page — `FEATURE_PAGES` in `src/pages/OtherPages.tsx` so the hub advertises it. The `scripts/spa-fallback.mjs` `ROUTES` array must mirror the routes in `App.tsx` exactly — S3 returns 404 for any route not listed.
 
-Don't add a feature page to `NAV_LINKS` unless you've checked the horizontal width budget. The nav row is a single non-wrapping flex line; at 500-1199px each extra link shrinks every button via the `max-[1099px]:` / `max-[999px]:` / `max-[749px]:` / `max-[599px]:` / `max-[499px]:` step-downs in `Header.tsx`, and below 500px the whole row falls back to the hamburger dropdown (`@media (max-width: 499px)` in `app.css`). Five links fit comfortably; six was already at the edge.
+Don't add a feature page to `NAV_LINKS` unless you've checked the horizontal width budget. The nav row is a single non-wrapping flex line, so its width is fixed at any given viewport; if the row's natural width exceeds the space left for the middle grid column, the overflow pushes the theme toggle off the right edge of the screen (the row cannot shrink, and the grid column will not shrink below its content). The `max-[1099px]:` / `max-[999px]:` / `max-[799px]:` / `max-[599px]:` / `max-[499px]:` step-downs in `Header.tsx` are what keep it fitting; below 500px the whole row falls back to the hamburger dropdown (`@media (max-width: 499px)` in `app.css`).
+
+⚠️ Two traps when tuning those tiers:
+
+1. **Tailwind v4's `max-[Npx]:` is exclusive** — it compiles to `@media (width < Npx)`, not `<=`. A tier labelled `max-[799px]` stops applying at exactly 799px. So a gap at the 799→800 boundary is real; verify at both N-1 and N.
+2. **Every tier that sets a property must keep setting it, or the value leaks from the tier below.** Dropping `text-sm` from the `max-[799px]` tier while keeping it on `max-[599px]` meant 600-799px inherited the 20px base font and the nav overflowed again. When you widen a tier's range, re-check that each property it previously set is still set.
+
+Measure with the actual nodes rather than reasoning about it: compare `.nav__links`'s natural width against the space available (viewport − nav padding − brand column − actions column) and assert `.nav__actions` sits fully inside the viewport. Five links fit comfortably; six was already at the edge.
 
 ## Navigation constants
 

@@ -12,14 +12,14 @@ React + TypeScript + Vite site for Virginia Tech's AutoBoat team, styled with Ta
 | `/ourteam`     | Meet the Team |
 | `/fleet`       | Our Fleet     |
 | `/sponsors`    | Sponsors      |
-| `/index`       | Index         |
+| `/other-pages` | Other Pages   |
 | `/live`        | Live Boat Map |
 | `/calendar`    | Calendar      |
 | `/gallery`     | Gallery       |
 
 The top nav only carries the five primary pages (`/`, `/ourteam`, `/fleet`,
-`/sponsors`, `/index`). `/live`, `/calendar`, and `/gallery` are still public
-routes reachable directly by URL — `/index` is the hub that links to them.
+`/sponsors`, `/other-pages`). `/live`, `/calendar`, and `/gallery` are still public
+routes reachable directly by URL — `/other-pages` is the hub that links to them.
 
 The `/calendar` page reads events from a Cloudflare Worker in `worker/`
 (proxies Discord's guild scheduled-events API without exposing the bot

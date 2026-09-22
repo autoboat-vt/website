@@ -142,9 +142,9 @@ For a new page, register the route in `src/App.tsx` and `scripts/spa-fallback.mj
 1. `src/App.tsx` — `<Route path="/calendar" element={<Calendar />} />`.
 2. `scripts/spa-fallback.mjs` — `ROUTES` array includes `"/calendar"` so the S3 SPA fallback writes `dist/calendar/index.html`.
 3. `README.md` — routes table + `VITE_EVENTS_URL` env var description.
-4. `src/pages/Index.tsx` — `FEATURE_PAGES` entry so the Index hub links to it.
+4. `src/pages/OtherPages.tsx` — `FEATURE_PAGES` entry so the Other Pages hub links to it.
 
-⚠️ `/calendar` is deliberately **not** in `NAV_LINKS`. It's reachable directly at `/calendar` and from the `/index` hub. Adding it back to the nav would blow the five-link width budget (see `AGENTS.md`).
+⚠️ `/calendar` is deliberately **not** in `NAV_LINKS`. It's reachable directly at `/calendar` and from the `/other-pages` hub. Adding it back to the nav would blow the five-link width budget (see `AGENTS.md`).
 
 Drop any of the four and the route breaks in a different way (client-side vs S3 vs hub vs docs).
 
