@@ -416,6 +416,50 @@ describe("discord events client", () => {
             const sorted = [...starts].sort((a, b) => a - b);
             expect(starts).toEqual(sorted);
         });
+
+        // A cancelled series has a terminal Discord status and no UNTIL (the
+        // rule's `end` is not settable), so without a clip it would paint
+        // struck-through chips on every future occurrence, forever.
+        describe("cancelled series", () => {
+            function cancelledWeekly(): CalendarEvent {
+                return sampleEvent({
+                    id: "dead",
+                    name: "Cancelled standup",
+                    start: "2026-03-04T19:00:00.000Z", // Wednesday
+                    status: "canceled",
+                    isRecurring: true,
+                    recurrenceRule: "FREQ=WEEKLY;INTERVAL=1;BYDAY=WE",
+                });
+            }
+
+            it("keeps occurrences that already happened", () => {
+                // Mid-March: Mar 4 and Mar 11 are in the past, Mar 18/25 are not.
+                const out = expandRecurrences([cancelledWeekly()], from, to, new Date(Date.UTC(2026, 2, 15)));
+                expect(out.map((o) => o.start.getUTCDate())).toEqual([4, 11]);
+            });
+
+            it("stops projecting occurrences into the future", () => {
+                // Same month, before the series started: nothing has happened
+                // yet, so nothing should render.
+                const out = expandRecurrences([cancelledWeekly()], from, to, new Date(Date.UTC(2026, 2, 1)));
+                expect(out).toHaveLength(0);
+            });
+
+            it("still expands a live series through the whole window", () => {
+                // The clip is scoped to cancelled events; a scheduled weekly
+                // event keeps all four March occurrences.
+                const live = { ...cancelledWeekly(), id: "live", status: "scheduled" as const };
+                const out = expandRecurrences([live], from, to, new Date(Date.UTC(2026, 2, 1)));
+                expect(out).toHaveLength(4);
+            });
+
+            it("leaves an already-finished window empty rather than shifting it", () => {
+                // `now` far past the window: the clip resolves to the window
+                // end, so the historical range still expands normally.
+                const out = expandRecurrences([cancelledWeekly()], from, to, new Date(Date.UTC(2027, 0, 1)));
+                expect(out).toHaveLength(4);
+            });
+        });
     });
 
     describe("describeRecurrence", () => {

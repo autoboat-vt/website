@@ -251,8 +251,10 @@ export default function Calendar() {
         // or end of the grid still produce the right chips.
         const windowStart = addDays(new Date(monthAnchor.getFullYear(), monthAnchor.getMonth(), 1), -7);
         const windowEnd = addDays(new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0), 7);
-        return expandRecurrences(events, windowStart, windowEnd);
-    }, [events, monthAnchor]);
+        // Pass the tracked clock: expandRecurrences clips cancelled series at
+        // `now`, so it must follow the same clock the "today" highlight uses.
+        return expandRecurrences(events, windowStart, windowEnd, now);
+    }, [events, monthAnchor, now]);
 
     const { cells, monthLabel } = useMemo(
         () => buildMonthGrid(monthAnchor, occurrences, now),

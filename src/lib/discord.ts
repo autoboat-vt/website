@@ -278,11 +278,21 @@ export function webcalUrl(): string {
  * occurrence, each shifted by the same start/end duration as the base event.
  *
  * The output is sorted by occurrence start time.
+ *
+ * Cancelled series are clipped at `now` (see the note in the recurring branch).
+ * `now` is injectable so that clip is deterministic under test; callers that
+ * already track a clock should pass theirs rather than let the default drift.
  */
-export function expandRecurrences(events: CalendarEvent[], from: Date, to: Date): ExpandedOccurrence[] {
+export function expandRecurrences(
+    events: CalendarEvent[],
+    from: Date,
+    to: Date,
+    now: Date = new Date(),
+): ExpandedOccurrence[] {
     const out: ExpandedOccurrence[] = [];
     const fromMs = from.getTime();
     const toMs = to.getTime();
+    const nowMs = now.getTime();
 
     for (const event of events) {
         const baseStart = new Date(event.start);
@@ -301,7 +311,16 @@ export function expandRecurrences(events: CalendarEvent[], from: Date, to: Date)
                 const rule = rrulestr(`RRULE:${event.recurrenceRule}`, {
                     dtstart: baseStart,
                 });
-                for (const occurrenceStart of rule.between(from, to, true)) {
+                // A cancelled series is a historical record, not a live one.
+                // Discord's CANCELED status is terminal and its RRULE carries
+                // no UNTIL (the rule's `end` is not settable), so expanding it
+                // to the window end would paint struck-through chips on every
+                // occurrence in every future month, forever. Stop at `now`:
+                // the occurrences that already happened stay visible (the
+                // cancellation is worth seeing), later ones are not generated.
+                const cutoffMs = event.status === "canceled" ? Math.min(toMs, nowMs) : toMs;
+                if (cutoffMs < fromMs) continue;
+                for (const occurrenceStart of rule.between(from, new Date(cutoffMs), true)) {
                     out.push({
                         event,
                         start: occurrenceStart,
