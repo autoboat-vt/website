@@ -650,12 +650,33 @@
         position: relative;
         display: flex;
         align-items: center;
-        justify-content: space-between;
         gap: 1rem;
         margin-bottom: 1.5rem;
-        /* The Subscribe control expands into a full-width panel; wrapping
-           lets it claim its own row instead of squeezing the month label. */
+        /* The month nav group is `flex-basis: 100%`, so it always claims the
+           first row on its own and the controls wrap below it. `center`
+           therefore only ever affects that wrapped controls row -- a
+           single-item flex row under `space-between` pins to the left edge,
+           which is what left Today + Subscribe hanging under the left of a
+           centered month label. */
         flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    /* Month navigation: prev arrow, label, next arrow. Grouped so the two
+       arrows can never be separated by the header's flex-wrap -- when they
+       lived in different containers, the controls group wrapping to its own
+       row stacked the arrows vertically.
+
+       `flex-basis: 100%` keeps this group on a row by itself at EVERY width
+       (not just narrow ones), so Today + Subscribe always sit on the row
+       below it. Its automatic minimum size (min-content, i.e. the longest
+       word in the label) is deliberately left in place: it stops the label
+       collapsing to zero width when space runs out. */
+    .calendar-month-nav {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex: 1 1 100%;
     }
 
     .calendar-month-label {
@@ -663,13 +684,15 @@
         font-size: 1.5rem;
         font-weight: 800;
         text-align: center;
+        /* Fills the space between the arrows rather than a `flex: 1` on the
+           label itself, which would make the label the flexible item and
+           leave the arrows sitting together with the label after them. */
         flex: 1;
     }
 
-    /* Right-hand header controls (next-month + Today). The subscribe control
-       deliberately sits OUTSIDE this group as a direct child of the header, so
-       its open panel can take a full row instead of stretching this nowrap
-       group to the panel's width. */
+    /* Today + Subscribe. The month nav group claims a full row of its own, so
+       this group always wraps onto the row below it and the header's
+       `justify-content: center` centers it at every width. */
     .calendar-header__controls {
         display: flex;
         align-items: center;
@@ -704,28 +727,6 @@
         background-color: rgba(255, 255, 255, 0.03);
     }
 
-    .calendar-today-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0.5rem 0.75rem;
-        border-radius: 0.5rem;
-        border: 1px solid rgba(0, 0, 0, 0.06);
-        background-color: rgba(0, 0, 0, 0.03);
-        color: var(--color-fontcolor);
-        font-size: 0.875rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition:
-            background-color 200ms,
-            border-color 200ms,
-            transform 200ms;
-    }
-    .dark .calendar-today-btn {
-        border-color: rgba(255, 255, 255, 0.06);
-        background-color: rgba(255, 255, 255, 0.03);
-    }
-
     /* --- Calendar subscribe ---
        The panel is a dropdown. It anchors to `.calendar-header` (which sets
        position: relative), NOT to this element: on mobile the toggle sits
@@ -750,15 +751,20 @@
         transform: rotate(180deg);
     }
 
-    /* Anchored under the header's right edge, just below the toggle row.
-       `min(25rem, 100%)` caps it at a readable dropdown width (three provider
-       rows plus a URL -- spanning the full card left the content in a
-       mostly-empty box) while guaranteeing it never exceeds the header, so it
+    /* Anchored under the header's bottom edge, centered.
+       Centering (rather than the old `right: 0` right-edge anchor) keeps the
+       panel visually attached to the Subscribe toggle, which now sits in the
+       middle of the header under the centered controls row. The containing
+       block is still `.calendar-header` (its `position: relative`), so
+       `left: 50%` is half the header and `min(25rem, 100%)` still resolves
+       against the header width -- the panel can't exceed the header, so it
        can't overflow the viewport on a phone. */
     .calendar-subscribe__panel {
         position: absolute;
         top: calc(100% + 0.5rem);
-        right: 0;
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
         z-index: 20;
         width: min(25rem, 100%);
         padding: 1.125rem 1.25rem 1rem;
@@ -1415,13 +1421,22 @@
         }
 
         .calendar-header {
+            /* `justify-content: center` and the wrapped controls row are
+               already handled by the base rule -- the month nav group has
+               `flex-basis: 100%` at every width, so no centring override is
+               needed here. */
             margin-bottom: 1rem;
         }
-        .calendar-header .btn-sm {
-            /* The Today button is the widest header control; trim it so the
-               month label keeps room on 320px screens. */
-            padding: 0.25rem 0.5rem;
-            font-size: 0.75rem;
+        .calendar-header .btn--sm {
+            /* Today + Subscribe, trimmed a little tighter than the shared
+               `.btn--sm` so they sit lighter under the month label. Scoped to
+               `.calendar-header` on purpose: LiveMap also uses `.btn--sm` and
+               should keep the shared size.
+               NOTE: `.btn--sm` is a single class, NOT the Tailwind-style
+               `.btn-sm`. This read `.calendar-header .btn-sm` until now, which
+               matched nothing and silently did nothing. */
+            padding: 0.25rem 0.75rem;
+            font-size: 0.85rem;
         }
         .calendar-month-label {
             font-size: 1.05rem;

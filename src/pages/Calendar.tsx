@@ -328,16 +328,22 @@ export default function Calendar() {
                 // the grid fill the section instead on wide viewports.
                 <Card className="calendar-wrapper w-full max-w-none">
                     <div className="calendar-header">
-                        <button
-                            type="button"
-                            className="calendar-nav-btn"
-                            onClick={() => navigateMonth(-1)}
-                            aria-label="Previous month"
-                        >
-                            <ChevronLeft size={18} />
-                        </button>
-                        <h2 className="calendar-month-label">{monthLabel}</h2>
-                        <div className="calendar-header__controls">
+                        {/* The two arrows live in ONE group so the header can
+                            never wrap between them. They used to be split
+                            across the header (prev) and the controls group
+                            (next), so when the controls group wrapped to its
+                            own row on a narrow screen the arrows stacked
+                            vertically instead of staying side by side. */}
+                        <div className="calendar-month-nav">
+                            <button
+                                type="button"
+                                className="calendar-nav-btn"
+                                onClick={() => navigateMonth(-1)}
+                                aria-label="Previous month"
+                            >
+                                <ChevronLeft size={18} />
+                            </button>
+                            <h2 className="calendar-month-label">{monthLabel}</h2>
                             <button
                                 type="button"
                                 className="calendar-nav-btn"
@@ -346,6 +352,8 @@ export default function Calendar() {
                             >
                                 <ChevronRight size={18} />
                             </button>
+                        </div>
+                        <div className="calendar-header__controls">
                             <button type="button" className="btn btn--sm" onClick={goToToday}>
                                 Today
                             </button>

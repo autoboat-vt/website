@@ -170,6 +170,40 @@ describe("Calendar page", () => {
         expect(toggle?.getAttribute("aria-controls")).toBe(panel?.id);
     });
 
+    it("keeps both month nav arrows in the same container as the month label", async () => {
+        // Regression guard for a mobile layout bug: the prev arrow used to be
+        // a direct child of `.calendar-header`, while the next arrow lived
+        // inside `.calendar-header__controls`. The header is a wrapping flex
+        // row, and on a narrow screen the controls group wrapped onto its own
+        // row -- taking the next arrow with it and stacking the two arrows
+        // vertically. Both arrows now live in `.calendar-month-nav` alongside
+        // the label, so no wrap can ever separate them.
+        mockFetchOnce([]);
+        const { container } = renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        const nav = container.querySelector(".calendar-month-nav");
+        expect(nav).not.toBeNull();
+        expect(nav?.querySelector('[aria-label="Previous month"]')).not.toBeNull();
+        expect(nav?.querySelector('[aria-label="Next month"]')).not.toBeNull();
+        expect(nav?.querySelector(".calendar-month-label")).not.toBeNull();
+
+        // The arrows are siblings within one nowrap-ish flex container, in
+        // left-to-right order around the label.
+        const children = Array.from(nav?.children ?? []);
+        expect(nav?.firstElementChild).toBe(nav?.querySelector('[aria-label="Previous month"]'));
+        expect(nav?.lastElementChild).toBe(nav?.querySelector('[aria-label="Next month"]'));
+        expect(children).toHaveLength(3);
+
+        // The controls group must NOT contain either arrow, or a wrap could
+        // split them again.
+        const controls = container.querySelector(".calendar-header__controls");
+        expect(controls?.querySelector('[aria-label="Next month"]')).toBeNull();
+        expect(controls?.querySelector('[aria-label="Previous month"]')).toBeNull();
+    });
+
     it("aligns day numbers with the correct weekday column", async () => {
         // Regression test: the grid starts on Sunday. The number of leading
         // other-month pad cells before the 1st must equal the 1st's getDay()

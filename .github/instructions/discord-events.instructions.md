@@ -61,8 +61,10 @@ Users of those apps are directed to the manual "Add calendar from URL" flow, wit
 
 - `.calendar-wrapper` must keep `overflow: visible` (it used to be `hidden`) or the dropdown is clipped. The month grid clips its own rounded corners via `.calendar` instead.
 - `.calendar-header` must keep `position: relative` — it is the panel's containing block.
+- The panel is centered on the header (`left: 50%` + `transform: translateX(-50%)`). It used to use `right: 0` to hug the header's right edge, matching a toggle that sat at the right end of the header. Once the controls moved to a centered row below the month, that anchor left the panel detached from the toggle by ~344px at 1280px. Centering keeps the panel under the toggle, and because the containing block is unchanged the `min(25rem, 100%)` width still resolves against the header, so it can never overflow the viewport at any width.
+- ⚠️ If you ever add a `transform` to `.calendar-subscribe__panel` (for an open/close animation), include the centering translate or the panel will jump sideways: `transform: translateX(-50%) translateY(8px)`.
 - The panel widths with `min(25rem, 100%)`: at desktop it caps at a readable 25rem; on mobile `100%` resolves against the header so it can never overflow the viewport. Anchoring to the *toggle* instead fails on mobile, where the toggle sits mid-row and a left-extending panel runs off screen.
-- `.calendar-subscribe` is `display: inline-flex` so it sits inline in the nowrap `.calendar-header__controls` group without stretching it.
+- `.calendar-subscribe` is `display: inline-flex` so it sits inline in the nowrap `.calendar-header__controls` group without stretching it. See "Month-nav header layout" below for what that group may contain (Today + Subscribe, NOT the month arrows).
 
 ⚠️ The panel's typography rules are written as `.calendar-subscribe__panel .calendar-subscribe__title` (0,2,0) on purpose. The panel renders inside `Card`, and `.card h3` / `.card p` (0,1,1) otherwise beat a bare single-class rule (0,1,0) — the title rendered at 36px and body text at 20px instead of ~17px/14px. Keep the doubled-up selectors when adding text styles here.
 
@@ -84,6 +86,22 @@ Below 700px the calendar renders a different markup branch, gated by an `isMobil
 - The agenda rows reuse `eventChipClassName` and open the same `EventModal`, so status styling and modal behavior are shared between branches.
 - 700px is the point where ~90px columns start needing multi-line chips; the media query in `app.css` and the matchMedia query in `Calendar.tsx` MUST match.
 - Tests: `src/test/setup.ts` stubs matchMedia with `matches: false`, so the existing tests exercise the desktop branch; the mobile describe block in `Calendar.test.tsx` re-stubs it to `matches: true` in `beforeEach`.
+
+### Month-nav header layout
+
+⚠️ Both month arrows and the month label live in ONE flex container, `.calendar-month-nav` (prev arrow, `.calendar-month-label`, next arrow). Do NOT move an arrow back out to be a direct child of `.calendar-header` or into `.calendar-header__controls`.
+
+The header carries TODAY + SUBSCRIBE ON A CENTERED ROW BELOW THE MONTH at every width (the user asked for this at all breakpoints, not just mobile). `.calendar-month-nav` is `flex: 1 1 100%`, so its 100% basis forces it onto a row of its own; `.calendar-header__controls` then wraps to the row beneath it and `justify-content: center` on the header centers that group. Desktop used to put everything on one row (`space-between`), so this is a deliberate always-wrapped layout — don't "restore" a single row.
+
+⚠️ `justify-content: center` (not `space-between`) is load-bearing. A wrapped flex row holding a single item under `space-between` pins that item to the **left edge**, which is what left Today + Subscribe hanging left under a centered month label (measured at 390px: gap-left 0px, gap-right 111px). Anything that stops `.calendar-month-nav` from claiming its own row will re-expose this.
+
+⚠️ `.calendar-month-nav` deliberately has no `min-width: 0`. Its automatic minimum size is `min-content` (the longest word in the label), which is what stops the label collapsing to zero width. Adding `min-width: 0` made the label 0px wide at 320/360px while the arrows stayed put. The label inside uses `flex: 1` to fill the space between the arrows.
+
+Because the nav group no longer shares a row with the controls, the `@media (max-width: 700px)` block needs no header-centering override (it only trims `margin-bottom` now).
+
+Regression guard: `Calendar.test.tsx` "keeps both month nav arrows in the same container as the month label" asserts both arrows are children of `.calendar-month-nav`, that the label sits between them, and that neither is inside `.calendar-header__controls`.
+
+⚠️ The shared button class is `.btn--sm` (double dash), NOT `.btn-sm`. There is no Tailwind `sm:` derivative here — `.btn`/`.btn--sm`/`.btn--primary`/`.btn--solid` are hand-written classes in `app.css`. The header's mobile sizing rule was written as `.calendar-header .btn-sm`, which matched **nothing**, so the intended trim silently did nothing until 2026-09-22. Use `.calendar-header .btn--sm` and keep it scoped to `.calendar-header` so LiveMap's three `.btn--sm` buttons (Recenter / Refresh now / Try again) keep the shared size. A `.calendar-today-btn` rule pair also sat unused in the calendar block and was deleted. ⚠️ **Lesson: a CSS rule that matches nothing fails silently** — grep the selector against the actual JSX `className` strings before assuming a cascade/specificity problem.
 
 ## No-webhook constraint
 
