@@ -89,7 +89,7 @@ export const SUBTEAM_IMAGES = {
  * Every image on the site, for the /gallery grid: the loose photos first,
  * then the subteam photography.
  *
- * ⚠️ The /gallery grid keys tiles by `src`, so a `src` appearing twice
+ * WARNING: The /gallery grid keys tiles by `src`, so a `src` appearing twice
  * would drop a tile and emit a React duplicate-key warning. There are
  * currently no duplicates -- `src/test/lib/galleryImages.test.ts` guards it.
  */

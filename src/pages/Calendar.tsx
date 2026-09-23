@@ -3,7 +3,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CalendarSubscribe from "../components/CalendarSubscribe";
 import Card from "../components/Card";
 import EventModal from "../components/EventModal";
-import { type CalendarEvent, type ExpandedOccurrence, expandRecurrences, fetchEvents } from "../lib/discord";
+import {
+    type CalendarEvent,
+    type ExpandedOccurrence,
+    expandRecurrences,
+    fetchEvents,
+    OFFICERS_URL,
+} from "../lib/discord";
 
 const DAY_HEADINGS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 /** Single-letter labels used on mobile, where the 3-letter forms overflow
@@ -170,7 +176,17 @@ function AgendaRow({
  * the worker's KV TTL (60s) -- polling faster would never see fresher data. */
 const EVENTS_POLL_INTERVAL_MS = 60_000;
 
-export default function Calendar() {
+export interface CalendarProps {
+    /**
+     * Which feed to read. `officer` reads the Worker's `/officers/events`
+     * route, which includes officer-only events the public feed filters out.
+     * Used by the `/calendar/officers` page; `/calendar` keeps the default.
+     */
+    variant?: "public" | "officer";
+}
+
+export default function Calendar({ variant = "public" }: CalendarProps) {
+    const baseUrl = variant === "officer" ? OFFICERS_URL : undefined;
     const [monthAnchor, setMonthAnchor] = useState(() => {
         const now = new Date();
         return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -218,7 +234,7 @@ export default function Calendar() {
         const controller = new AbortController();
         abortRef.current = controller;
         try {
-            const data = await fetchEvents(controller.signal);
+            const data = await fetchEvents(controller.signal, baseUrl);
             // If we were aborted while awaiting, drop the result.
             if (controller.signal.aborted) return;
             hasDataRef.current = true;
@@ -232,7 +248,7 @@ export default function Calendar() {
             setError(err instanceof Error ? err.message : "Failed to load events");
             setEvents([]);
         }
-    }, []);
+    }, [baseUrl]);
 
     // Initial load + polling loop with visibility-aware pause, mirroring the
     // LiveMap pattern (skip hidden tabs, immediately repoll on visibility).
@@ -360,7 +376,7 @@ export default function Calendar() {
                             {/* Renders the toggle inline here; its panel is
                                 absolutely positioned so it can't stretch this
                                 nowrap group (see .calendar-subscribe__panel). */}
-                            <CalendarSubscribe />
+                            <CalendarSubscribe variant={variant} />
                         </div>
                     </div>
 

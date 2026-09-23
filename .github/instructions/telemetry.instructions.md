@@ -10,9 +10,9 @@ Typed REST client for the telemetry server (Flask behind Cloudflare Tunnel; API 
 ## Key exports
 
 - `TELEMETRY_URL` — base URL (from `globalThis.__VITE_TELEMETRY_URL__` or default `https://vt-autoboat-telemetry.uk`).
-- `fetchFleetState()` → `BoatWithPosition[]` — fetches instances, then status + waypoints in parallel per instance via `Promise.allSettled`. Failed per-boat fetches are filtered out, not thrown.
-- `positionFromStatus(status)` → `{lat, lng} | null` — applies the GPS sentinel (near-zero noise → null).
-- `fetchWaypoints(instanceId)` → `Waypoint[] | null` — filters malformed entries.
+- `fetchFleetState()` -> `BoatWithPosition[]` — fetches instances, then status + waypoints in parallel per instance via `Promise.allSettled`. Failed per-boat fetches are filtered out, not thrown.
+- `positionFromStatus(status)` -> `{lat, lng} | null` — applies the GPS sentinel (near-zero noise -> null).
+- `fetchWaypoints(instanceId)` -> `Waypoint[] | null` — filters malformed entries.
 - `fetchWithTimeout(url, opts)` — wrapper around `fetch` with an `AbortController`-based timeout (default 8000ms). Every method throws on network/HTTP failure so callers can decide how to surface errors.
 - Formatters: `headingToCompass`, `formatSpeed`, `formatLastSeen`, `boatModeLabel`.
 - Error class: `TelemetryError` — typed error for downstream handling.
@@ -21,9 +21,9 @@ Typed REST client for the telemetry server (Flask behind Cloudflare Tunnel; API 
 
 ## API endpoints
 
-- `GET /instance_manager/get_all_instance_info` → `InstanceInfo[]`
-- `GET /boat_status/get/<id>` → `BoatStatus` (has `latitude`, `longitude`)
-- `GET /waypoints/get/<id>` → `[[lat, lng], ...]`
+- `GET /instance_manager/get_all_instance_info` -> `InstanceInfo[]`
+- `GET /boat_status/get/<id>` -> `BoatStatus` (has `latitude`, `longitude`)
+- `GET /waypoints/get/<id>` -> `[[lat, lng], ...]`
 
 ## Wire format
 
@@ -37,11 +37,11 @@ Typed REST client for the telemetry server (Flask behind Cloudflare Tunnel; API 
 
 ## GPS sentinel
 
-Treat `(0, 0)` AND near-zero noise (`Math.abs(lat) < 0.001 && Math.abs(lng) < 0.001`) as "no GPS fix" → return null. Strict `=== 0` lets through tiny floats that snap the map to empty ocean.
+Treat `(0, 0)` AND near-zero noise (`Math.abs(lat) < 0.001 && Math.abs(lng) < 0.001`) as "no GPS fix" -> return null. Strict `=== 0` lets through tiny floats that snap the map to empty ocean.
 
 ## Config
 
-`TELEMETRY_URL` defaults to `https://vt-autoboat-telemetry.uk`. Override at build time via `VITE_TELEMETRY_URL` env var (wired through `vite.config.ts` `define` → `globalThis.__VITE_TELEMETRY_URL__`). Uses `globalThis` not `import.meta.env` because `import.meta` is syntax (can't be polyfilled in Jest).
+`TELEMETRY_URL` defaults to `https://vt-autoboat-telemetry.uk`. Override at build time via `VITE_TELEMETRY_URL` env var (wired through `vite.config.ts` `define` -> `globalThis.__VITE_TELEMETRY_URL__`). Uses `globalThis` not `import.meta.env` because `import.meta` is syntax (can't be polyfilled in Jest).
 
 ## `useBoatHistory` hook (`src/hooks/useBoatHistory.ts`)
 

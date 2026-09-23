@@ -28,6 +28,14 @@ token). It also serves a subscribable iCalendar feed at
 Calendar, or Outlook; the page's **Subscribe** control links to it. See
 `worker/README.md` for the one-time setup.
 
+Officer-only events are kept off the public calendar. An event is internal when
+it was scheduled in the officer voice channel (`OFFICERS_CHANNEL_ID`), so the
+Worker classifies each event by its channel and serves the full set only on
+`/officers/*`. That route is **unlisted but not access-controlled** — anyone
+with the link can read it — so it is intentionally absent from the table above
+and from the site nav. See "Audience gating" in
+`.github/instructions/discord-events.instructions.md`.
+
 ## Environment variables
 
 Set these before `bun run dev` or `bun run build`:
@@ -46,7 +54,7 @@ Requires Node.js 18+. [Bun](https://bun.sh) is the default runner (npm/yarn also
 ```bash
 bun install            # install deps
 bun run dev            # dev server at http://localhost:3000
-bun run build          # production build → dist/
+bun run build          # production build -> dist/
 bun run preview        # preview the build
 bun run test           # jest unit tests
 bun run lint           # biome lint

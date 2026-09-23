@@ -161,6 +161,10 @@ describe("Discord payload -> .ics feed", () => {
             image: `https://cdn.discordapp.com/guild-events/1000000000000000001/abc123.png?size=512`,
             recurrenceRule: null,
             cancelledDates: [],
+            // Audience gating fields: the channel id is what classification
+            // keys off, and with no channel list supplied it fails open.
+            channelId: "2000000000000000002",
+            audience: "public",
         });
     });
 

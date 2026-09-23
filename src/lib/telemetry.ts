@@ -336,7 +336,7 @@ export async function fetchFleetState(opts?: FetchOptions): Promise<BoatWithPosi
     });
 }
 
-/** Format a heading in degrees as a compass direction, e.g. 0→N, 225→SW. */
+/** Format a heading in degrees as a compass direction, e.g. 0 is N, 225 is SW. */
 export function headingToCompass(degrees?: number): string {
     if (typeof degrees !== "number" || !Number.isFinite(degrees)) return "—";
 

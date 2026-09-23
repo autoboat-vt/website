@@ -152,7 +152,7 @@ export const VT_COLORS = {
 
 /**
  * Flat lookup by hex value (case-insensitive).
- * @example byHex("#861f41") → VT_COLORS.primary.maroon
+ * @example byHex("#861f41") returns VT_COLORS.primary.maroon
  */
 export function byHex(hex: string): VtColor | undefined {
     const target = hex.toUpperCase();
@@ -166,7 +166,7 @@ export function byHex(hex: string): VtColor | undefined {
 
 /**
  * Flat lookup by official CSS variable name (case-insensitive).
- * @example byCssVar("--vt-maroon") → VT_COLORS.primary.maroon
+ * @example byCssVar("--vt-maroon") returns VT_COLORS.primary.maroon
  */
 export function byCssVar(name: string): VtColor | undefined {
     const target = name.toLowerCase();

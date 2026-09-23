@@ -22,7 +22,19 @@ const distDir = resolve(__dirname, "..", "dist");
 const indexHtml = join(distDir, "index.html");
 
 // Must match the routes defined in src/App.tsx.
-const ROUTES = ["/ourteam", "/fleet", "/sponsors", "/other-pages", "/calendar", "/gallery", "/live"];
+const ROUTES = [
+    "/ourteam",
+    "/fleet",
+    "/sponsors",
+    "/other-pages",
+    "/calendar",
+    "/gallery",
+    "/live",
+    // Nested under /calendar by URL only. Writes dist/calendar/officers/
+    // index.html alongside dist/calendar/index.html -- the two coexist, and
+    // mkdirSync(recursive) creates the nested directory.
+    "/calendar/officers",
+];
 
 for (const route of ROUTES) {
     const dest = join(distDir, `${route}/index.html`);

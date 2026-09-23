@@ -16,6 +16,13 @@
  * line is stripped from the description here so it is not rendered twice.
  */
 
+import {
+    type Audience,
+    type AudienceConfig,
+    audienceConfigFromEnv,
+    type DiscordChannel,
+    isOfficerEvent,
+} from "./audience";
 import { parseCancelledDates, stripCancelledNote } from "./cancellations";
 import { type DiscordRecurrenceRule, formatRecurrenceRule } from "./recurrence";
 
@@ -33,6 +40,18 @@ export interface CalendarEvent {
     image: string | null; // fully-qualified CDN url, or null
     /** RFC 5545 RRULE body (without the leading "RRULE:"), or null. */
     recurrenceRule: string | null;
+    /**
+     * Discord voice/stage channel hosting the event, or null for a channel-less
+     * event. This is the field audience gating keys off: the channel's parent
+     * category encodes who is allowed to see the event (see `audience.ts`).
+     */
+    channelId: string | null;
+    /**
+     * Who may see this event. Derived from `channelId`'s category, NOT from
+     * Discord's `privacy_level` (which only ever means "guild members" and
+     * cannot express a role-scoped audience).
+     */
+    audience: Audience;
     /**
      * ISO `YYYY-MM-DD` dates whose occurrence is cancelled, parsed from the
      * description's `Cancelled:` convention. The website renders these as
@@ -111,10 +130,58 @@ export function toCalendarEvent(e: DiscordGuildScheduledEvent): CalendarEvent {
         image: buildCdnImageUrl(e),
         recurrenceRule: rule,
         cancelledDates,
+        channelId: e.channel_id ?? null,
+        // Provisionally public. `normalizeEvents` reclassifies against the
+        // channel list; a caller that uses this directly gets the fail-open
+        // default (see audience.ts).
+        audience: "public",
     };
 }
 
-/** Normalize a raw Discord scheduled-events array. */
-export function normalizeEvents(events: DiscordGuildScheduledEvent[]): CalendarEvent[] {
-    return events.map(toCalendarEvent);
+/** Options for `normalizeEvents`. */
+export interface NormalizeOptions {
+    /**
+     * Discord channels, used to resolve each event's category -> audience.
+     * Omitted by callers that only want the raw normalization (e.g. the
+     * `.ics` builder tests); an empty list means nothing can be classified as
+     * officer, so everything is public (see audience.ts).
+     */
+    channels?: DiscordChannel[];
+    /**
+     * Resolved audience config. Defaults to the committed defaults.
+     *
+     * WARNING: Deliberately an explicit `AudienceConfig` (`officersChannelId`) and
+     * NOT the raw `AudienceEnv` (`OFFICERS_CHANNEL_ID`). An earlier version
+     * accepted the env shape here and callers spread the resolved config into
+     * it, which silently ignored the override -- the keys differ only by
+     * casing, so every event classified as public against the default id.
+     * Keep the two conventions apart.
+     */
+    audienceConfig?: AudienceConfig;
+}
+
+/**
+ * Normalize a raw Discord scheduled-events array and classify each event's
+ * audience from its channel's parent category.
+ *
+ * Classification lives here, not in the route handlers, so the JSON and `.ics`
+ * consumers can never disagree about who may see an event -- and so the filter
+ * runs BEFORE the KV write, meaning a newly-hidden event can never be served
+ * from a warm cache that predates the change.
+ */
+export function normalizeEvents(events: DiscordGuildScheduledEvent[], options: NormalizeOptions = {}): CalendarEvent[] {
+    const config = options.audienceConfig ?? audienceConfigFromEnv({});
+    const channels = options.channels ?? [];
+    return events.map((e) => {
+        const event = toCalendarEvent(e);
+        return {
+            ...event,
+            audience: isOfficerEvent(event, config, channels) ? "officer" : "public",
+        };
+    });
+}
+
+/** Keep only the events the public calendar may show. */
+export function publicEvents(events: CalendarEvent[]): CalendarEvent[] {
+    return events.filter((e) => e.audience === "public");
 }

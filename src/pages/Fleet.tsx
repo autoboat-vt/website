@@ -42,7 +42,7 @@ const STATUS_STYLES: Record<VesselStatus, { text: string; dot: string; pulse: bo
 
 interface Vessel {
     /**
-     * Display name. ⚠️ Also used as the section anchor id
+     * Display name. Also used as the section anchor id
      * (`id={name.toLowerCase()}`), so renaming a vessel changes its
      * deep-link URL. `reverse` is a per-card flag, not derived from index --
      * when you add or reorder vessels, re-balance the flags to keep the

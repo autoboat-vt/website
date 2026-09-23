@@ -37,7 +37,7 @@ interface HyperlinkProps {
     href: UrlString;
     /** The visible link text. */
     children: ReactNode;
-    /** Optional hash anchor on an internal route (e.g. "software" → "/ourteam#software"). */
+    /** Optional hash anchor on an internal route (e.g. "software" maps to "/ourteam#software"). */
     hash?: string;
     /** Override the default underline styling. */
     className?: string;

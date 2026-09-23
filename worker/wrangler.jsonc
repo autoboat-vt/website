@@ -21,8 +21,27 @@
         // How long to cache the Discord events payload in KV, in seconds.
         "CACHE_TTL_SECONDS": "60",
         // Display name subscribers see in Google/Apple/Outlook Calendar for
-        // the /calendar.ics feed. Public, non-secret.
-        "CALENDAR_NAME": "AutoBoat at Virginia Tech"
+        // the /calendar.ics feed. Public, non-secret. The /officers feed uses
+        // its own default ("AutoBoat Officers") unless this is set.
+        "CALENDAR_NAME": "AutoBoat at Virginia Tech",
+        // Officer-only VOICE CHANNEL id. Events scheduled in this channel are
+        // excluded from /events and /calendar.ics, and included only on
+        // /officers/*. Every other channel is public. NOT a secret -- anyone in
+        // the server can see a channel id.
+        //
+        // WARNING: Classified by CHANNEL, not category: every event voice channel
+        // (officer, subteam, and general member) shares ONE category, so the
+        // category cannot tell them apart.
+        //
+        // Blank means "no officer channel", which makes the Worker serve
+        // NOTHING rather than guess (fail-closed). Omit the var entirely to use
+        // DEFAULT_OFFICERS_CHANNEL_ID in worker/src/audience.ts.
+        // Verify with `curl <worker-url>/audiences`.
+        "OFFICERS_CHANNEL_ID": "1550594891766308997",
+        // Comma-separated PUBLIC category ids. Documentation only -- the filter
+        // is fail-open, so these need not be exhaustive. Reported by /audiences
+        // so the mapping can be reviewed.
+        "PUBLIC_CATEGORY_IDS": "1017960607317569546,1017961755422023750,1521086208877723708,1170066058371997756,1496252157961531502"
     },
     // Smart placement is recommended for Workers that are latency-sensitive and
     // need to be close to users. This is the case for our Discord events API.

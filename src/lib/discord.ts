@@ -213,7 +213,7 @@ export function isLocationUrl(location: string): boolean {
  * `entity_metadata.location` empty; the meetup location is written into the
  * description instead.
  *
- * ⚠️ The ONLY accepted form is a labeled line: `Location: <value>`, or
+ * WARNING: The ONLY accepted form is a labeled line: `Location: <value>`, or
  * `Where:` as a synonym. `<value>` is either a place or a URL. Anything else
  * means the event has no location -- do NOT reintroduce a "first bold span"
  * or similar guess. The team bolds emphasis too
@@ -264,8 +264,8 @@ export function extractLocationFromDescription(description: string | null): {
  * the guard but is still unparseable) would otherwise render event chips as
  * recurring while their occurrences silently collapse to a single one.
  */
-export async function fetchEvents(signal?: AbortSignal): Promise<CalendarEvent[]> {
-    const data = await fetchJson<unknown>(`${EVENTS_URL}/events`, signal);
+export async function fetchEvents(signal?: AbortSignal, baseUrl: string = EVENTS_URL): Promise<CalendarEvent[]> {
+    const data = await fetchJson<unknown>(`${baseUrl}/events`, signal);
     if (!Array.isArray(data)) return [];
     return data.filter(isCalendarEvent).map((raw) => {
         const ev =
@@ -301,6 +301,29 @@ export const EVENTS_ICS_URL = `${EVENTS_URL}/calendar.ics`;
  */
 export function webcalUrl(): string {
     return EVENTS_ICS_URL.replace(/^https?:\/\//, "webcals://");
+}
+
+/**
+ * Base URL for the officer routes. Passing this to `fetchEvents` as its
+ * `baseUrl` reads `/officers/events`; `OFFICERS_ICS_URL` below is the feed.
+ *
+ * WARNING: **Not a secret.** The Worker serves these routes to anyone who requests
+ * them; there is no key, token, or login. This is an unguessable *address*,
+ * not a protected one -- sharing the link shares the officer calendar. Treat
+ * the URL itself as the thing to rotate if it spreads.
+ */
+export const OFFICERS_URL = `${EVENTS_URL}/officers`;
+
+/**
+ * Absolute URL of the officer iCalendar feed (`GET /officers/calendar.ics`),
+ * which includes events the public feed hides. See `OFFICERS_URL` for the
+ * security caveat.
+ */
+export const OFFICERS_ICS_URL = `${OFFICERS_URL}/calendar.ics`;
+
+/** The officer feed URL in `webcals://` form. See `webcalUrl`. */
+export function officersWebcalUrl(): string {
+    return OFFICERS_ICS_URL.replace(/^https?:\/\//, "webcals://");
 }
 
 /**

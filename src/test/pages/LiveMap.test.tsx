@@ -128,7 +128,7 @@ describe("LiveMap page", () => {
         global.fetch = jest.fn(() => new Promise<MockResponse>(() => {})) as unknown as typeof fetch;
         renderLiveMap();
         expect(screen.getByText(/Connecting/i)).toBeInTheDocument();
-        // No boat to draw yet → map is hidden, not showing an empty ocean.
+        // No boat to draw yet, so the map is hidden rather than showing an empty ocean.
         expect(screen.queryByTestId("map-container")).not.toBeInTheDocument();
     });
 
@@ -242,7 +242,7 @@ describe("LiveMap page", () => {
         expect(detailsSection).not.toBeNull();
         if (detailsSection) {
             const withinDetails = within(detailsSection as HTMLElement);
-            // Index 1 (zero-based) → displayed as #2 (1-based).
+            // Index 1 (zero-based) is displayed as #2 (1-based).
             expect(withinDetails.getByText("#2")).toBeInTheDocument();
             // The zero-based value #1 must NOT appear for the waypoint stat
             // (it would be the bug we're guarding against).
@@ -310,16 +310,16 @@ describe("LiveMap page", () => {
 
         expect(screen.getByText(/No boats registered/i)).toBeInTheDocument();
         expect(screen.queryByTestId("boat-marker")).not.toBeInTheDocument();
-        // No boats → map is hidden entirely.
+        // No boats, so the map is hidden entirely.
         expect(screen.queryByTestId("map-container")).not.toBeInTheDocument();
     });
 
     it("lists boats that are registered but have no GPS fix", async () => {
-        // Instance 7 exists but its status comes back empty (no data yet) →
+        // Instance 7 exists but its status comes back empty (no data yet),
         // positionFromStatus returns null.
         mockFetchSequence([
             { body: [{ instance_id: 7, instance_identifier: "ghost" }] },
-            { body: {} }, // empty status → no GPS
+            { body: {} }, // empty status, so no GPS
             { body: [] }, // GET /waypoints/get/7 (none)
         ]);
         renderLiveMap();
@@ -336,7 +336,7 @@ describe("LiveMap page", () => {
         }
         // No marker for the GPS-less boat.
         expect(screen.queryByTestId("boat-marker")).not.toBeInTheDocument();
-        // No boat with a position to draw → map is hidden.
+        // No boat with a position to draw, so the map is hidden.
         expect(screen.queryByTestId("map-container")).not.toBeInTheDocument();
     });
 

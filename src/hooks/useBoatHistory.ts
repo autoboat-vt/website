@@ -15,7 +15,7 @@ export interface BoatSample {
     distance?: number;
 }
 
-/** Map of instance_id → accumulated samples (oldest first). */
+/** Map of instance_id to accumulated samples (oldest first). */
 export type BoatHistoryMap = Map<number, BoatSample[]>;
 
 /** How far back to keep samples. Matches the "last 5 minutes" plot window. */

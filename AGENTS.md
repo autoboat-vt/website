@@ -43,14 +43,14 @@ A change is not done until the relevant checks are run and the result is reviewe
 
 ## Writing Style
 
-Write in plain ASCII. Do not use emojis, decorative unicode, or characters/tics that only an LLM would produce (e.g. `✨`, `🚀`, `👉`, em dashes `—` where a hyphen suffices, curly quotes `“”` instead of straight `"`, heavy use of `**bold**` for emphasis). Code, comments, commit messages, PR descriptions, and documentation should read like they were written by a human teammate, not an AI. The only sanctioned exception is the `⚠️` marker, used in `.github/instructions/` files and `AGENTS.md` to flag critical gotchas/maintenance rules - do not sprinkle it elsewhere.
+Write in plain ASCII. Do not use emojis, decorative unicode, or characters/tics that only an LLM would produce (sparkles/rocket/pointing-hand emoji, em dashes where a hyphen suffices, curly quotes instead of straight `"`, heavy use of `**bold**` for emphasis). Code, comments, commit messages, PR descriptions, and documentation should read like they were written by a human teammate, not an AI. **There are no sanctioned emoji exceptions** - in particular, do not use the warning-triangle emoji anywhere (it was used historically and has been removed). Flag a critical gotcha with the ASCII text `WARNING:` instead, and soften one with `NOTE:`. Do not sprinkle either.
 
 ## Essential Commands
 
 ```bash
 bun install            # install deps
 bun run dev            # dev server at http://localhost:3000
-bun run build          # production build → dist/ (+ SPA fallback copies)
+bun run build          # production build -> dist/ (+ SPA fallback copies)
 bun run test           # jest unit tests
 bun run test:watch     # jest watch mode
 bun run lint           # biome lint (MUST use --config-path=./biome.json)
@@ -86,13 +86,14 @@ src/
   lib/                  # telemetry.ts (REST client), discord.ts, vtColors.ts, galleryImages.ts (shared gallery data)
   test/                 # jest tests + __mocks__/
 scripts/
-  deploy.sh             # manual deploy to VT GitLab (S4 → S3)
+  deploy.sh             # manual deploy to VT GitLab (S4 -> S3)
   spa-fallback.mjs      # copies index.html to route paths for S3 SPA routing
   bump-cicd.sh          # pulls upstream cicd files into external/cicd/ (vendored, not a submodule)
 worker/                 # Cloudflare Worker proxying Discord scheduled events for /calendar
   wrangler.jsonc        # worker config (KV binding, env vars)
-  src/index.ts          # /events (JSON) + /calendar.ics (iCal subscription feed) routes, KV cache, Discord REST fetch
-  src/events.ts         # pure normalization of Discord payloads -> CalendarEvent (no bindings, unit-testable)
+    src/index.ts          # /events + /calendar.ics + /officers/* + /audiences routes, KV cache, Discord REST fetch
+    src/events.ts         # normalization of Discord payloads -> CalendarEvent (no bindings, unit-testable); applies audience filtering
+    src/audience.ts       # officer-channel -> audience (public|officer) classification; the officer-visibility rule
   src/cancellations.ts  # parses the description's `Cancelled:` convention into excludedDates + EXDATE values
   src/ics.ts            # iCalendar (RFC 5545) serializer for the subscribable feed
   src/recurrence.ts     # Discord's structured recurrence_rule object -> RFC 5545 RRULE body
@@ -114,6 +115,7 @@ public/                 # static assets, _redirects, images
 | `/live`     | Live Boat Map | (not in nav)   |
 | `/calendar` | Calendar      | (not in nav)   |
 | `/gallery`  | Gallery       | (not in nav)   |
+| `/calendar/officers` | Officers Calendar | (not in nav, **unlisted**) |
 
 NavLink items are defined in `src/components/Header.tsx` as `NAV_LINKS`. The home link uses `end: true` (react-router's `end` prop) so it's only active on exact `/`.
 
@@ -121,13 +123,19 @@ The nav carries only the five primary pages. `/live`, `/calendar`, and `/gallery
 
 `/calendar` reads Discord guild scheduled events via a Cloudflare Worker in `worker/` (see `discord-events.instructions.md`). The Worker also serves the same events as a subscribable iCalendar feed at `GET /calendar.ics`, surfaced by the page's **Subscribe** control (`src/components/CalendarSubscribe.tsx`).
 
+`/calendar/officers` is the same calendar pointed at the Worker's `/officers/events` route, which includes officer-only events the public feed hides. WARNING: **It is unlisted but NOT access-controlled** - the URL is unguessable, not protected. It is deliberately absent from `NAV_LINKS`, from `OtherPages.tsx` `FEATURE_PAGES`, and from the README routes table, because all of those are public surfaces. It requires only the `App.tsx` + `spa-fallback.mjs` registrations (not the four-place ritual the other feature pages need). Audience gating lives in `worker/src/audience.ts`; verify the real configuration with `curl <worker-url>/audiences`.
+
+WARNING: **Officer events are identified by VOICE CHANNEL ID, not by category** (`OFFICERS_CHANNEL_ID`, default `DEFAULT_OFFICERS_CHANNEL_ID` in `audience.ts`). Every event voice channel — officer, subteam, and general member — lives under ONE shared category, so `parent_id` is identical for all of them and identifies nothing; an earlier version classified by category and was both useless and actively harmful (it would hide every public event while still leaking the officer ones). Classification is `channel_id === OFFICERS_CHANNEL_ID ? "officer" : "public"`, which needs no channel list at all. Exactly one officer channel is expected; everything else is public. A blank `OFFICERS_CHANNEL_ID` is the one fail-**closed** state: the Worker serves nothing and reports `X-Audience-Configured: false`.
+
+WARNING: Two different `/officers` paths exist and they are NOT the same thing: the **page** is `/calendar/officers` (nested under the public `/calendar`), while the **Worker API route** is `<worker-url>/officers/events` / `/officers/calendar.ics`, which is an origin-level path on the Worker itself and is unrelated to site routing. Don't "harmonize" one to match the other.
+
 If you add a route, update **all four**: `src/App.tsx`, `scripts/spa-fallback.mjs` route list, the README routes table, and — if the page is a non-nav feature page — `FEATURE_PAGES` in `src/pages/OtherPages.tsx` so the hub advertises it. The `scripts/spa-fallback.mjs` `ROUTES` array must mirror the routes in `App.tsx` exactly — S3 returns 404 for any route not listed.
 
 Don't add a feature page to `NAV_LINKS` unless you've checked the horizontal width budget. The nav row is a single non-wrapping flex line, so its width is fixed at any given viewport; if the row's natural width exceeds the space left for the middle grid column, the overflow pushes the theme toggle off the right edge of the screen (the row cannot shrink, and the grid column will not shrink below its content). The `max-[1099px]:` / `max-[999px]:` / `max-[799px]:` / `max-[599px]:` / `max-[499px]:` step-downs in `Header.tsx` are what keep it fitting; below 500px the whole row falls back to the hamburger dropdown (`@media (max-width: 499px)` in `app.css`).
 
-⚠️ Two traps when tuning those tiers:
+WARNING: Two traps when tuning those tiers:
 
-1. **Tailwind v4's `max-[Npx]:` is exclusive** — it compiles to `@media (width < Npx)`, not `<=`. A tier labelled `max-[799px]` stops applying at exactly 799px. So a gap at the 799→800 boundary is real; verify at both N-1 and N.
+1. **Tailwind v4's `max-[Npx]:` is exclusive** — it compiles to `@media (width < Npx)`, not `<=`. A tier labelled `max-[799px]` stops applying at exactly 799px. So a gap at the 799-> 800 boundary is real; verify at both N-1 and N.
 2. **Every tier that sets a property must keep setting it, or the value leaks from the tier below.** Dropping `text-sm` from the `max-[799px]` tier while keeping it on `max-[599px]` meant 600-799px inherited the 20px base font and the nav overflowed again. When you widen a tier's range, re-check that each property it previously set is still set.
 
 Measure with the actual nodes rather than reasoning about it: compare `.nav__links`'s natural width against the space available (viewport − nav padding − brand column − actions column) and assert `.nav__actions` sits fully inside the viewport. Five links fit comfortably; six was already at the edge.
@@ -151,7 +159,7 @@ Detailed, topic-specific guidance lives in `.github/instructions/*.instructions.
 | `vt-colors.instructions.md` | `src/lib/vtColors.ts`, `src/app.css`, `src/hooks/useTheme.ts` | VT brand palette, shading-vs-tinting rules, Impact Orange, WCAG AA, theme tokens, `useTheme`, FOUC prevention |
 | `testing.instructions.md` | `src/test/**`, `jest.config.js` | Jest config, `moduleNameMapper`, react-leaflet mock architecture, `setup.ts` polyfills, `runTests` tool gotcha, `MemoryRouter` wrapping |
 | `deploy.instructions.md` | `scripts/**`, `.github/**` | `deploy.sh`, `spa-fallback.mjs`, `bump-cicd.sh` (vendor-update), `build.yml`, vendored `external/cicd/` model, git workflow |
-| `discord-events.instructions.md` | `src/lib/discord.ts`, `src/pages/Calendar.tsx`, `src/components/CalendarSubscribe.tsx`, `src/test/lib/discord.test.ts`, `src/test/pages/Calendar.test.tsx`, `src/test/components/CalendarSubscribe.test.tsx`, `src/test/worker/ics.test.ts`, `src/test/worker/recurrence.test.ts`, `src/test/worker/events.test.ts`, `worker/**` | Calendar architecture, no-webhook constraint, Worker + KV setup, `VITE_EVENTS_URL`, the `/calendar.ics` subscription feed, Discord's recurrence_rule object -> RRULE conversion, rrule expansion, 4-place route registration |
+| `discord-events.instructions.md` | `src/lib/discord.ts`, `src/pages/Calendar.tsx`, `src/pages/Officers.tsx`, `src/components/CalendarSubscribe.tsx`, `src/test/lib/discord.test.ts`, `src/test/pages/Calendar.test.tsx`, `src/test/pages/Officers.test.tsx`, `src/test/components/CalendarSubscribe.test.tsx`, `src/test/worker/*.test.ts`, `worker/**` | Calendar architecture, no-webhook constraint, Worker + KV setup, `VITE_EVENTS_URL`, audience gating (channel category -> officer/public), the `/calendar.ics` + `/officers/*` feeds, Discord's recurrence_rule object -> RRULE conversion, rrule expansion, 4-place route registration |
 
 When adding a new instruction file, add a row to this table so it's discoverable.
 
@@ -206,13 +214,13 @@ Tailwind v4's layer order is `theme, base, utilities`; `@layer components` in `s
 - Components are `PascalCase.tsx` (e.g., `BoatMarker.tsx`, `ImageModal.tsx`). Pages match their route name: `OurTeam.tsx`, `LiveMap.tsx`.
 - Non-component modules are `camelCase.ts` (e.g., `telemetry.ts`, `vtColors.ts`).
 - Hooks are `use<Thing>.ts` in `src/hooks/`.
-- Tests mirror the source path under `src/test/`: `src/components/Footer.tsx` → `src/test/components/Footer.test.tsx`.
+- Tests mirror the source path under `src/test/`: `src/components/Footer.tsx` -> `src/test/components/Footer.test.tsx`.
 - Import paths: use relative imports (`./components/Header`), not path aliases. Test imports from `src/test/components/` need two levels up (`../../components/`).
 - CSS is imported once in `src/main.tsx` (`import "./app.css"`). Don't add per-component CSS files — put component styles in `@layer components` in `src/app.css`.
 
 ### Environment variables & secrets
 
-- `VITE_TELEMETRY_URL` — only Vite-prefixed vars are exposed to the client bundle. Wired through `vite.config.ts` `define` → `globalThis.__VITE_TELEMETRY_URL__`. Empty string if unset (falls back to default URL in `telemetry.ts`).
+- `VITE_TELEMETRY_URL` — only Vite-prefixed vars are exposed to the client bundle. Wired through `vite.config.ts` `define` -> `globalThis.__VITE_TELEMETRY_URL__`. Empty string if unset (falls back to default URL in `telemetry.ts`).
 - `.env`, `.env.local`, `.env.*.local` are gitignored. Don't commit real env files.
 - `.vscode/` policy: `.gitignore` has `.vscode/*` then `!.vscode/settings.json` — everything in `.vscode/` is ignored EXCEPT `settings.json`, which is committed so the Biome config-discovery fix (`biome.configurationPath`) is shared with the team. Don't commit personal files like `extensions.json`, `launch.json`, or `tasks.json` — add a new `!.vscode/<file>` negation only if a setting is genuinely project-shared.
 - The deploy script uses cached VT GitLab SSH credentials — it does not read a token from env. `scripts/bump-cicd.sh` (manual upstream sync of `external/cicd/`) also uses locally-cached VT GitLab creds — anonymous HTTPS fetch of `code.vt.edu` returns 403. There is no automated CI workflow for syncing `external/cicd/` (the old `submodule-update.yml` was removed when the submodule was converted to vendored files).
@@ -221,7 +229,7 @@ Tailwind v4's layer order is `theme, base, utilities`; `@layer components` in `s
 ### Image & asset conventions
 
 - Site images live in `public/images/` organized by page: `a_front_image/`, `gallery/`, `our_team_images/` (with subdirs per subteam: `electronics/`, `mechanical/`, `navarch/`, `sail/`, `software/`), `sponsors/` (sponsor logos, referenced from the `SPONSORS` array in `src/pages/Sponsors.tsx`).
-- ⚠️ Sponsor logos render on a band that is hard-coded `bg-white` in both themes (sponsor marks are designed for light backgrounds), so a logo with a white or very light wordmark will be invisible. Check new logos against white. SVG is fine — the `webp-convert` CI job only globs `public/images/*.png|jpg|jpeg`.
+- WARNING: Sponsor logos render on a band that is hard-coded `bg-white` in both themes (sponsor marks are designed for light backgrounds), so a logo with a white or very light wordmark will be invisible. Check new logos against white. SVG is fine — the `webp-convert` CI job only globs `public/images/*.png|jpg|jpeg`.
 - Reference images from components/pages as absolute paths from `public/` (e.g., `/images/gallery/foo.jpg`). Vite serves `public/` at the root.
 - `BoatMarker` uses `/images/boat-icon.webp` (50px square, centered anchor) — keep this asset in `public/images/`.
 - Lazy-load gallery and below-the-fold images (`loading="lazy"`) — they shift layout, which is why the hash-link scroll effect re-scrolls on a decay schedule.
@@ -249,7 +257,7 @@ Tailwind v4's layer order is `theme, base, utilities`; `@layer components` in `s
 
 - `CITATION.cff` (repo root) provides citation metadata for the project (CFF schema 1.2.0). GitHub renders a "Cite this repository" button on the repo page from this file.
 - The `date-released` field is kept **dynamic** by `.github/workflows/update-citation-date.yml`, which runs on every push to `main` (and via `workflow_dispatch`). If `date-released` is stale (not today's UTC date), the workflow updates it via `sed`, commits as `github-actions[bot]` on a `chore/citation-date-<DATE>` branch, opens a PR, and calls `gh pr merge --auto --squash`. The PR auto-merges once the required `build` status check passes. The `if: github.actor != 'github-actions[bot]'` guard on the job prevents infinite loops (the auto-merge commit re-fires `push`, but that run is skipped). Don't edit `date-released` by hand — the workflow will overwrite it on the next push to `main`.
-- ⚠️ The workflow uses a **PR + auto-merge**, not a direct push to `main`. `main` is branch-protected with `build` as a required status check (strict), so a direct push from `github-actions[bot]` is rejected with `GH006: Protected branch update failed - Required status check "build" is expected.` This is the same pattern as `dependabot-automerge.yml`. Auto-merge requires the same three repo settings (allow auto-merge enabled, `build` as a required check, required reviews = 0) — see "Auto-merge" in `.github/instructions/deploy.instructions.md`.
+- WARNING: The workflow uses a **PR + auto-merge**, not a direct push to `main`. `main` is branch-protected with `build` as a required status check (strict), so a direct push from `github-actions[bot]` is rejected with `GH006: Protected branch update failed - Required status check "build" is expected.` This is the same pattern as `dependabot-automerge.yml`. Auto-merge requires the same three repo settings (allow auto-merge enabled, `build` as a required check, required reviews = 0) — see "Auto-merge" in `.github/instructions/deploy.instructions.md`.
 
 ## Working Style Notes
 
@@ -273,7 +281,7 @@ This repo doesn't enforce conventional commits, but the existing history uses sh
 
 ## Things To Avoid
 
-- Using emojis, decorative unicode (curly quotes, em dashes, arrows like `→` outside of code), or LLM-typical tics (`✨`, `🚀`, `👉`, excessive `**bold**`) in code, comments, commit messages, PR descriptions, or docs. Write plain ASCII. The only sanctioned exception is the `⚠️` marker in `.github/instructions/` files and `AGENTS.md`.
+- Using emojis, decorative unicode (curly quotes, em dashes, arrow glyphs outside of code), or LLM-typical tics (sparkles/rocket/pointing-hand emoji, excessive `**bold**`) in code, comments, commit messages, PR descriptions, or docs. Write plain ASCII. There are no exceptions - see "Writing Style" above.
 - Editing files under `external/cicd/` directly without running `scripts/bump-cicd.sh` - that directory is a vendored copy of an upstream repo and is updated by re-running the bump script, not by hand-editing.
 - Editing files under `dist/`, `node_modules/`, `coverage/`, or `build/` - these are build outputs.
 - Leaving `.github/instructions/*.instructions.md` or `AGENTS.md` stale after a codebase change. Stale instructions mislead every subsequent agent session. Update them in the same PR as the code change, always. Trust source over memory - `read_file` the actual code before editing an instruction file.

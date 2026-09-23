@@ -7,6 +7,7 @@ import Fleet from "./pages/Fleet";
 import Gallery from "./pages/Gallery";
 import Home from "./pages/Home";
 import LiveMap from "./pages/LiveMap";
+import Officers from "./pages/Officers";
 import OtherPages from "./pages/OtherPages";
 import OurTeam from "./pages/OurTeam";
 import Sponsors from "./pages/Sponsors";
@@ -68,6 +69,7 @@ export default function App() {
                     <Route path="/calendar" element={<Calendar />} />
                     <Route path="/gallery" element={<Gallery />} />
                     <Route path="/live" element={<LiveMap />} />
+                    <Route path="/calendar/officers" element={<Officers />} />
                     <Route path="*" element={<Home />} />
                 </Routes>
             </main>

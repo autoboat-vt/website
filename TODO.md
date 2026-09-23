@@ -1,5 +1,4 @@
-~~sponsors page~~ ✓ done
-
+~~sponsors page~~ done
 our fleet
 
 update images

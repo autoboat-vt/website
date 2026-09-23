@@ -1,7 +1,7 @@
 import { CalendarPlus, Check, ChevronDown, Copy, Link as LinkIcon } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { FaCalendar } from "react-icons/fa6";
-import { EVENTS_ICS_URL, webcalUrl } from "../lib/discord";
+import { EVENTS_ICS_URL, OFFICERS_ICS_URL, officersWebcalUrl, webcalUrl } from "../lib/discord";
 
 /**
  * "Subscribe" affordance for the calendar page.
@@ -34,7 +34,19 @@ interface Provider {
     testId?: string;
 }
 
-export default function CalendarSubscribe() {
+export interface CalendarSubscribeProps {
+    /**
+     * Which feed to advertise. The officer variant appears on the
+     * `/calendar/officers` page and points at the officer feed, which includes
+     * events the public feed hides. It is the same component so the two panels
+     * cannot drift.
+     */
+    variant?: "public" | "officer";
+}
+
+export default function CalendarSubscribe({ variant = "public" }: CalendarSubscribeProps) {
+    const isOfficer = variant === "officer";
+    const icsUrl = isOfficer ? OFFICERS_ICS_URL : EVENTS_ICS_URL;
     const [open, setOpen] = useState(false);
     const [copied, setCopied] = useState(false);
     const panelId = useId();
@@ -56,10 +68,10 @@ export default function CalendarSubscribe() {
             // and in jsdom; fall back to a hidden textarea + execCommand so
             // the button still works in those environments.
             if (navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(EVENTS_ICS_URL);
+                await navigator.clipboard.writeText(icsUrl);
             } else {
                 const textarea = document.createElement("textarea");
-                textarea.value = EVENTS_ICS_URL;
+                textarea.value = icsUrl;
                 textarea.setAttribute("readonly", "");
                 textarea.style.position = "fixed";
                 textarea.style.opacity = "0";
@@ -89,7 +101,7 @@ export default function CalendarSubscribe() {
     const providers: Provider[] = [
         {
             key: "webcal",
-            href: webcalUrl(),
+            href: isOfficer ? officersWebcalUrl() : webcalUrl(),
             label: "Open in your calendar app",
             hint: "Outlook, Thunderbird, Apple Calendar, etc.",
             icon: FaCalendar,
@@ -114,10 +126,13 @@ export default function CalendarSubscribe() {
             {open && (
                 <div className="calendar-subscribe__panel" id={panelId}>
                     <div className="calendar-subscribe__header">
-                        <h3 className="calendar-subscribe__title">Subscribe to this calendar</h3>
+                        <h3 className="calendar-subscribe__title">
+                            {isOfficer ? "Subscribe to the officers calendar" : "Subscribe to this calendar"}
+                        </h3>
                         <p className="calendar-subscribe__intro">
-                            Add the AutoBoat calendar to your own calendar app. It updates automatically as events
-                            change in Discord.
+                            {isOfficer
+                                ? "Includes officer-only events, which the public calendar leaves out. Anyone with this link can read it, so keep it inside the team."
+                                : "Add the AutoBoat calendar to your own calendar app. It updates automatically as events change in Discord."}
                         </p>
                     </div>
 
@@ -149,7 +164,7 @@ export default function CalendarSubscribe() {
 
                     <div className="calendar-subscribe__url-row">
                         <LinkIcon size={14} aria-hidden="true" className="calendar-subscribe__url-icon" />
-                        <code className="calendar-subscribe__url">{EVENTS_ICS_URL}</code>
+                        <code className="calendar-subscribe__url">{icsUrl}</code>
                         <button
                             type="button"
                             className="calendar-subscribe__copy"
@@ -162,7 +177,11 @@ export default function CalendarSubscribe() {
                     </div>
 
                     <div className="calendar-subscribe__footer">
-                        <a className="calendar-subscribe__download" href={EVENTS_ICS_URL} download="autoboat.ics">
+                        <a
+                            className="calendar-subscribe__download"
+                            href={icsUrl}
+                            download={isOfficer ? "autoboat-officers.ics" : "autoboat.ics"}
+                        >
                             Download .ics
                         </a>
                         <p className="calendar-subscribe__hint">

@@ -7,15 +7,100 @@ a normalized JSON list of events from a KV cache.
 
 ```
 website (browser)
-    |  GET https://<worker>.workers.dev/events
+    |  GET https://<worker>.workers.dev/events          <- public events only
     v
 Cloudflare Worker (this repo, `worker/`)
-    |  KV get "events" (5 min TTL)
+    |  KV get "events:v2"    (60 s TTL)  <- the FULL set, all audiences
+    |  KV get "channels:v1"  (60 s TTL)  <- diagnostics only (/audiences)
     |  miss -> GET https://discord.com/api/v10/guilds/<guild_id>/scheduled-events?with_user_count=true
+    |          GET https://discord.com/api/v10/guilds/<guild_id>/channels
     |           Authorization: Bot ${DISCORD_BOT_TOKEN}
     v
 Discord API
 ```
+
+## Routes
+
+| Route | Contents |
+| ----- | -------- |
+| `GET /events` | Public events as JSON (the website's month grid). |
+| `GET /calendar.ics` | The same public events as an iCalendar feed. |
+| `GET /officers/events` | **All** events, including officer-only, as JSON. |
+| `GET /officers/calendar.ics` | All events as an iCalendar feed. |
+| `GET /audiences` | Diagnostics: the configured officer channel, plus every category and channel the Worker sees with its resolved audience. |
+
+## Officer-only events
+
+The team keeps an event internal by hosting it in a voice channel only the
+officers can see. Since voice events have no `location`, the Worker derives the
+audience from the channel the event was scheduled in:
+
+```
+event.channel_id === OFFICERS_CHANNEL_ID ? "officer" : "public"
+```
+
+WARNING: **The channel, not its category.** Every event voice channel -- officer,
+subteam, and general member -- lives in the **same** category, so the category
+is identical for every event and identifies nothing.
+
+Exactly one officer channel is expected. Everything else is public, including
+unrecognised channels -- the filter is deliberately **fail-open**, so a *second*
+officer channel would be public until its id replaced the configured one.
+
+### Finding `OFFICERS_CHANNEL_ID`
+
+This is the one value that changes what the public calendar exposes, and a wrong
+value **fails silently** -- the filter looks configured while officer events keep
+being published. To find it, run the audit script. It is read-only (one `GET`,
+nothing written) and never logs the token:
+
+```bash
+cd worker
+npx wrangler login
+DISCORD_BOT_TOKEN=<token> npm run channels
+```
+
+The token may instead live in `worker/.dev.vars` (gitignored):
+
+```
+DISCORD_BOT_TOKEN=<token>
+```
+
+The script prints the channel tree with every channel's id, marks the channel
+currently configured as officer-only, and warns when the configured id is not a
+channel in the guild or is not a voice/stage channel -- either way no event would
+ever match it, so officer events would keep being published. That is the
+silent-failure case this script exists to catch.
+
+If the officer voice channel is **missing** from the output, the bot lacks
+`VIEW_CHANNEL` on it (an explicit deny for `@everyone` overrides the bot's
+server-wide permission). Its events then never reach the Worker at all, so
+treat it as a configuration fault rather than a safe state. Fix it with a
+channel-level permission override granting the bot `VIEW_CHANNEL`.
+
+### Verifying after deploy
+
+```bash
+curl https://<worker-url>/audiences | jq .
+```
+
+It prints `officersChannelId` and each channel with the audience it resolves to,
+so a wrong `OFFICERS_CHANNEL_ID` is visible rather than silently publishing
+officer events.
+
+### If you prefer the Discord UI
+
+Enable **Developer Mode** (User Settings -> Advanced), then right-click the
+**voice channel** that hosts officer events -> **Copy Channel ID**.
+
+WARNING: Right-click the *channel* itself, not the category containing it. All event
+channels share one category, so copying a category id gives you a value that
+identifies nothing.
+
+WARNING: **The `/officers/*` routes are not access-controlled.** They are unguessable
+addresses, not protected ones -- anyone with the URL can read them. There is no
+key and no login. Treat the URL as the thing to rotate if it spreads, and don't
+link it from any public page.
 
 ## One-time setup
 
@@ -131,7 +216,15 @@ Set via `vars` in `wrangler.jsonc` (public, non-secret):
 - `CACHE_TTL_SECONDS` — KV TTL for the cached events payload. Default 300.
   Also advertised to calendar clients as the `.ics` refresh interval.
 - `CALENDAR_NAME` — display name for the `.ics` feed. Default
-  "AutoBoat at Virginia Tech".
+  "AutoBoat at Virginia Tech". The `/officers/calendar.ics` route defaults to
+  "AutoBoat Officers" instead.
+- `OFFICERS_CHANNEL_ID` — the officer-only voice channel id. Omit it to use
+  `DEFAULT_OFFICERS_CHANNEL_ID` in `src/audience.ts`; a **blank** value means
+  "no officer channel", which makes the Worker serve **nothing** (fail-closed)
+  rather than guess. Verify it with `/audiences`.
+- `PUBLIC_CATEGORY_IDS` — comma-separated category ids that are intended to be
+  public. Documentation only (the filter is fail-open), reported by `/audiences`
+  so the mapping can be reviewed.
 
 Set via `wrangler secret put` (secret, never committed):
 
@@ -143,7 +236,16 @@ Set via `wrangler secret put` (secret, never committed):
   plus `OPTIONS` preflight for both. Everything else 404s. Trailing slashes
   are ignored, so `/events/` and `/calendar.ics/` work too.
 - Both routes share one KV cache via a common `loadEvents()` helper, so the
-  JSON payload and the feed can never disagree.
+  JSON payload and the feed can never disagree. The cache holds the **full**
+  event set; each route filters in memory.
+- While `OFFICERS_CHANNEL_ID` is blank the Worker serves **no** events and
+  reports `X-Audience-Configured: false`. It cannot tell an officer event from a
+  public one in that state, so serving the public calendar would publish the
+  officer one. The KV event write is skipped too, so a poisoned cache cannot
+  outlive the misconfiguration.
+- `X-Audience-Source: channels|unavailable` reports whether the diagnostic
+  channels fetch succeeded. It is informational: classification is a plain id
+  comparison, so this does not affect visibility.
 - Discord upstream failures produce a generic `502` with the CORS headers
   intact. The bot token is never included in responses, logs, or error bodies.
 - KV writes are fire-and-forget via `ctx.waitUntil` so the response isn't

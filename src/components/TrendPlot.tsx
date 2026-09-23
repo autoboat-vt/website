@@ -12,7 +12,7 @@ interface TrendPlotProps {
     unit: string;
     /** Stroke color for the data line (hex). */
     color: string;
-    /** Conversion applied to raw values before plotting/display, e.g. m/s→kn. */
+    /** Conversion applied to raw values before plotting/display, e.g. m/s to kn. */
     convert?: (v: number) => number;
     /** Number of decimals for displayed values. */
     decimals?: number;
