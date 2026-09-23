@@ -5,12 +5,10 @@ import { EVENTS_ICS_URL, OFFICERS_ICS_URL, OFFICERS_URL } from "../../lib/discor
 /**
  * Tests for the officers calendar page.
  *
- * Two things matter here and neither is visible from the component alone:
- *  1. It reads the OFFICER feed, not the public one. A copy-paste of the
- *     public page would look identical but silently show the wrong (smaller)
- *     event set -- the bug would be invisible, since both render a calendar.
- *  2. It warns that it is not access-controlled. The page is the one place a
- *     reader can learn that the URL is unguessable rather than protected.
+ * The thing that matters here is not visible from the component alone: it
+ * reads the OFFICER feed, not the public one. A copy-paste of the public page
+ * would look identical but silently show the wrong (smaller) event set -- the
+ * bug would be invisible, since both render a calendar.
  */
 
 import Officers from "../../pages/Officers";
@@ -104,15 +102,6 @@ describe("Officers page", () => {
         );
     });
 
-    it("warns that the page is unlisted but not protected", () => {
-        fetchMockOnce([]);
-        renderOfficers();
-
-        const banner = screen.getByRole("note");
-        expect(banner).toHaveTextContent(/not password protected/i);
-        expect(banner).toHaveTextContent(/keep the link/i);
-    });
-
     it("exposes an accessible page heading", () => {
         fetchMockOnce([]);
         renderOfficers();
@@ -152,5 +141,24 @@ describe("route registration", () => {
         const { resolve } = await import("node:path");
         const spa = readFileSync(resolve(__dirname, "../../../scripts/spa-fallback.mjs"), "utf8");
         expect(spa).toContain('"/calendar/officers"');
+    });
+
+    it("stays unlisted on every public surface", async () => {
+        // The visible warning banner was removed at the team's request, so the
+        // page no longer tells a reader it is unguessable-rather-than-protected.
+        // That makes this the only guard of the real invariant: the path must
+        // not be advertised on any public surface. Add it to one of these and
+        // the route stops being unlisted while every other test still passes.
+        const { readFileSync } = await import("node:fs");
+        const { resolve } = await import("node:path");
+
+        const navLinks = readFileSync(resolve(__dirname, "../../components/Header.tsx"), "utf8");
+        expect(navLinks).not.toContain("/calendar/officers");
+
+        const otherPages = readFileSync(resolve(__dirname, "../../pages/OtherPages.tsx"), "utf8");
+        expect(otherPages).not.toContain("/calendar/officers");
+
+        const readme = readFileSync(resolve(__dirname, "../../../README.md"), "utf8");
+        expect(readme).not.toContain("/calendar/officers");
     });
 });

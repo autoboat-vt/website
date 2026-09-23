@@ -119,10 +119,13 @@ event.channel_id === OFFICERS_CHANNEL_ID ? "officer" : "public"
   it as a configuration fault rather than a safe state.
 - WARNING: **The officer routes are NOT access-controlled.** They are unguessable
   addresses, not protected ones -- anyone with the URL can read them. This was an
-explicit product decision (no key, no login). `src/pages/Officers.tsx` says so in
-a visible banner, and the 
-  Subscribe panel repeats it, because the likeliest leak is an officer pasting the
-  link without realizing it carries no auth.
+  explicit product decision (no key, no login). The visible warning banner on
+  `src/pages/Officers.tsx` was removed at the team's request (2026-09-22), so the
+  page no longer states this; the Subscribe panel is the only remaining in-UI
+  signal, and the likeliest leak is still an officer pasting the link without
+  realizing it carries no auth. `Officers.test.tsx` guards the compensating
+  invariant: the path must stay out of `Header.tsx` `NAV_LINKS`, `OtherPages.tsx`
+  `FEATURE_PAGES`, and the README routes table.
 - WARNING: **Two different `/officers` paths, and they are unrelated.** The *page* is
   `/calendar/officers` (nested under the public `/calendar`). The *Worker API
   routes* are `<worker-url>/officers/events` and `/officers/calendar.ics` -- an
@@ -378,7 +381,7 @@ The `rrule` package handles the full RFC 5545 grammar, so all of the above varia
 - `src/test/worker/cancellations.test.ts` — `parseCancelledDates` (the documented two-line example, every label variant, multi-date/multi-line/dedup/sort, the mixed comma-before-year list style, year resolution and explicit-year precedence, and the malformed cases: null input, unlabelled prose, `TBD`, Feb 30, month 13, day 32, non-leap Feb 29, non-month words), `stripCancelledNote` (note removal, mid-description notes, multiple notes, null when the note was the only content, blank-line collapsing, every label variant, and that unlabelled prose survives), and `toExdateValue` (time-of-day borrowed from `DTSTART`, sub-second truncation, midnight fallback for an unparseable start, and the `NaNNaNNaN` malformed-date regression). Imports `worker/src/cancellations.ts` by relative path, same reason as `ics.test.ts`.
 - `src/test/worker/audience.test.ts` — `parseChannelIds` (comma/whitespace/trailing-comma/JSONC-indentation forms, and that empty-ish input gives `[]`), `audienceConfigFromEnv` (the committed default, that a **blank** `OFFICERS_CHANNEL_ID` means "no officer channel" rather than falling back to the default, and first-id-wins), the default id's snowflake shape, `audienceForChannel` (officer for the configured channel, public for subteam/general/no-parent/unknown/null, that a channel merely *containing* the id is not officer, and that an **empty channel list still hides officer events** — the old degraded-mode leak), `isOfficerEvent`, `listChannels`, and `listCategories` (categories only, sorted).
 - `src/test/worker/audience-filter.test.ts` — the classification seam through `normalizeEvents`: that `channel_id` survives normalization (dropping it would silently make everything public), officer vs public per channel, each event classified independently within one payload, `channelId` + `audience` in the full normalized shape, that classification composes correctly with cancellation parsing and recurrence conversion, and `publicEvents` (drops officer, keeps order, all-officer -> empty).
-- `src/test/pages/Officers.test.tsx` — that the page requests the **officer** route specifically (compared as a full URL, since the public route is a substring-compatible neighbour), the subscribe control points at the officer `.ics` (and NOT the public one), the webcal URL derivation, the "unlisted but not password protected" warning, and the accessible heading.
+- `src/test/pages/Officers.test.tsx` — that the page requests the **officer** route specifically (compared as a full URL, since the public route is a substring-compatible neighbour), the subscribe control points at the officer `.ics` (and NOT the public one), the webcal URL derivation, the accessible heading, and that the path stays unlisted (absent from `Header.tsx`, `OtherPages.tsx`, and the README routes table — the banner that used to state this was removed, so this is now the only guard).
 
 WARNING: When adding a year test here, the **written year must differ from the reference year**. An earlier version of this suite used `referenceYear=2026` with `2026` written explicitly, so a silently-dropped year was undetectable — removing the `,?` from `MONTH_DAY_RE` still passed all 78 tests, because the year fell back to a reference year equal to it. Always make the parsed value distinguishable from the fallback.
 
