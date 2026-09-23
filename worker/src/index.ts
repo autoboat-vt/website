@@ -32,16 +32,21 @@
  *   2. Cache hit (KV)                -> render from the cached events.
  *   3. Cache miss                    -> fetch
  *      GET https://discord.com/api/v10/guilds/{DISCORD_GUILD_ID}/scheduled-events?with_user_count=true
- *      and .../channels, with `Authorization: Bot ${DISCORD_BOT_TOKEN}`,
- *      normalize + classify, write to KV (waitUntil).
+ *      with `Authorization: Bot ${DISCORD_BOT_TOKEN}`, normalize +
+ *      classify, write to KV (waitUntil).
  *   JSON responses report X-Cache: HIT|MISS.
- *
- * Both Discord resources are cached, because they change together and a
- * category rename (or adding an officer channel) must not serve stale
- * classification. See EVENTS_KV_KEY / CHANNELS_KV_KEY below.
  *
  * Discord upstream errors are returned as a generic 502 with CORS headers
  * intact; the bot token is never logged, echoed, or included in responses.
+ *
+ * ⚠️ WRITE BUDGET. The `/guilds/{id}/channels` fetch used to run on this path
+ * and its result was written to KV too, so every cache miss cost TWO writes.
+ * The free tier allows 1,000 writes/day, and a miss is what consumes one, so
+ * `CACHE_TTL_SECONDS` is a hard budget: at 60s the Worker exceeded the daily
+ * limit and the calendar went empty until 00:00 UTC. Classification no longer
+ * needs the channel list, so today a miss costs exactly ONE write. Keep the TTL
+ * at >= 180s and preserve the one-write-per-miss invariant; `routes.test.ts`
+ * pins it.
  *
  * CORS: the only allowed origin is ALLOWED_ORIGIN (default
  * https://autoboat.aoe.vt.edu). Non-matching browsers are blocked at the
@@ -89,9 +94,13 @@ interface Env {
  * also mean the officer routes could never be served from cache and would hit
  * Discord on every request -- a rate-limit risk (Discord throttles the
  * scheduled-events endpoint aggressively). The full set is a few KB.
+ *
+ * WARNING: `EVENTS_KV_KEY` is the ONLY key written. One write per cache miss is
+ * what keeps the Worker inside the free tier's 1,000 writes/day; see the write
+ * budget note in the module header. Do not add another key here -- a second
+ * per-miss write doubles the daily write rate for no benefit.
  */
 const EVENTS_KV_KEY = "events:v2";
-const CHANNELS_KV_KEY = "channels:v1";
 const WORKER_USER_AGENT = "autoboat-website-worker/1.0";
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 const DISCORD_UPSTREAM_TIMEOUT_MS = 5_000;
@@ -151,15 +160,17 @@ async function fetchDiscordEvents(env: Env): Promise<DiscordGuildScheduledEvent[
 }
 
 /**
- * Fetch the guild's channels, used to resolve each event's category.
+ * Fetch the guild's channels.
  *
- * WARNING: This must NOT fail the request. If the channel list is unavailable we
- * classify with an empty list, which is fail-open (everything public) -- see
- * `audienceForChannel`. That is a deliberate availability trade-off: a
- * Discord hiccup on this secondary call should not blank the public calendar.
- * The cost is that officer events could be published during that window, which
- * is why the `X-Audience-Source: channels|unavailable` response header exists:
- * if it ever reports `unavailable`, the classifier had no data.
+ * WARNING: Used ONLY by the `/audiences` diagnostics route. Classification does
+ * not need this -- it compares `channel_id` against the configured officer
+ * channel (see audience.ts) -- so a failure here cannot affect who sees an
+ * event. It used to gate the classifier, which is why an earlier version of
+ * this comment described a fail-open window; that is no longer true.
+ *
+ * The result is deliberately NOT written to KV. Caching it cost one write per
+ * cache miss, which doubled the Worker's usage against the free tier's 1,000
+ * writes/day, for a value only this diagnostics route reads.
  */
 async function fetchDiscordChannels(env: Env): Promise<DiscordChannel[] | null> {
     try {
@@ -172,7 +183,7 @@ async function fetchDiscordChannels(env: Env): Promise<DiscordChannel[] | null> 
 
 function parseTtlSeconds(env: Env): number {
     const n = Number.parseInt(env.CACHE_TTL_SECONDS, 10);
-    return Number.isFinite(n) && n > 0 ? n : 300;
+    return Number.isFinite(n) && n > 0 ? n : 180;
 }
 
 function jsonResponse(body: unknown, init: ResponseInit, env: Env): Response {
@@ -205,29 +216,26 @@ async function loadEvents(
      * a correctly-configured request to serve from. See eventsForRoute.
      */
     configured: boolean,
-): Promise<{ events: CalendarEvent[]; cache: "HIT" | "MISS"; channelsAvailable: boolean }> {
+): Promise<{ events: CalendarEvent[]; cache: "HIT" | "MISS" }> {
     const ttl = parseTtlSeconds(env);
 
     const cached = await env.EVENTS_KV.get(EVENTS_KV_KEY, { type: "json", cacheTtl: ttl });
     if (cached !== null && Array.isArray(cached)) {
-        // The channels cache is only consulted on a miss; on a hit the
-        // audience on each event is already resolved and stored with it.
-        return { events: cached as CalendarEvent[], cache: "HIT", channelsAvailable: true };
+        return { events: cached as CalendarEvent[], cache: "HIT" };
     }
 
-    const [raw, channels] = await Promise.all([fetchDiscordEvents(env), fetchDiscordChannels(env)]);
-    const events = normalizeEvents(raw, {
-        channels: channels ?? [],
-        audienceConfig: audienceConfigFromEnv(env),
-    });
-    // Fire-and-forget KV writes -- do not block the response on them.
+    const raw = await fetchDiscordEvents(env);
+    // Classification needs NO channel list -- it is a string comparison against
+    // the configured officer channel id (see audience.ts). The channels fetch
+    // used to happen here and its result was written to KV on every miss, which
+    // doubled the write cost against the free tier's 1,000 writes/day for a
+    // value only `/audiences` reads. It is now fetched lazily there instead.
+    const events = normalizeEvents(raw, { audienceConfig: audienceConfigFromEnv(env) });
+    // Fire-and-forget KV write -- do not block the response on it.
     if (configured) {
         ctx.waitUntil(env.EVENTS_KV.put(EVENTS_KV_KEY, JSON.stringify(events), { expirationTtl: ttl }));
     }
-    if (channels) {
-        ctx.waitUntil(env.EVENTS_KV.put(CHANNELS_KV_KEY, JSON.stringify(channels), { expirationTtl: ttl }));
-    }
-    return { events, cache: "MISS", channelsAvailable: channels !== null };
+    return { events, cache: "MISS" };
 }
 
 /**
@@ -263,7 +271,7 @@ function upstreamUnavailable(env: Env): Response {
 async function handleGetEvents(env: Env, ctx: ExecutionContext, audience: Audience): Promise<Response> {
     const ttl = parseTtlSeconds(env);
     const configured = audienceIsConfigured(audienceConfigFromEnv(env));
-    let loaded: { events: CalendarEvent[]; cache: "HIT" | "MISS"; channelsAvailable: boolean };
+    let loaded: { events: CalendarEvent[]; cache: "HIT" | "MISS" };
     try {
         loaded = await loadEvents(env, ctx, configured);
     } catch {
@@ -278,10 +286,7 @@ async function handleGetEvents(env: Env, ctx: ExecutionContext, audience: Audien
             headers: {
                 "X-Cache": loaded.cache,
                 "X-Audience": audience,
-                // Surfaces a degraded classifier rather than hiding it.
-                "X-Audience-Source": loaded.channelsAvailable ? "channels" : "unavailable",
-                // false => no officer channel/category is configured, so
-                // nothing is served.
+                // false => no officer channel is configured, so nothing is served.
                 "X-Audience-Configured": String(configured),
                 "Cache-Control": `public, max-age=${ttl}`,
             },
@@ -312,7 +317,7 @@ function icsResponse(body: string, init: ResponseInit, env: Env): Response {
 async function handleGetIcs(env: Env, ctx: ExecutionContext, audience: Audience): Promise<Response> {
     const ttl = parseTtlSeconds(env);
     const configured = audienceIsConfigured(audienceConfigFromEnv(env));
-    let loaded: { events: CalendarEvent[]; cache: "HIT" | "MISS"; channelsAvailable: boolean };
+    let loaded: { events: CalendarEvent[]; cache: "HIT" | "MISS" };
     try {
         loaded = await loadEvents(env, ctx, configured);
     } catch {
@@ -334,7 +339,6 @@ async function handleGetIcs(env: Env, ctx: ExecutionContext, audience: Audience)
             headers: {
                 "X-Cache": loaded.cache,
                 "X-Audience": audience,
-                "X-Audience-Source": loaded.channelsAvailable ? "channels" : "unavailable",
                 "X-Audience-Configured": String(configured),
                 "Cache-Control": `public, max-age=${ttl}`,
                 "Content-Disposition": 'inline; filename="autoboat.ics"',
@@ -364,15 +368,12 @@ async function handleGetIcs(env: Env, ctx: ExecutionContext, audience: Audience)
 async function handleGetAudiences(env: Env): Promise<Response> {
     const config = audienceConfigFromEnv(env);
     const configured = audienceIsConfigured(config);
-    const ttl = parseTtlSeconds(env);
 
-    let channels: DiscordChannel[] | null;
-    const cached = await env.EVENTS_KV.get(CHANNELS_KV_KEY, { type: "json", cacheTtl: ttl });
-    if (cached !== null && Array.isArray(cached)) {
-        channels = cached as DiscordChannel[];
-    } else {
-        channels = await fetchDiscordChannels(env);
-    }
+    // Fetched fresh, never cached: this is a low-traffic diagnostics route, and
+    // classification does not depend on the channel list at all, so caching it
+    // would only add write cost (the free tier allows 1,000 writes/day) for a
+    // value nothing on the event path reads.
+    const channels = await fetchDiscordChannels(env);
 
     if (!channels) {
         return jsonResponse(

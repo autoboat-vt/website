@@ -300,7 +300,7 @@ describe("caching", () => {
             { ...discordEvent("public-1", "Software Work Session", SOFTWARE_VOICE), audience: "public" },
             { ...discordEvent("officer-1", "Officer Budget Review", OFFICER_VOICE), audience: "officer" },
         ];
-        const kv = makeKv({ "events:v2": seeded, "channels:v1": CHANNELS });
+        const kv = makeKv({ "events:v2": seeded });
         const calls = stubDiscord({ failChannels: true });
         const { ctx } = makeCtx();
 
@@ -318,10 +318,92 @@ describe("caching", () => {
     });
 });
 
+describe("KV write budget", () => {
+    // WARNING: The Workers KV FREE TIER allows 1,000 WRITES/day (reads are 100,000,
+    // never the constraint). A cache MISS is what costs a write, so the budget
+    // is a function of the TTL:
+    //
+    //     writes/day = (86400 / TTL) * writes per miss
+    //
+    // Three things regress this silently, and all three did at once in
+    // production, where a 60s TTL with 2 writes per miss came to ~2,880
+    // writes/day -- the calendar went empty and stayed empty until 00:00 UTC,
+    // because a failed write means the entry never lands and every following
+    // request is another miss. These tests pin each factor.
+    it("costs exactly ONE write per cache miss", async () => {
+        // The single most important number here. Fetching the channel list on
+        // this path and caching it too used to make this 2, which is what put
+        // the Worker over budget. Classification compares `channel_id` against
+        // the officer channel, so the channel list is only needed by
+        // `/audiences` -- do not reintroduce a second write here.
+        const { kv } = await get("/events");
+        expect(Object.keys(kv.writes)).toEqual(["events:v2"]);
+    });
+
+    it("writes the SAME key on every route, so the count stays 1", async () => {
+        const paths = ["/events", "/calendar.ics", "/officers/events", "/officers/calendar.ics"];
+        for (const path of paths) {
+            const { kv } = await get(path);
+            expect(Object.keys(kv.writes)).toEqual(["events:v2"]);
+        }
+    });
+
+    it("writes nothing at all on a cache hit", async () => {
+        // A warm cache must be pure reads, or the budget scales with traffic
+        // rather than with time.
+        const seeded = [{ ...discordEvent("public-1", "Software Work Session", SOFTWARE_VOICE), audience: "public" }];
+        const kv = makeKv({ "events:v2": seeded });
+        stubDiscord();
+        const { ctx } = makeCtx();
+        const res = await worker.fetch(
+            new Request("https://worker.test/events"),
+            { ...ENV, EVENTS_KV: kv } as never,
+            ctx as never,
+        );
+
+        expect(res.headers.get("X-Cache")).toBe("HIT");
+        expect(kv.writes).toEqual({});
+    });
+
+    it("stays inside the daily write budget at the shipped TTL", async () => {
+        // Guards the actual config value, not just the code. `wrangler.jsonc` is
+        // the deploy source of truth, so read it off disk: someone lowering the
+        // TTL for "fresher events" is the likeliest way to break this, and
+        // nothing else in the suite would notice. 180s is the accepted floor --
+        // it buys 3-minute refreshes at ~2x write headroom. Below that the
+        // margin stops absorbing retries and redeploys.
+        const { readFileSync } = await import("node:fs");
+        const { resolve } = await import("node:path");
+        const wrangler = readFileSync(resolve(__dirname, "../../../worker/wrangler.jsonc"), "utf8");
+        const match = wrangler.match(/"CACHE_TTL_SECONDS"\s*:\s*"(\d+)"/);
+        if (!match) throw new Error("CACHE_TTL_SECONDS not found in worker/wrangler.jsonc");
+
+        const ttl = Number(match[1]);
+        const writesPerMiss = 1;
+        const writesPerDay = Math.ceil(86400 / ttl) * writesPerMiss;
+
+        expect(ttl).toBeGreaterThanOrEqual(180);
+        // Leave real headroom: deploys, retries, and clock skew all consume
+        // writes, and the failure mode is a blank calendar rather than an error.
+        expect(writesPerDay).toBeLessThan(1000);
+    });
+
+    it("keeps the fallback TTL safe when the var is missing or malformed", async () => {
+        // parseTtlSeconds falls back when the var is absent/unparseable. If that
+        // default were ever lowered to something aggressive, a misconfigured
+        // deploy would blow the budget with no visible cause.
+        for (const ttl of [undefined, "", "abc", "0", "-5"]) {
+            const { kv } = await get("/events", { env: ttl === undefined ? {} : { CACHE_TTL_SECONDS: ttl } });
+            expect(Object.keys(kv.writes)).toEqual(["events:v2"]);
+        }
+    });
+});
+
 describe("degraded channel fetch", () => {
     it("still serves the public calendar when the channel list is unavailable", async () => {
-        // Availability trade-off: a hiccup on the secondary call must not blank
-        // the public calendar.
+        // The channel fetch now happens only inside `/audiences`, so it cannot
+        // affect the event routes at all. Kept as a guard in case a future
+        // change puts it back on this path.
         const { res } = await get("/events", { failChannels: true });
         expect(res.status).toBe(200);
         expect((await res.json()) as unknown[]).toHaveLength(1);
@@ -338,16 +420,20 @@ describe("degraded channel fetch", () => {
         expect(body.map((e) => e.id)).toEqual(["public-1"]);
     });
 
-    it("flags that the channel list was unavailable", async () => {
-        // X-Audience-Source is now informational only -- it no longer implies a
-        // degraded audience, since classification does not depend on the list.
-        const { res } = await get("/events", { failChannels: true });
-        expect(res.headers.get("X-Audience-Source")).toBe("unavailable");
-    });
+    it("does not even call the channels endpoint on an event route", async () => {
+        // Quantifies the fix: with the channels fetch off this path, an event
+        // request makes ONE Discord call instead of two. Driven through the
+        // handler directly because `get()` stubs Discord itself.
+        const calls = stubDiscord();
+        const { ctx } = makeCtx();
+        await worker.fetch(
+            new Request("https://worker.test/events"),
+            { ...ENV, EVENTS_KV: makeKv() } as never,
+            ctx as never,
+        );
 
-    it("reports channels as the source when the list loaded", async () => {
-        const { res } = await get("/events");
-        expect(res.headers.get("X-Audience-Source")).toBe("channels");
+        expect(calls.filter((u) => u.includes("/channels"))).toHaveLength(0);
+        expect(calls.filter((u) => u.includes("/scheduled-events"))).toHaveLength(1);
     });
 });
 

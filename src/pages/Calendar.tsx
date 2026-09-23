@@ -172,9 +172,19 @@ function AgendaRow({
     );
 }
 
-/** Events refresh cadence while the page is visible. Deliberately matches
- * the worker's KV TTL (60s) -- polling faster would never see fresher data. */
-const EVENTS_POLL_INTERVAL_MS = 60_000;
+/**
+ * Events refresh cadence while the page is visible.
+ *
+ * Kept in sync with the Worker's `CACHE_TTL_SECONDS` (180s): polling faster
+ * would only re-read the same cached payload, because the Worker cannot serve
+ * anything fresher.
+ *
+ * This is a READ-side setting. The Worker's write budget (the free tier allows
+ * 1,000 writes/day, and only a cache MISS costs one) is what actually bounds
+ * the TTL -- see the write budget note in `worker/src/index.ts`. Shortening
+ * this interval does NOT reduce writes, since a warm cache is pure reads.
+ */
+const EVENTS_POLL_INTERVAL_MS = 180_000;
 
 export interface CalendarProps {
     /**

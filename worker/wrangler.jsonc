@@ -19,7 +19,33 @@
         // deployed Worker from localhost; prefer `wrangler dev` for that instead.
         "ALLOWED_ORIGIN": "https://autoboat.aoe.vt.edu",
         // How long to cache the Discord events payload in KV, in seconds.
-        "CACHE_TTL_SECONDS": "60",
+        //
+        // WARNING: This value is budgeted against the Workers KV FREE TIER, which
+        // allows 1,000 WRITES/day (reads are 100,000, nowhere near the limit).
+        // Every cache miss writes the events key, so the miss rate -- not the
+        // request rate -- is what burns the budget:
+        //
+        //     misses/day = 86400 / TTL        writes/day = misses/day * writes per miss
+        //     TTL  60s -> 1440 misses -> 1440 writes   OVER the 1,000 limit
+        //     TTL 120s ->  720 misses ->  720 writes   ok (thin margin)
+        //     TTL 180s ->  480 misses ->  480 writes   ok (this config)
+        //     TTL 300s ->  288 misses ->  288 writes   ok (comfortable)
+        //
+        // 180s (3 minutes) is a deliberate refresh-vs-budget trade: it keeps
+        // roughly 2x headroom for retries and deploys while refreshing twice as
+        // often as 300s. Lowering it further cuts that headroom fast -- do the
+        // arithmetic above before you do.
+        //
+        // WARNING: A too-short TTL does NOT degrade gracefully. If the write fails,
+        // the entry never lands, so every following request is also a miss and
+        // keeps trying to write -- the calendar goes empty and stays empty until
+        // 00:00 UTC. Keep this at >= 180 unless the account moves to Workers Paid.
+        //
+        // Also advertised to calendar clients as REFRESH-INTERVAL /
+        // X-PUBLISHED-TTL, so changing it changes how often subscribed
+        // Google/Apple/Outlook calendars poll. Keep the website's
+        // EVENTS_POLL_INTERVAL_MS in sync (it is only a READ-side concern now).
+        "CACHE_TTL_SECONDS": "180",
         // Display name subscribers see in Google/Apple/Outlook Calendar for
         // the /calendar.ics feed. Public, non-secret. The /officers feed uses
         // its own default ("AutoBoat Officers") unless this is set.

@@ -13,26 +13,55 @@ The `/calendar` page on the website displays Discord guild scheduled events as a
 website (browser)                    calendar app (Google/Apple/Outlook)
     |  GET .../events  (PUBLIC only)      |  GET .../calendar.ics  (PUBLIC only)
     v                                    v
-worker/ (Cloudflare Worker)  --- one KV cache per resource, shared by all routes ---
-    |  KV get "events:v2"   (60 s TTL)      <- full set, all audiences
-    |  KV get "channels:v1" (60 s TTL)      <- diagnostics only (/audiences)
+worker/ (Cloudflare Worker)  --- one KV cache, shared by all routes ---
+    |  KV get  "events:v2"   (180 s TTL)   <- full set, all audiences. THE ONLY KEY WRITTEN.
+    |  KV put  "events:v2"   (on a MISS)   <- exactly ONE write per miss (write budget!)
     |  miss -> GET .../guilds/<id>/scheduled-events?with_user_count=true
-    |          GET .../guilds/<id>/channels
     |           Authorization: Bot ${DISCORD_BOT_TOKEN}
     |  classify each event: channel_id === OFFICERS_CHANNEL_ID ? officer : public
     v
 Discord API
+
+(separately, for diagnostics only, never cached)
+    GET /audiences  -> GET .../guilds/<id>/channels
 ```
 
-The channels resource is still fetched and cached, but **classification no longer
-uses it** -- it is a plain id comparison. It is kept for `GET /audiences`, which
-is how an operator verifies the configured channel against the real guild.
+The channels endpoint is called by `GET /audiences` ONLY, and its result is not
+cached. Classification is a plain id comparison, so the channel list is not
+needed to decide visibility -- see "Write budget" below for why caching it was
+actively harmful.
 
 The Worker normalizes Discord's `GuildScheduledEvent` shape into a small `CalendarEvent` record (`src/lib/discord.ts`), which is what the website consumes. The Worker owns:
 
 - **Five routes**, in two audience families. Public: `GET /events` (JSON) and `GET /calendar.ics` (iCalendar). Officer: `GET /officers/events` and `GET /officers/calendar.ics`. Plus `GET /audiences` (diagnostics, see below). All four event routes call `loadEvents()` and then filter, so no two consumers can disagree about visibility. Trailing slashes are normalized, so `/events/` also works.
 - CORS (locked to `https://autoboat.aoe.vt.edu` via `ALLOWED_ORIGIN` var). Calendar clients are not browsers -- they ignore CORS entirely, so the `.ics` feed works regardless of the origin lockdown.
-- KV caching (TTL from `CACHE_TTL_SECONDS` var, 60 s in `wrangler.jsonc`, `parseTtlSeconds` fallback 300 s). KV writes are fire-and-forget via `ctx.waitUntil` so the response isn't blocked on them. JSON responses also send `Cache-Control: public, max-age=<TTL>` -- the client must fetch with `cache: "no-store"` or the browser cache defeats background polling.
+- KV caching (TTL from `CACHE_TTL_SECONDS` var, **180 s** in `wrangler.jsonc`, `parseTtlSeconds` fallback 180 s). KV writes are fire-and-forget via `ctx.waitUntil` so the response isn't blocked on them. JSON responses also send `Cache-Control: public, max-age=<TTL>` -- the client must fetch with `cache: "no-store"` or the browser cache defeats background polling.
+
+### Write budget (do not regress this)
+
+WARNING: The account is on the Workers KV **FREE** tier: **1,000 writes/day** (reads
+are 100,000 and are never the constraint). A cache MISS is what costs a write, so
+
+```
+writes/day = (86400 / TTL) * writes-per-miss-to-KV
+```
+
+This was hit in production. The original config used a 60 s TTL *and* wrote two
+keys per miss (`events:v2` + a `channels:v1` cache the event path no longer
+needed), giving ~2,880 writes/day -- roughly 3x the limit. It fails **badly**: a
+rejected write means the entry never lands, so every subsequent request is also a
+miss and keeps retrying, and the calendar renders empty until 00:00 UTC.
+
+Two invariants keep it safe, both pinned by `routes.test.ts`:
+
+1. **Exactly ONE KV write per cache miss**, always the same key. No second key on
+the event path -- if you need the channel list, fetch it in `/audiences` alone.
+2. **`CACHE_TTL_SECONDS` stays >= 180.** At 180 s a continuously-active site costs
+   480 writes/day (~2x headroom); the test reads the value off `wrangler.jsonc`
+   and asserts it.
+
+Raising the website's `EVENTS_POLL_INTERVAL_MS` does NOT reduce writes -- a warm
+cache is pure reads. Only the TTL and the writes-per-miss do.
 - Pre-mapping Discord's numeric status/entity_type codes to lowercase strings (`scheduled | active | completed | canceled`).
 
 ## Audience gating (officer-only events)
@@ -92,18 +121,13 @@ event.channel_id === OFFICERS_CHANNEL_ID ? "officer" : "public"
   Caching only the public subset would be smaller, but the officer routes would
   then miss every time and hit Discord on each request -- and Discord throttles the
   scheduled-events endpoint aggressively. Keep the full set.
-- **Degraded mode**: `X-Audience-Source: channels|unavailable` reports whether the
-  secondary channels fetch succeeded. It is now **informational only** -- the
-  audience no longer depends on that fetch, so `unavailable` does NOT mean events
-  leaked. A failure there does not blank the public calendar.
 - **`GET /audiences`** is the diagnostic: it reports `officersChannelId` and
   `configured`, lists every category, and lists every non-category channel with its
   id, name, parent category, and resolved audience -- so the real config can be
   verified without Discord UI archaeology. A wrong officer channel id fails open
   and is otherwise invisible. It exposes channel/category names (no event data, no
-  secret) and is `Cache-Control: no-store`. This route is the **reason the channels
-  resource is still fetched and cached** at all; classification itself does not use
-  it.
+  secret), is `Cache-Control: no-store`, and **fetches the channel list live
+  without caching it** (see "Write budget").
 - WARNING: **Find the officer channel id with `worker/scripts/channel-audit.mjs`**
   (`cd worker && npm run channels`). It is read-only, takes the bot token from
   `DISCORD_BOT_TOKEN` or gitignored `.dev.vars` (never logs it), prints the channel
@@ -140,7 +164,7 @@ event.channel_id === OFFICERS_CHANNEL_ID ? "officer" : "public"
 
 The website owns:
 
-- Background refresh: `Calendar.tsx` polls `fetchEvents` every `EVENTS_POLL_INTERVAL_MS` (60 s, deliberately matching the KV TTL) with the same visibility-aware pattern as `LiveMap.tsx` -- skip while `document.hidden`, immediate repoll on visibility, abort the in-flight poll before starting a new one. Transient poll failures keep the last-good events; the error card only appears when nothing has loaded yet.
+- Background refresh: `Calendar.tsx` polls `fetchEvents` every `EVENTS_POLL_INTERVAL_MS` (180 s) with the same visibility-aware pattern as `LiveMap.tsx` -- skip while `document.hidden`, immediate repoll on visibility, abort the in-flight poll before starting a new one. Transient poll failures keep the last-good events; the error card only appears when nothing has loaded yet. NOTE: this interval is a READ-side knob only -- with a warm KV cache a poll costs zero writes, so shortening it cannot affect the KV write budget. The KV TTL alone sets the write rate (see the write budget section).
 - RRULE expansion for recurring events (via the `rrule` package).
 - The month-grid UI, day-name headers, chip rendering, and the mobile layout branch (below).
 
@@ -244,7 +268,7 @@ Discord incoming webhooks are POST-only on a channel -- they cannot *pull* guild
 
 - `DISCORD_GUILD_ID` — public, not a secret.
 - `ALLOWED_ORIGIN` — deployment origin; do NOT set to `*` in production.
-- `CACHE_TTL_SECONDS` — KV TTL, `60` in production config (`parseTtlSeconds` in the worker falls back to `300` for unparseable/missing values). Lower values mean more Discord API hits; keep the website's `EVENTS_POLL_INTERVAL_MS` in sync with this. Also advertised in the `.ics` as `REFRESH-INTERVAL`/`X-PUBLISHED-TTL`.
+- `CACHE_TTL_SECONDS` — KV TTL, `180` in production config (`parseTtlSeconds` in the worker falls back to `180` for unparseable/missing values). Do NOT lower it to "refresh faster": on the KV free tier this value is a hard write budget, not just a freshness knob (see the write budget section). Keep the website's `EVENTS_POLL_INTERVAL_MS` in sync with this. Also advertised in the `.ics` as `REFRESH-INTERVAL`/`X-PUBLISHED-TTL`.
 - `CALENDAR_NAME` — optional; display name for the `.ics` feed (`X-WR-CALNAME`). Defaults to "AutoBoat at Virginia Tech".
 
 Secrets (never committed) go in via `wrangler secret put`:

@@ -10,13 +10,14 @@ website (browser)
     |  GET https://<worker>.workers.dev/events          <- public events only
     v
 Cloudflare Worker (this repo, `worker/`)
-    |  KV get "events:v2"    (60 s TTL)  <- the FULL set, all audiences
-    |  KV get "channels:v1"  (60 s TTL)  <- diagnostics only (/audiences)
+    |  KV get "events:v2"    (180 s TTL)  <- the FULL set, all audiences
+    |  KV put "events:v2"    (on a MISS)  <- ONE write per miss (write budget!)
     |  miss -> GET https://discord.com/api/v10/guilds/<guild_id>/scheduled-events?with_user_count=true
-    |          GET https://discord.com/api/v10/guilds/<guild_id>/channels
     |           Authorization: Bot ${DISCORD_BOT_TOKEN}
     v
 Discord API
+
+(separately: GET /audiences -> GET .../channels, live and uncached)
 ```
 
 ## Routes
@@ -213,7 +214,8 @@ Set via `vars` in `wrangler.jsonc` (public, non-secret):
 - `DISCORD_GUILD_ID` — Discord server ID.
 - `ALLOWED_ORIGIN` — the only browser origin allowed to call this Worker.
   Default: `https://autoboat.aoe.vt.edu`. Do NOT set to `*` in production.
-- `CACHE_TTL_SECONDS` — KV TTL for the cached events payload. Default 300.
+- `CACHE_TTL_SECONDS` — KV TTL for the cached events payload. **180** (3 minutes),
+  and must stay at or above it (see "KV write budget").
   Also advertised to calendar clients as the `.ics` refresh interval.
 - `CALENDAR_NAME` — display name for the `.ics` feed. Default
   "AutoBoat at Virginia Tech". The `/officers/calendar.ics` route defaults to
@@ -240,9 +242,6 @@ Set via `wrangler secret put` (secret, never committed):
   public one in that state, so serving the public calendar would publish the
   officer one. The KV event write is skipped too, so a poisoned cache cannot
   outlive the misconfiguration.
-- `X-Audience-Source: channels|unavailable` reports whether the diagnostic
-  channels fetch succeeded. It is informational: classification is a plain id
-  comparison, so this does not affect visibility.
 - Discord upstream failures produce a generic `502` with the CORS headers
   intact. The bot token is never included in responses, logs, or error bodies.
 - KV writes are fire-and-forget via `ctx.waitUntil` so the response isn't
@@ -250,6 +249,36 @@ Set via `wrangler secret put` (secret, never committed):
 - The KV read uses `cacheTtl` equal to the KV entry TTL -- this keeps KV
   reads served from the Cloudflare edge cache between entries expiring
   from KV itself.
+
+## KV write budget
+
+WARNING: **This Worker runs on the Workers KV FREE tier: 1,000 writes/day.** Reads
+are 100,000/day and are never the constraint. Only a cache **miss** costs a
+write, so:
+
+```
+writes/day = (86400 / CACHE_TTL_SECONDS) * writes-per-miss
+```
+
+A 60 s TTL with two writes per miss (the events payload plus a `channels:v1`
+cache the event path did not need) came to ~2,880 writes/day -- about 3x the
+limit -- and was hit in production.
+
+WARNING: **It does not degrade gracefully.** A rejected write means the entry never
+lands, so every following request is also a miss and keeps retrying. The calendar
+renders empty and stays empty until the daily limit resets at 00:00 UTC.
+
+Two invariants keep it inside the budget:
+
+1. **One KV write per cache miss**, always the key `events:v2`. The channels
+   endpoint is fetched live by `/audiences` only, and never cached.
+2. **`CACHE_TTL_SECONDS` >= 180.** At 180 s a continuously-active site costs
+   480 writes/day, leaving roughly 2x headroom; the floor exists so the margin
+   survives retries and redeploys. `routes.test.ts` reads the value off
+   `wrangler.jsonc` and asserts it, so lowering it fails the suite.
+
+Note the website's `EVENTS_POLL_INTERVAL_MS` does **not** affect this: a warm
+cache is pure reads. Only the TTL and the writes-per-miss do.
 
 ## Why not Discord webhooks?
 
