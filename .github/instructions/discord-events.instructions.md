@@ -65,8 +65,12 @@ event.channel_id === OFFICERS_CHANNEL_ID ? "officer" : "public"
   the team's stated policy. **Config**: `OFFICERS_CHANNEL_ID` (wrangler var)
   falls back to `DEFAULT_OFFICERS_CHANNEL_ID` in `audience.ts` (the real channel,
   set 2026-09-22). Absent uses the default; **blank means "no officer channel"**
-  and makes the Worker serve NOTHING rather than guess. `PUBLIC_CATEGORY_IDS` is
-  documentation only (see below).
+  and makes the Worker serve NOTHING rather than guess. This is the **only**
+  audience setting. An earlier `PUBLIC_CATEGORY_IDS`/`DEFAULT_PUBLIC_CATEGORY_IDS`
+  list was removed: with the officer channel the sole signal and everything else
+  public by construction, a public allowlist was unreachable configuration -- it
+  could not change any outcome, only mislead the next reader into thinking
+  public/private was category-driven. Do not reintroduce one.
 - WARNING: **Classification needs no channel list at all** -- it is a string
   comparison. Two consequences: a Discord hiccup on `GET /guilds/{id}/channels`
   can no longer degrade the filter (the old category rule leaked in that case), and
@@ -94,10 +98,12 @@ event.channel_id === OFFICERS_CHANNEL_ID ? "officer" : "public"
   leaked. A failure there does not blank the public calendar.
 - **`GET /audiences`** is the diagnostic: it reports `officersChannelId` and
   `configured`, lists every category, and lists every non-category channel with its
-  id, category, and resolved audience -- so the real config can be verified without
-  Discord UI archaeology. A wrong officer channel id fails open and is otherwise
-  invisible. It exposes channel/category names (no event data, no secret) and is
-  `Cache-Control: no-store`.
+  id, name, parent category, and resolved audience -- so the real config can be
+  verified without Discord UI archaeology. A wrong officer channel id fails open
+  and is otherwise invisible. It exposes channel/category names (no event data, no
+  secret) and is `Cache-Control: no-store`. This route is the **reason the channels
+  resource is still fetched and cached** at all; classification itself does not use
+  it.
 - WARNING: **Find the officer channel id with `worker/scripts/channel-audit.mjs`**
   (`cd worker && npm run channels`). It is read-only, takes the bot token from
   `DISCORD_BOT_TOKEN` or gitignored `.dev.vars` (never logs it), prints the channel

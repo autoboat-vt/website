@@ -55,47 +55,14 @@ export interface DiscordChannel {
 }
 
 /**
- * Voice channel whose events are officer-only. **This is the whole signal.**
+ * The single value that decides visibility: an event is officer-only iff its
+ * `channel_id` equals this. Added by the team 2026-09-22.
  *
- * Exactly one officer channel is expected, and every event NOT in it is public
- * -- that is the team's stated policy: "all subteam events and general member
- * events to be public, just the officer events need to be hidden". So an event
- * is officer-only iff its `channel_id` equals this id.
- *
- * WARNING: Why the CHANNEL and not its category: every event voice channel --
- * officer, subteam, and general member alike -- lives under ONE shared
- * category. The category is therefore identical for every event and
- * discriminates nothing. Classifying by channel is also the more faithful
- * model, since `VIEW_CHANNEL` is granted per channel and is what actually
- * restricts the event inside Discord.
- *
- * WARNING: Because there is exactly one id and no category rule, the channel LIST is
- * never consulted: classification is pure string comparison. Two consequences
- * worth knowing -- a Discord hiccup on `GET /guilds/{id}/channels` cannot
- * degrade the filter (an earlier category-based design leaked officer events in
- * that case), and a SECOND officer channel would be public until its id is
- * added here.
- *
- * The env var `OFFICERS_CHANNEL_ID` overrides this.
+ * There is deliberately no "public" counterpart. Everything that is not this
+ * channel is public, so a list of public channels or categories would be
+ * unreachable configuration -- it could not change any outcome, only mislead.
  */
 export const DEFAULT_OFFICERS_CHANNEL_ID = "1550594891766308997";
-
-/**
- * Categories whose events are intended to be public. Purely documentary: with
- * the fail-open policy below, any other channel is public too. Used only by the
- * `/audiences` diagnostics route so the real mapping can be eyeballed.
- *
- * WARNING: Category-level, so with every event channel sharing one category this
- * list cannot distinguish an officer event from a public one. It is
- * documentation, not a filter -- the officer channel id is the filter.
- */
-export const DEFAULT_PUBLIC_CATEGORY_IDS: readonly string[] = [
-    "1017960607317569546",
-    "1017961755422023750",
-    "1521086208877723708",
-    "1170066058371997756",
-    "1496252157961531502",
-];
 
 /** Resolved audience config, derived from the Worker's environment. */
 export interface AudienceConfig {
@@ -106,14 +73,11 @@ export interface AudienceConfig {
      * a sentinel string.
      */
     officersChannelId: string | null;
-    /** Documented public categories (diagnostics only). */
-    publicCategoryIds: string[];
 }
 
 /** The env fields this module reads. Kept minimal so tests can pass literals. */
 export interface AudienceEnv {
     OFFICERS_CHANNEL_ID?: string | undefined;
-    PUBLIC_CATEGORY_IDS?: string | undefined;
 }
 
 /**
@@ -138,13 +102,11 @@ export function audienceConfigFromEnv(env: AudienceEnv): AudienceConfig {
         env.OFFICERS_CHANNEL_ID === undefined
             ? [DEFAULT_OFFICERS_CHANNEL_ID]
             : parseChannelIds(env.OFFICERS_CHANNEL_ID);
-    const publicOverride = parseChannelIds(env.PUBLIC_CATEGORY_IDS);
     return {
         // The first id wins. More than one is a config mistake: there is one
         // officer channel, and silently honouring a list would hide events in
         // channels nobody meant to hide.
         officersChannelId: officers[0] ?? null,
-        publicCategoryIds: publicOverride.length > 0 ? publicOverride : [...DEFAULT_PUBLIC_CATEGORY_IDS],
     };
 }
 

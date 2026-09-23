@@ -218,13 +218,10 @@ Set via `vars` in `wrangler.jsonc` (public, non-secret):
 - `CALENDAR_NAME` — display name for the `.ics` feed. Default
   "AutoBoat at Virginia Tech". The `/officers/calendar.ics` route defaults to
   "AutoBoat Officers" instead.
-- `OFFICERS_CHANNEL_ID` — the officer-only voice channel id. Omit it to use
-  `DEFAULT_OFFICERS_CHANNEL_ID` in `src/audience.ts`; a **blank** value means
-  "no officer channel", which makes the Worker serve **nothing** (fail-closed)
-  rather than guess. Verify it with `/audiences`.
-- `PUBLIC_CATEGORY_IDS` — comma-separated category ids that are intended to be
-  public. Documentation only (the filter is fail-open), reported by `/audiences`
-  so the mapping can be reviewed.
+- `OFFICERS_CHANNEL_ID` — the officer-only voice channel id. **The only audience
+  setting.** Omit it to use `DEFAULT_OFFICERS_CHANNEL_ID` in `src/audience.ts`;
+  a **blank** value means "no officer channel", which makes the Worker serve
+  **nothing** (fail-closed) rather than guess. Verify it with `/audiences`.
 
 Set via `wrangler secret put` (secret, never committed):
 

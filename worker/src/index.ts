@@ -12,8 +12,8 @@
  *   GET /calendar.ics      -- the same public events as an iCalendar feed.
  *   GET /officers/events   -- JSON including officer-only events.
  *   GET /officers/calendar.ics -- the same broader set as a feed.
- *   GET /audiences         -- diagnostics: every category the Worker sees,
- *                             flagged with the audience it maps to.
+ *   GET /audiences         -- diagnostics: the configured officer channel,
+ *                             plus every channel/category the Worker sees.
  *
  * Audience gating (see audience.ts): the team restricts an event inside
  * Discord by hosting it in a voice channel only the intended audience can
@@ -78,8 +78,6 @@ interface Env {
      * from a subteam one.
      */
     OFFICERS_CHANNEL_ID?: string;
-    /** Comma-separated public category ids. Diagnostics only. Optional. */
-    PUBLIC_CATEGORY_IDS?: string;
     EVENTS_KV: KVNamespace;
 }
 
@@ -387,9 +385,6 @@ async function handleGetAudiences(env: Env): Promise<Response> {
     const categories = listCategories(channels).map((c) => ({
         id: c.id,
         name: c.name,
-        // Categories are documentary only now: classification is by channel,
-        // because every event channel shares one category.
-        documentedPublic: config.publicCategoryIds.includes(c.id),
     }));
 
     const channelList = listChannels(channels).map((c) => ({

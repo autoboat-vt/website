@@ -49,7 +49,6 @@ const CHANNELS: DiscordChannel[] = [
 
 const CONFIG: AudienceConfig = {
     officersChannelId: OFFICER_VOICE,
-    publicCategoryIds: [EVENTS_CATEGORY],
 };
 
 describe("parseChannelIds", () => {
@@ -110,8 +109,9 @@ describe("audienceConfigFromEnv", () => {
         expect(audienceConfigFromEnv({ OFFICERS_CHANNEL_ID: "4242,9999" }).officersChannelId).toBe("4242");
     });
 
-    it("falls back to the documented public list when unset", () => {
-        expect(audienceConfigFromEnv({}).publicCategoryIds.length).toBeGreaterThan(0);
+    it("does not need a channel list to classify", () => {
+        // The config is a single id; nothing else is consulted.
+        expect(audienceConfigFromEnv({}).officersChannelId).toBe(DEFAULT_OFFICERS_CHANNEL_ID);
     });
 
     it("gives the officer id a snowflake shape", () => {
@@ -119,12 +119,6 @@ describe("audienceConfigFromEnv", () => {
         // as officer, publishing the officer calendar. Discord snowflakes are
         // 17-20 digits.
         expect(DEFAULT_OFFICERS_CHANNEL_ID).toMatch(/^\d{17,20}$/);
-    });
-
-    it("gives every documented public id a snowflake shape", () => {
-        for (const id of audienceConfigFromEnv({}).publicCategoryIds) {
-            expect(id).toMatch(/^\d{17,20}$/);
-        }
     });
 });
 
@@ -189,7 +183,7 @@ describe("audienceForChannel", () => {
         // The fail-open default of the pure function. Note the ROUTE layer
         // refuses to serve anything in this state (eventsForRoute), so this is
         // not reachable as a leak through the public calendar.
-        const unconfigured: AudienceConfig = { officersChannelId: null, publicCategoryIds: [] };
+        const unconfigured: AudienceConfig = { officersChannelId: null };
         expect(audienceForChannel(OFFICER_VOICE, unconfigured, CHANNELS)).toBe("public");
     });
 });

@@ -26,7 +26,6 @@ const CHANNELS = [
 
 const CONFIG: AudienceConfig = {
     officersChannelId: OFFICER_VOICE,
-    publicCategoryIds: [EVENTS_CATEGORY],
 };
 
 /** A raw Discord voice event -- entity_metadata is null for voice events. */
