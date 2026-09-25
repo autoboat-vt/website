@@ -46,6 +46,22 @@
         // Google/Apple/Outlook calendars poll. Keep the website's
         // EVENTS_POLL_INTERVAL_MS in sync (it is only a READ-side concern now).
         "CACHE_TTL_SECONDS": "180",
+        // OPTIONAL age-based pruning for the event archive, in days. LEFT UNSET
+        // ON PURPOSE: the team asked to keep EVERY event, so the default is
+        // unbounded retention and the KV key is written with no expiry.
+        //
+        // Discord's scheduled-events endpoint returns only SCHEDULED/ACTIVE
+        // events, so an event disappears from the API the moment it completes
+        // or is cancelled. The Worker archives what it has already seen and
+        // keeps serving it -- forever, unless a value is set here.
+        //
+        // Setting this re-enables pruning older than N days. It does NOT affect
+        // the KV write budget above: the miss rate is set by
+        // CACHE_TTL_SECONDS alone, and a miss still costs exactly one write.
+        // Total history is bounded regardless by MAX_ARCHIVED_EVENTS in
+        // worker/src/archive.ts.
+        //
+        // "RETENTION_DAYS": "365",
         // Display name subscribers see in Google/Apple/Outlook Calendar for
         // the /calendar.ics feed. Public, non-secret. The /officers feed uses
         // its own default ("AutoBoat Officers") unless this is set.

@@ -36,15 +36,20 @@ const CHANNELS = [
     { id: SOFTWARE_VOICE, name: "Software Voice", type: 2, parent_id: EVENTS_CATEGORY },
 ];
 
-function discordEvent(id: string, name: string, channelId: string | null) {
+function discordEvent(
+    id: string,
+    name: string,
+    channelId: string | null,
+    times: { start?: string; end?: string | null } = {},
+) {
     return {
         id,
         guild_id: "999",
         channel_id: channelId,
         name,
         description: null,
-        scheduled_start_time: "2026-10-01T19:00:00.000Z",
-        scheduled_end_time: null,
+        scheduled_start_time: times.start ?? "2026-10-01T19:00:00.000Z",
+        scheduled_end_time: times.end === undefined ? null : times.end,
         privacy_level: 2,
         status: 1,
         entity_type: 2,
@@ -221,6 +226,277 @@ describe("route -> audience wiring", () => {
     });
 });
 
+describe("past-event retention", () => {
+    // WHY THIS SUITE EXISTS. Discord's `/guilds/{id}/scheduled-events` returns
+    // only `SCHEDULED`/`ACTIVE` events, and both `COMPLETED` and `CANCELED` are
+    // terminal -- so an event leaves the API the moment it ends, and a plain
+    // cache forgot it immediately. These tests drive the real handler across
+    // TWO successive fetches, which is the only way to observe the merge: a
+    // single request can never distinguish "archived" from "still in Discord's
+    // list".
+    //
+    // WARNING: The stored side of the cache is a NORMALIZED `CalendarEvent` (what
+    // `normalizeEvents` produced on a previous request), not a raw Discord
+    // payload. Seeding raw payloads here would exercise a shape the Worker
+    // never actually writes.
+    //
+    // The default dates are RELATIVE to now, deliberately. Hard-coding an old
+    // literal (e.g. 2020) would make the tests pass for the wrong reason --
+    // under an explicit retention window the event would be dropped by the age
+    // filter rather than exercised.
+    const PAST_DAYS_AGO = 7;
+    function daysFromNow(days: number): string {
+        return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+    }
+    /** One normalized, already-ended event as the Worker would have stored it. */
+    function storedPastEvent(id: string, name: string, overrides: Record<string, unknown> = {}) {
+        return {
+            id,
+            name,
+            description: null,
+            start: daysFromNow(-PAST_DAYS_AGO),
+            end: daysFromNow(-PAST_DAYS_AGO + 1 / 24),
+            status: "scheduled",
+            location: null,
+            userCount: null,
+            isRecurring: false,
+            image: null,
+            recurrenceRule: null,
+            channelId: SOFTWARE_VOICE,
+            audience: "public",
+            cancelledDates: [],
+            ...overrides,
+        };
+    }
+
+    /** Seed a stale cache entry holding `stored`, then refetch `fresh`. */
+    async function refetch(opts: {
+        stored: Record<string, unknown>[];
+        fresh?: ReturnType<typeof discordEvent>[];
+        env?: Record<string, string>;
+        path?: string;
+    }) {
+        const kv = makeKv({
+            "events:v2": {
+                fetchedAt: Date.now() - 600_000, // > ENV.CACHE_TTL_SECONDS (60)
+                events: opts.stored,
+            },
+        });
+        stubDiscord({ events: opts.fresh ?? [] });
+        const { ctx, promises } = makeCtx();
+        const res = await worker.fetch(
+            new Request(`https://worker.test${opts.path ?? "/events"}`),
+            { ...ENV, ...opts.env, EVENTS_KV: kv } as never,
+            ctx as never,
+        );
+        await Promise.all(promises);
+        return { body: (await res.json()) as { id: string; name?: string; status?: string }[], kv };
+    }
+
+    it("keeps a past event after Discord stops reporting it", async () => {
+        // The headline behavior: the event is gone from the fresh payload (as
+        // Discord does once it completes) but must still be served.
+        const { body } = await refetch({
+            stored: [storedPastEvent("completed-1", "Week 3 Build Session")],
+            fresh: [discordEvent("still-upcoming", "Next Meeting", SOFTWARE_VOICE)],
+        });
+
+        expect(body.map((e) => e.id)).toContain("completed-1");
+    });
+
+    it("marks an archived event as completed so it renders as history", async () => {
+        // Discord's terminal status never reaches us (the event is absent from
+        // the payload), so the Worker synthesizes it. Without this a past event
+        // would render with live styling.
+        const { body } = await refetch({ stored: [storedPastEvent("completed-1", "Week 3 Build Session")] });
+
+        expect(body.find((e) => e.id === "completed-1")?.status).toBe("completed");
+    });
+
+    it("keeps an upcoming event that vanished from Discord", async () => {
+        // The team asked to keep EVERY event. "Discord stopped reporting it"
+        // is not a reliable "this was scrapped" signal -- the API cannot tell
+        // deletion from cancellation -- so a future event is retained too.
+        const { body } = await refetch({
+            stored: [
+                storedPastEvent("future-dropped", "Vanished In Discord", {
+                    start: daysFromNow(30),
+                    end: daysFromNow(31),
+                }),
+            ],
+        });
+
+        expect(body.map((e) => e.id)).toContain("future-dropped");
+    });
+
+    it("keeps an arbitrarily old event by default", async () => {
+        // Retention is unbounded unless RETENTION_DAYS is set, so nothing is
+        // ever discarded for being old.
+        const { body } = await refetch({
+            stored: [
+                storedPastEvent("ancient", "From Years Ago", {
+                    start: daysFromNow(-4000),
+                    end: daysFromNow(-3999),
+                }),
+            ],
+        });
+
+        expect(body.map((e) => e.id)).toContain("ancient");
+    });
+
+    it("prunes old history only when RETENTION_DAYS opts in", async () => {
+        // The escape hatch: an explicit window restores age-based pruning,
+        // which is the safety valve if the archive ever grows too large.
+        const { body } = await refetch({
+            stored: [
+                storedPastEvent("ancient", "From Years Ago", {
+                    start: daysFromNow(-400),
+                    end: daysFromNow(-399),
+                }),
+            ],
+            env: { RETENTION_DAYS: "90" },
+        });
+
+        expect(body.map((e) => e.id)).not.toContain("ancient");
+    });
+
+    it("treats a malformed RETENTION_DAYS as keep-everything, not as a window", async () => {
+        // Losing history is unrecoverable, so an unparseable value must err
+        // toward retaining rather than falling back to some default cutoff.
+        const { body } = await refetch({
+            stored: [
+                storedPastEvent("ancient", "From Years Ago", {
+                    start: daysFromNow(-4000),
+                    end: daysFromNow(-3999),
+                }),
+            ],
+            env: { RETENTION_DAYS: "not-a-number" },
+        });
+
+        expect(body.map((e) => e.id)).toContain("ancient");
+    });
+
+    it("honours a huge RETENTION_DAYS as effectively unbounded", async () => {
+        // A large finite window is a valid way to express keep-everything
+        // without leaving the var unset.
+        const { body } = await refetch({
+            stored: [
+                storedPastEvent("ancient", "From Years Ago", {
+                    start: daysFromNow(-400),
+                    end: daysFromNow(-399),
+                }),
+            ],
+            env: { RETENTION_DAYS: "40000" },
+        });
+
+        expect(body.map((e) => e.id)).toContain("ancient");
+    });
+
+    it("writes the archive with NO expiry while retention is unbounded", async () => {
+        // WARNING: The failure this guards is silent and total. If the key carried
+        // an expiry while the archive is meant to live forever, the whole
+        // history would lapse and the next request would archive only what
+        // Discord still reports -- past events would vanish again, which is
+        // the exact bug this feature fixes.
+        const kv = makeKv();
+        let putOptions: unknown;
+        const spyKv = {
+            ...kv,
+            async put(key: string, value: string, options?: unknown) {
+                putOptions = options;
+                return kv.put(key, value);
+            },
+        };
+        stubDiscord();
+        const { ctx, promises } = makeCtx();
+        await worker.fetch(
+            new Request("https://worker.test/events"),
+            { ...ENV, EVENTS_KV: spyKv } as never,
+            ctx as never,
+        );
+        await Promise.all(promises);
+
+        expect(putOptions).toBeUndefined();
+    });
+
+    it("serves a retained officer event on the officer route", async () => {
+        // Retention is applied to the FULL set before audience filtering, so an
+        // archived officer event must survive on the officer route as well.
+        const { body } = await refetch({
+            stored: [
+                storedPastEvent("officer-past", "Past Officer Sync", { channelId: OFFICER_VOICE, audience: "officer" }),
+            ],
+            path: "/officers/events",
+        });
+
+        expect(body.map((e) => e.id)).toContain("officer-past");
+    });
+
+    it("keeps a retained officer event off the PUBLIC route", async () => {
+        // The complementary leak guard: archiving must not bypass audience
+        // filtering.
+        const { body } = await refetch({
+            stored: [
+                storedPastEvent("officer-past", "Past Officer Sync", { channelId: OFFICER_VOICE, audience: "officer" }),
+            ],
+        });
+
+        expect(body).toEqual([]);
+    });
+
+    it("does not duplicate an event that stays in the payload across refreshes", async () => {
+        // The merge keys on the Discord event id. A recurring event is present
+        // in every payload with the SAME id, so it must not be archived
+        // alongside itself.
+        const { body } = await refetch({
+            stored: [
+                storedPastEvent("recurring-1", "Weekly Standup", {
+                    start: daysFromNow(30),
+                    end: daysFromNow(31),
+                }),
+            ],
+            fresh: [
+                discordEvent("recurring-1", "Weekly Standup", SOFTWARE_VOICE, {
+                    start: daysFromNow(37),
+                    end: daysFromNow(38),
+                }),
+            ],
+        });
+
+        expect(body.filter((e) => e.id === "recurring-1")).toHaveLength(1);
+    });
+
+    it("takes the FRESH copy of an event that is still in the payload", async () => {
+        // A renamed event must not keep serving its stale archived name.
+        const { body } = await refetch({
+            stored: [
+                storedPastEvent("recurring-1", "Old Name", {
+                    start: daysFromNow(30),
+                    end: daysFromNow(31),
+                }),
+            ],
+            fresh: [
+                discordEvent("recurring-1", "New Name", SOFTWARE_VOICE, {
+                    start: daysFromNow(30),
+                    end: daysFromNow(31),
+                }),
+            ],
+        });
+
+        expect(body.find((e) => e.id === "recurring-1")?.name).toBe("New Name");
+    });
+
+    it("persists the retained set so the NEXT request also sees it", async () => {
+        // The archive is only useful if it is written back -- a merge that is
+        // served but not stored would collapse back to Discord's view on the
+        // following refresh.
+        const { kv } = await refetch({ stored: [storedPastEvent("completed-1", "Week 3 Build Session")] });
+        const written = kv.writes["events:v2"] as { events: { id: string }[] };
+
+        expect(written.events.map((e) => e.id)).toContain("completed-1");
+    });
+});
+
 describe("unconfigured officer channel", () => {
     // WARNING: This is the one place the policy is fail-CLOSED. Everywhere else an
     // unknown channel is public (the team asked for that). But with no officer
@@ -280,11 +556,23 @@ describe("unconfigured officer channel", () => {
 describe("caching", () => {
     it("caches the FULL event set, so officer routes can be served from cache", async () => {
         const { kv } = await get("/events");
-        const cached = kv.writes["events:v2"] as { id: string; audience: string }[];
+        const cached = kv.writes["events:v2"] as { events: { id: string; audience: string }[] };
         // Storing only the public subset would force the officer routes to hit
         // Discord on every request.
-        expect(cached.map((e) => e.id).sort()).toEqual(["officer-1", "public-1"]);
-        expect(cached.find((e) => e.id === "officer-1")?.audience).toBe("officer");
+        expect(cached.events.map((e) => e.id).sort()).toEqual(["officer-1", "public-1"]);
+        expect(cached.events.find((e) => e.id === "officer-1")?.audience).toBe("officer");
+    });
+
+    it("stamps the entry with fetchedAt so freshness survives a long-lived key", async () => {
+        // The key expires on the RETENTION window, not the cache TTL, so
+        // freshness has to live in the value. Without this stamp every request
+        // after the first would look "fresh" for days.
+        const before = Date.now();
+        const { kv } = await get("/events");
+        const cached = kv.writes["events:v2"] as { fetchedAt: number };
+        expect(typeof cached.fetchedAt).toBe("number");
+        expect(cached.fetchedAt).toBeGreaterThanOrEqual(before);
+        expect(cached.fetchedAt).toBeLessThanOrEqual(Date.now());
     });
 
     it("reports X-Cache: MISS on a cold cache and HIT when warm", async () => {
@@ -300,7 +588,7 @@ describe("caching", () => {
             { ...discordEvent("public-1", "Software Work Session", SOFTWARE_VOICE), audience: "public" },
             { ...discordEvent("officer-1", "Officer Budget Review", OFFICER_VOICE), audience: "officer" },
         ];
-        const kv = makeKv({ "events:v2": seeded });
+        const kv = makeKv({ "events:v2": { fetchedAt: Date.now(), events: seeded } });
         const calls = stubDiscord({ failChannels: true });
         const { ctx } = makeCtx();
 
@@ -315,6 +603,48 @@ describe("caching", () => {
         expect(body.map((e) => e.id)).toEqual(["public-1"]);
         // No Discord traffic at all -- the cache was warm.
         expect(calls).toHaveLength(0);
+    });
+
+    it("refetches once the entry is older than the TTL", async () => {
+        // Freshness is `now - fetchedAt >= TTL`, NOT "the key is still there".
+        // The key outlives the TTL by design, so this is what keeps the write
+        // rate at 86400/TTL instead of collapsing to one fetch per retention
+        // window.
+        const stale = [{ ...discordEvent("public-1", "Stale Copy", SOFTWARE_VOICE), audience: "public" }];
+        const kv = makeKv({ "events:v2": { fetchedAt: Date.now() - 120_000, events: stale } });
+        const calls = stubDiscord();
+        const { ctx } = makeCtx();
+
+        const res = await worker.fetch(
+            new Request("https://worker.test/events"),
+            { ...ENV, EVENTS_KV: kv } as never,
+            ctx as never,
+        );
+
+        // ENV.CACHE_TTL_SECONDS is 60, so a 120s-old entry is stale.
+        expect(res.headers.get("X-Cache")).toBe("MISS");
+        expect(calls.filter((u) => u.includes("/scheduled-events"))).toHaveLength(1);
+    });
+
+    it("treats a legacy bare-array entry as stale rather than serving it forever", async () => {
+        // An entry written by a pre-retention Worker has no fetchedAt. Reading
+        // it as infinitely stale refetches and rewrites it in the new shape,
+        // instead of either dropping history or serving stale data for days.
+        const legacy = [{ ...discordEvent("public-1", "Software Work Session", SOFTWARE_VOICE), audience: "public" }];
+        const kv = makeKv({ "events:v2": legacy });
+        const calls = stubDiscord();
+        const { ctx } = makeCtx();
+
+        const res = await worker.fetch(
+            new Request("https://worker.test/events"),
+            { ...ENV, EVENTS_KV: kv } as never,
+            ctx as never,
+        );
+
+        expect(res.headers.get("X-Cache")).toBe("MISS");
+        expect(calls.filter((u) => u.includes("/scheduled-events"))).toHaveLength(1);
+        // ...and the entry is upgraded in place.
+        expect((kv.writes["events:v2"] as { fetchedAt: number }).fetchedAt).toBeGreaterThan(0);
     });
 });
 
@@ -352,7 +682,7 @@ describe("KV write budget", () => {
         // A warm cache must be pure reads, or the budget scales with traffic
         // rather than with time.
         const seeded = [{ ...discordEvent("public-1", "Software Work Session", SOFTWARE_VOICE), audience: "public" }];
-        const kv = makeKv({ "events:v2": seeded });
+        const kv = makeKv({ "events:v2": { fetchedAt: Date.now(), events: seeded } });
         stubDiscord();
         const { ctx } = makeCtx();
         const res = await worker.fetch(
@@ -363,6 +693,19 @@ describe("KV write budget", () => {
 
         expect(res.headers.get("X-Cache")).toBe("HIT");
         expect(kv.writes).toEqual({});
+    });
+
+    it("still writes exactly one key per miss with retention enabled", async () => {
+        // The retention config changes the key's lifetime and value size, not
+        // the write count. This is the regression that would matter most: a
+        // second key (e.g. a separate archive key) doubles writes/day and puts
+        // the free tier over budget, which blanks the calendar until 00:00 UTC.
+        // Asserted both with unbounded retention (the default) and with an
+        // explicit window.
+        for (const env of [{}, { RETENTION_DAYS: "365" }]) {
+            const { kv } = await get("/events", { env });
+            expect(Object.keys(kv.writes)).toEqual(["events:v2"]);
+        }
     });
 
     it("stays inside the daily write budget at the shipped TTL", async () => {

@@ -3,22 +3,34 @@
 Cloudflare Worker that proxies Discord's guild scheduled-events REST API for the
 AutoBoat website calendar. The website is a fully static S3 site, so the bot
 token cannot live in its bundle -- this Worker holds it server-side and serves
-a normalized JSON list of events from a KV cache.
+a normalized JSON list of events from a KV cache that doubles as a short
+archive, so events survive Discord forgetting them.
 
 ```
 website (browser)
     |  GET https://<worker>.workers.dev/events          <- public events only
     v
 Cloudflare Worker (this repo, `worker/`)
-    |  KV get "events:v2"    (180 s TTL)  <- the FULL set, all audiences
-    |  KV put "events:v2"    (on a MISS)  <- ONE write per miss (write budget!)
-    |  miss -> GET https://discord.com/api/v10/guilds/<guild_id>/scheduled-events?with_user_count=true
+    |  KV get "events:v2"  <- { fetchedAt, events }, the FULL set, all audiences
+    |                        fresh while now - fetchedAt < CACHE_TTL_SECONDS
+    |  KV put "events:v2"  (on a STALE read)  <- ONE write per miss (write budget!)
+    |                        NO expiry by default (retention is unbounded)
+    |  stale -> GET https://discord.com/api/v10/guilds/<guild_id>/scheduled-events?with_user_count=true
     |           Authorization: Bot ${DISCORD_BOT_TOKEN}
+    |           normalize -> MERGE over the stored events -> write
     v
 Discord API
 
 (separately: GET /audiences -> GET .../channels, live and uncached)
 ```
+
+RETENTION. Discord's list endpoint returns only `SCHEDULED`/`ACTIVE` events,
+and both `COMPLETED` and `CANCELED` are terminal -- so an event disappears from
+the API the moment it ends. A plain cache would forget it immediately. Each
+refresh therefore merges the fresh events OVER the stored ones, keeping every
+event Discord has stopped reporting. **Retention is unbounded: every event the
+Worker has ever seen is kept.** That is what keeps past events on the calendar;
+nothing on the website filters them. Set `RETENTION_DAYS` to opt into pruning.
 
 ## Routes
 
@@ -214,9 +226,18 @@ Set via `vars` in `wrangler.jsonc` (public, non-secret):
 - `DISCORD_GUILD_ID` — Discord server ID.
 - `ALLOWED_ORIGIN` — the only browser origin allowed to call this Worker.
   Default: `https://autoboat.aoe.vt.edu`. Do NOT set to `*` in production.
-- `CACHE_TTL_SECONDS` — KV TTL for the cached events payload. **180** (3 minutes),
-  and must stay at or above it (see "KV write budget").
+- `CACHE_TTL_SECONDS` — how long a cached payload is considered fresh, in
+  seconds. **180** (3 minutes), and must stay at or above it (see "KV write
+  budget"). This is the refetch rate, not the key's lifetime.
   Also advertised to calendar clients as the `.ics` refresh interval.
+- `RETENTION_DAYS` — **optional**, and left unset by default, which keeps
+  **every** event forever. Set it to prune archived events older than N days.
+  Discord returns only `SCHEDULED`/`ACTIVE` events, so the archive is what makes
+  past events visible at all. It does **not** affect the KV write budget (the
+  miss rate is set by `CACHE_TTL_SECONDS`); it only bounds how much history is
+  kept. Total history is bounded regardless by `MAX_ARCHIVED_EVENTS`.
+  A malformed value keeps everything rather than falling back to a cutoff, since
+  discarding history is unrecoverable.
 - `CALENDAR_NAME` — display name for the `.ics` feed. Default
   "AutoBoat at Virginia Tech". The `/officers/calendar.ics` route defaults to
   "AutoBoat Officers" instead.
@@ -235,8 +256,10 @@ Set via `wrangler secret put` (secret, never committed):
   plus `OPTIONS` preflight for both. Everything else 404s. Trailing slashes
   are ignored, so `/events/` and `/calendar.ics/` work too.
 - Both routes share one KV cache via a common `loadEvents()` helper, so the
-  JSON payload and the feed can never disagree. The cache holds the **full**
-  event set; each route filters in memory.
+  JSON payload and the feed can never disagree. The value is an archive
+  (`{ fetchedAt, events }`) holding the **full** event set; each route filters
+  in memory. See "Event retention" below for why it is an archive and not a
+  plain cache.
 - While `OFFICERS_CHANNEL_ID` is blank the Worker serves **no** events and
   reports `X-Audience-Configured: false`. It cannot tell an officer event from a
   public one in that state, so serving the public calendar would publish the
@@ -246,9 +269,62 @@ Set via `wrangler secret put` (secret, never committed):
   intact. The bot token is never included in responses, logs, or error bodies.
 - KV writes are fire-and-forget via `ctx.waitUntil` so the response isn't
   blocked on the write.
-- The KV read uses `cacheTtl` equal to the KV entry TTL -- this keeps KV
-  reads served from the Cloudflare edge cache between entries expiring
-  from KV itself.
+- The KV read uses `cacheTtl` equal to the cache TTL -- this keeps KV reads
+  served from the Cloudflare edge cache between refreshes.
+- `X-Cache: HIT` means the stored entry was still fresh (`now - fetchedAt <
+  CACHE_TTL_SECONDS`), not merely that the key existed. The key outlives the
+  cache TTL by design.
+
+## Event retention
+
+WARNING: **Discord's scheduled-events endpoint returns only `SCHEDULED` and
+`ACTIVE` events.** `COMPLETED` and `CANCELED` are terminal statuses, so an
+event drops out of the API the moment it ends (a voice/stage event completes a
+few minutes after the last person leaves the channel; an external event
+completes at its end time). A cache that mirrors that list therefore forgets
+every meeting as soon as it happens.
+
+`src/archive.ts` closes the gap. On each refresh the freshly fetched events
+are merged over the stored ones:
+
+1. **Fresh wins** -- an event still in Discord's list is taken verbatim, since
+   its name, description, or start time may have changed.
+2. **Every event that fell out of the list is kept** -- this is unbounded by
+   default. It is deliberately unconditional, because Discord drops an event
+   for exactly two reasons (it completed, or it was removed) and the API cannot
+   tell them apart.
+   - an event that had **ended** is marked `completed`, so the calendar renders
+     it as history;
+   - an event that had **not ended** keeps its status, since marking it
+     `completed` would claim a meeting happened that never did;
+   - an already-`canceled` event keeps its status, which is styled differently.
+3. **Malformed events are dropped** -- a record whose dates cannot be parsed
+   can neither be reasoned about nor aged out.
+4. **Nothing is dropped for being old** unless `RETENTION_DAYS` is set. The
+   result is still held under `MAX_ARCHIVED_EVENTS`, which is a safety ceiling
+   rather than a retention policy (roughly a 600 KB value, ~50 years of weekly
+   meetings).
+
+The merge keys on Discord's event id, so a recurring event -- which appears in
+every payload under one stable id -- is never duplicated.
+
+WARNING: **Freshness lives in the value, not in KV's expiry.** The key is
+written with **no `expirationTtl`** in the default unbounded mode, so a plain
+"is the key present?" check would serve stale data forever. A miss is
+`now - fetchedAt >= CACHE_TTL_SECONDS`, and it still costs exactly one write.
+Do not add a second key. If you set `RETENTION_DAYS`, the key expires on that
+window (floored at 2x the cache TTL, capped at KV's 1-year maximum) -- do not
+set it below the cache TTL.
+
+WARNING: Do not give the key an expiry while retention is unbounded. The failure
+is silent and total: the history lapses, the next request archives only what
+Discord still reports, and past events disappear again -- the exact bug this
+feature fixes. `routes.test.ts` asserts the write carries no `expirationTtl` in
+that mode.
+
+A legacy entry written before retention (a bare array rather than
+`{ fetchedAt, events }`) is read as infinitely stale, so it is refetched and
+rewritten in the new shape on first use instead of being dropped.
 
 ## KV write budget
 
@@ -279,6 +355,12 @@ Two invariants keep it inside the budget:
 
 Note the website's `EVENTS_POLL_INTERVAL_MS` does **not** affect this: a warm
 cache is pure reads. Only the TTL and the writes-per-miss do.
+
+Retention does **not** change the arithmetic either. `RETENTION_DAYS` makes each
+stored value larger, not the writes more frequent: that is exactly why
+freshness moved into `fetchedAt` rather than being left to KV's expiry. A
+separate archive key would double writes/day to ~960 and put the free tier over
+budget.
 
 ## Why not Discord webhooks?
 

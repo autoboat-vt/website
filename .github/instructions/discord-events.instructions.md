@@ -1,6 +1,6 @@
 ---
-description: "Use when working on the calendar page, the Discord events client, the subscription affordance, officer-only event visibility, or the Cloudflare Worker that serves Discord guild scheduled events. Covers the no-webhook constraint, the Worker architecture, KV caching, VITE_EVENTS_URL, audience gating via Discord categories, the /calendar.ics feed, and rrule recurrence expansion."
-applyTo: "src/lib/discord.ts, src/pages/Calendar.tsx, src/pages/Officers.tsx, src/components/CalendarSubscribe.tsx, src/test/lib/discord.test.ts, src/test/pages/Calendar.test.tsx, src/test/pages/Officers.test.tsx, src/test/components/CalendarSubscribe.test.tsx, src/test/worker/ics.test.ts, src/test/worker/recurrence.test.ts, src/test/worker/events.test.ts, src/test/worker/cancellations.test.ts, src/test/worker/audience.test.ts, src/test/worker/audience-filter.test.ts, worker/**"
+description: "Use when working on the calendar page, the Discord events client, the subscription affordance, officer-only event visibility, past-event retention, or the Cloudflare Worker that serves Discord guild scheduled events. Covers the no-webhook constraint, the Worker architecture, KV caching + the retention archive, VITE_EVENTS_URL, audience gating via Discord channels, the /calendar.ics feed, and rrule recurrence expansion."
+applyTo: "src/lib/discord.ts, src/pages/Calendar.tsx, src/pages/Officers.tsx, src/components/CalendarSubscribe.tsx, src/test/lib/discord.test.ts, src/test/pages/Calendar.test.tsx, src/test/pages/Officers.test.tsx, src/test/components/CalendarSubscribe.test.tsx, src/test/worker/ics.test.ts, src/test/worker/recurrence.test.ts, src/test/worker/events.test.ts, src/test/worker/cancellations.test.ts, src/test/worker/audience.test.ts, src/test/worker/audience-filter.test.ts, src/test/worker/archive.test.ts, src/test/worker/routes.test.ts, worker/**"
 ---
 
 # Discord events + calendar
@@ -14,11 +14,14 @@ website (browser)                    calendar app (Google/Apple/Outlook)
     |  GET .../events  (PUBLIC only)      |  GET .../calendar.ics  (PUBLIC only)
     v                                    v
 worker/ (Cloudflare Worker)  --- one KV cache, shared by all routes ---
-    |  KV get  "events:v2"   (180 s TTL)   <- full set, all audiences. THE ONLY KEY WRITTEN.
-    |  KV put  "events:v2"   (on a MISS)   <- exactly ONE write per miss (write budget!)
-    |  miss -> GET .../guilds/<id>/scheduled-events?with_user_count=true
+    |  KV get  "events:v2"   <- { fetchedAt, events }: full set, all audiences
+    |                           fresh while now - fetchedAt < CACHE_TTL_SECONDS
+    |  KV put  "events:v2"   (on a STALE read) <- exactly ONE write per miss
+    |                           NO expiry by default (retention unbounded)
+    |  stale -> GET .../guilds/<id>/scheduled-events?with_user_count=true
     |           Authorization: Bot ${DISCORD_BOT_TOKEN}
     |  classify each event: channel_id === OFFICERS_CHANNEL_ID ? officer : public
+    |  MERGE fresh over stored -> write
     v
 Discord API
 
@@ -35,9 +38,82 @@ The Worker normalizes Discord's `GuildScheduledEvent` shape into a small `Calend
 
 - **Five routes**, in two audience families. Public: `GET /events` (JSON) and `GET /calendar.ics` (iCalendar). Officer: `GET /officers/events` and `GET /officers/calendar.ics`. Plus `GET /audiences` (diagnostics, see below). All four event routes call `loadEvents()` and then filter, so no two consumers can disagree about visibility. Trailing slashes are normalized, so `/events/` also works.
 - CORS (locked to `https://autoboat.aoe.vt.edu` via `ALLOWED_ORIGIN` var). Calendar clients are not browsers -- they ignore CORS entirely, so the `.ics` feed works regardless of the origin lockdown.
-- KV caching (TTL from `CACHE_TTL_SECONDS` var, **180 s** in `wrangler.jsonc`, `parseTtlSeconds` fallback 180 s). KV writes are fire-and-forget via `ctx.waitUntil` so the response isn't blocked on them. JSON responses also send `Cache-Control: public, max-age=<TTL>` -- the client must fetch with `cache: "no-store"` or the browser cache defeats background polling.
+- KV caching. The value under `events:v2` is an ARCHIVE (`{ fetchedAt, events }`), not a bare array: the full set for all audiences, plus when it was fetched. Freshness is `now - fetchedAt < CACHE_TTL_SECONDS` (**180 s** in `wrangler.jsonc`, `parseTtlSeconds` fallback 180 s), and the key itself is written with **no `expirationTtl`** while retention is unbounded (see "Past-event retention"). KV writes are fire-and-forget via `ctx.waitUntil` so the response isn't blocked on them. JSON responses also send `Cache-Control: public, max-age=<TTL>` -- the client must fetch with `cache: "no-store"` or the browser cache defeats background polling.
 
-### Write budget (do not regress this)
+## Past-event retention (why the cache is an archive)
+
+WARNING: **Discord's `GET /guilds/{id}/scheduled-events` returns ONLY `SCHEDULED`
+and `ACTIVE` events.** `COMPLETED` and `CANCELED` are terminal, so an event
+drops out of the API the moment it ends -- a voice/stage event completes a few
+minutes after the last person leaves the channel, an external event at its
+`scheduled_end_time`. A cache that mirrors that list forgets every meeting as
+soon as it happens.
+
+WARNING: **Nothing on the website filters past events, and nothing should.**
+`publicEvents()` filters by audience only; `expandRecurrences()` clips only
+*cancelled* series; the month grid renders any occurrence in the visible
+window. If past events are missing, they were never in the payload. Do not
+"fix" this client-side by widening the render window -- the data is gone by
+then. A recurring event's base `scheduled_start_time` also rolls forward and is
+used as `dtstart`, so past occurrences of a still-live series vanish too unless
+the RRULE re-derives them.
+
+WARNING: **Retention is UNBOUNDED: every event the Worker has ever seen is kept.**
+The team asked to keep the whole history, so there is no default cutoff.
+`RETENTION_DAYS` is an opt-in escape hatch for age-based pruning, not the
+normal mode. Do not reintroduce an age default -- discarding history is
+unrecoverable, and a retention window is not what makes past events work.
+
+`worker/src/archive.ts` is the fix, and it is deliberately pure (no bindings,
+no `fetch`, no KV) so the merge rules are unit-testable in `src/test/worker/archive.test.ts`.
+On each refresh the fresh events are merged OVER the stored ones:
+
+1. **Fresh wins** -- an event still in Discord's list is taken verbatim (name,
+   description, and start time can all change).
+2. **Every event that fell out of the list is kept.** This is unconditional on
+   purpose: Discord drops an event for exactly two reasons (it completed, or it
+   was removed) and the API cannot tell them apart, so the archive keeps both.
+   - an event that had **ended** is marked `completed` so the calendar renders
+     it as history (`asArchived`);
+   - an event that had **not ended** keeps its status -- marking it `completed`
+     would claim a meeting happened that never did;
+   - an already-`canceled` status is preserved, since it is styled differently.
+3. **Malformed events are dropped** -- a record whose dates cannot be parsed can
+   neither be reasoned about nor aged out, so it can never be pruned.
+4. **Nothing is dropped for being old** unless `RETENTION_DAYS` is set. The
+   result is still held under `MAX_ARCHIVED_EVENTS`, which is a **safety
+   ceiling, not a policy** -- it exists only so an unbounded history cannot
+   exceed what a single KV value can hold (25 MiB, and the archive is
+   serialized on every write).
+
+Merging keys on Discord's event id, so a recurring event -- present in every
+payload under one stable id -- is never duplicated.
+
+WARNING: **Freshness moved from KV's expiry into the stored `fetchedAt`.** The key
+is written with **no `expirationTtl`** in the default unbounded mode, so a
+plain "is the key present?" test would serve stale data forever. A miss is
+`now - fetchedAt >= CACHE_TTL_SECONDS`, and it still costs exactly ONE write --
+the write budget is unchanged. If `RETENTION_DAYS` IS set, the key expires on
+that window (floored at 2x the cache TTL, capped at KV's 1-year max), so never
+set it below the cache TTL.
+
+WARNING: **Never give the key an expiry while retention is unbounded.** The failure
+is silent and total: the history lapses, the next request archives only what
+Discord still reports, and past events disappear again. `routes.test.ts`
+asserts the write carries no `expirationTtl` in that mode.
+
+WARNING: **`X-Cache` is now freshness-driven, not key-existence-driven.** Do not
+revert it to "was there a KV value" -- with a non-expiring key that would
+report HIT forever.
+
+A legacy entry (a bare array, written before retention existed) is parsed as
+infinitely stale by `parseCacheEntry`, so it is refetched and rewritten in the
+new shape on first use rather than being dropped or served indefinitely.
+
+Retention applies to the **full** set before audience filtering, so an archived
+officer event survives on `/officers/*` and stays hidden on the public routes.
+
+## Write budget (do not regress this)
 
 WARNING: The account is on the Workers KV **FREE** tier: **1,000 writes/day** (reads
 are 100,000 and are never the constraint). A cache MISS is what costs a write, so
@@ -62,6 +138,13 @@ the event path -- if you need the channel list, fetch it in `/audiences` alone.
 
 Raising the website's `EVENTS_POLL_INTERVAL_MS` does NOT reduce writes -- a warm
 cache is pure reads. Only the TTL and the writes-per-miss do.
+
+Retention does NOT change this arithmetic either. `RETENTION_DAYS` makes each
+stored value larger, not the writes more frequent -- that is precisely why
+freshness moved into `fetchedAt` instead of being left to KV's expiry. A
+separate archive key would double writes/day to ~960 and put the free tier over
+budget.
+
 - Pre-mapping Discord's numeric status/entity_type codes to lowercase strings (`scheduled | active | completed | canceled`).
 
 ## Audience gating (officer-only events)
@@ -268,7 +351,15 @@ Discord incoming webhooks are POST-only on a channel -- they cannot *pull* guild
 
 - `DISCORD_GUILD_ID` — public, not a secret.
 - `ALLOWED_ORIGIN` — deployment origin; do NOT set to `*` in production.
-- `CACHE_TTL_SECONDS` — KV TTL, `180` in production config (`parseTtlSeconds` in the worker falls back to `180` for unparseable/missing values). Do NOT lower it to "refresh faster": on the KV free tier this value is a hard write budget, not just a freshness knob (see the write budget section). Keep the website's `EVENTS_POLL_INTERVAL_MS` in sync with this. Also advertised in the `.ics` as `REFRESH-INTERVAL`/`X-PUBLISHED-TTL`.
+- `CACHE_TTL_SECONDS` — how long a cached payload stays fresh, `180` in production config (`parseTtlSeconds` in the worker falls back to `180` for unparseable/missing values). Do NOT lower it to "refresh faster": on the KV free tier this value is a hard write budget, not just a freshness knob (see the write budget section). Keep the website's `EVENTS_POLL_INTERVAL_MS` in sync with this. Also advertised in the `.ics` as `REFRESH-INTERVAL`/`X-PUBLISHED-TTL`.
+- `RETENTION_DAYS` — **optional**, unset by default, which keeps **every** event
+  forever (the team's explicit request; see "Past-event retention"). Setting it
+  opts into age-based pruning, which is the safety valve if the archive ever
+  grows too large. Does NOT affect the write budget: the miss rate is set by
+  `CACHE_TTL_SECONDS` alone, and a longer window only makes each stored value
+  larger (bounded by `MAX_ARCHIVED_EVENTS` in `archive.ts`). A malformed value
+  keeps everything rather than falling back to a cutoff, since discarding
+  history is unrecoverable.
 - `CALENDAR_NAME` — optional; display name for the `.ics` feed (`X-WR-CALNAME`). Defaults to "AutoBoat at Virginia Tech".
 
 Secrets (never committed) go in via `wrangler secret put`:

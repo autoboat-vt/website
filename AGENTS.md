@@ -91,9 +91,10 @@ scripts/
   bump-cicd.sh          # pulls upstream cicd files into external/cicd/ (vendored, not a submodule)
 worker/                 # Cloudflare Worker proxying Discord scheduled events for /calendar
   wrangler.jsonc        # worker config (KV binding, env vars)
-    src/index.ts          # /events + /calendar.ics + /officers/* + /audiences routes, KV cache, Discord REST fetch
-    src/events.ts         # normalization of Discord payloads -> CalendarEvent (no bindings, unit-testable); applies audience filtering
-    src/audience.ts       # officer-channel -> audience (public|officer) classification; the officer-visibility rule
+  src/index.ts          # /events + /calendar.ics + /officers/* + /audiences routes, KV cache, Discord REST fetch
+  src/events.ts         # normalization of Discord payloads -> CalendarEvent (no bindings, unit-testable); applies audience filtering
+  src/archive.ts        # retention: merge fresh over stored, keep every event Discord drops, mark ended ones completed
+  src/audience.ts       # officer-channel -> audience (public|officer) classification; the officer-visibility rule
   src/cancellations.ts  # parses the description's `Cancelled:` convention into excludedDates + EXDATE values
   src/ics.ts            # iCalendar (RFC 5545) serializer for the subscribable feed
   src/recurrence.ts     # Discord's structured recurrence_rule object -> RFC 5545 RRULE body
@@ -122,6 +123,8 @@ NavLink items are defined in `src/components/Header.tsx` as `NAV_LINKS`. The hom
 The nav carries only the five primary pages. `/live`, `/calendar`, and `/gallery` are deliberately **out of the nav but still public routes** — they're reachable directly by URL and linked from `/other-pages`, the hub page (`src/pages/OtherPages.tsx`). `FEATURE_PAGES` in that file controls what the hub advertises; adding a feature means adding a `Route` + a `FEATURE_PAGES` entry + the `spa-fallback.mjs` listing + the README row. Don't add these back to `NAV_LINKS` without checking the width budget below.
 
 `/calendar` reads Discord guild scheduled events via a Cloudflare Worker in `worker/` (see `discord-events.instructions.md`). The Worker also serves the same events as a subscribable iCalendar feed at `GET /calendar.ics`, surfaced by the page's **Subscribe** control (`src/components/CalendarSubscribe.tsx`).
+
+WARNING: **Past events only stay on the calendar because the Worker archives them, not because anything filters them.** Discord's scheduled-events endpoint returns only `SCHEDULED`/`ACTIVE` events -- `COMPLETED` and `CANCELED` are terminal, so an event leaves the API the moment it ends. The KV value is therefore an archive (`{ fetchedAt, events }`) and each refresh merges the fresh events over the stored ones. **Retention is unbounded: every event the Worker has seen is kept**, which is what makes past events work; `RETENTION_DAYS` is an opt-in escape hatch for age-based pruning, not the default. Nothing client-side filters past events -- `publicEvents()` filters by audience only and `expandRecurrences()` clips only *cancelled* series -- so widening the render window would not recover anything. Freshness lives in `fetchedAt`, not KV's expiry (the key is written with no expiry by default), so the write budget (one write per stale read) is unchanged. See `discord-events.instructions.md`.
 
 `/calendar/officers` is the same calendar pointed at the Worker's `/officers/events` route, which includes officer-only events the public feed hides. WARNING: **It is unlisted but NOT access-controlled** - the URL is unguessable, not protected. It is deliberately absent from `NAV_LINKS`, from `OtherPages.tsx` `FEATURE_PAGES`, and from the README routes table, because all of those are public surfaces. It requires only the `App.tsx` + `spa-fallback.mjs` registrations (not the four-place ritual the other feature pages need). Audience gating lives in `worker/src/audience.ts`; verify the real configuration with `curl <worker-url>/audiences`.
 
@@ -159,7 +162,7 @@ Detailed, topic-specific guidance lives in `.github/instructions/*.instructions.
 | `vt-colors.instructions.md` | `src/lib/vtColors.ts`, `src/app.css`, `src/hooks/useTheme.ts` | VT brand palette, shading-vs-tinting rules, Impact Orange, WCAG AA, theme tokens, `useTheme`, FOUC prevention |
 | `testing.instructions.md` | `src/test/**`, `jest.config.js` | Jest config, `moduleNameMapper`, react-leaflet mock architecture, `setup.ts` polyfills, `runTests` tool gotcha, `MemoryRouter` wrapping |
 | `deploy.instructions.md` | `scripts/**`, `.github/**` | `deploy.sh`, `spa-fallback.mjs`, `bump-cicd.sh` (vendor-update), `build.yml`, vendored `external/cicd/` model, git workflow |
-| `discord-events.instructions.md` | `src/lib/discord.ts`, `src/pages/Calendar.tsx`, `src/pages/Officers.tsx`, `src/components/CalendarSubscribe.tsx`, `src/test/lib/discord.test.ts`, `src/test/pages/Calendar.test.tsx`, `src/test/pages/Officers.test.tsx`, `src/test/components/CalendarSubscribe.test.tsx`, `src/test/worker/*.test.ts`, `worker/**` | Calendar architecture, no-webhook constraint, Worker + KV setup, `VITE_EVENTS_URL`, audience gating (channel category -> officer/public), the `/calendar.ics` + `/officers/*` feeds, Discord's recurrence_rule object -> RRULE conversion, rrule expansion, 4-place route registration |
+| `discord-events.instructions.md` | `src/lib/discord.ts`, `src/pages/Calendar.tsx`, `src/pages/Officers.tsx`, `src/components/CalendarSubscribe.tsx`, `src/test/lib/discord.test.ts`, `src/test/pages/Calendar.test.tsx`, `src/test/pages/Officers.test.tsx`, `src/test/components/CalendarSubscribe.test.tsx`, `src/test/worker/*.test.ts`, `worker/**` | Calendar architecture, no-webhook constraint, Worker + KV setup, `VITE_EVENTS_URL`, audience gating (officer channel -> officer/public), past-event retention + the unbounded archive cache, the `/calendar.ics` + `/officers/*` feeds, Discord's recurrence_rule object -> RRULE conversion, rrule expansion, 4-place route registration |
 
 When adding a new instruction file, add a row to this table so it's discoverable.
 

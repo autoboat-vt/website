@@ -29,12 +29,23 @@
  *
  * Flow per request (JSON + .ics share it):
  *   1. Preflight (`OPTIONS`)         -> 204 with CORS headers.
- *   2. Cache hit (KV)                -> render from the cached events.
- *   3. Cache miss                    -> fetch
+ *   2. Cache fresh (KV, `fetchedAt`) -> render from the cached archive.
+ *   3. Cache stale/absent            -> fetch
  *      GET https://discord.com/api/v10/guilds/{DISCORD_GUILD_ID}/scheduled-events?with_user_count=true
  *      with `Authorization: Bot ${DISCORD_BOT_TOKEN}`, normalize +
- *      classify, write to KV (waitUntil).
+ *      classify, MERGE over the stored archive, write to KV (waitUntil).
  *   JSON responses report X-Cache: HIT|MISS.
+ *
+ * RETENTION. Discord's list endpoint returns only `SCHEDULED`/`ACTIVE` events,
+ * so an event vanishes from it the moment it reaches the terminal
+ * `COMPLETED`/`CANCELED` status. The value stored under `EVENTS_KV_KEY` is
+ * therefore an archive (`{ fetchedAt, events }`) and each refresh merges the
+ * fresh events over the stored ones, keeping the events Discord has stopped
+ * reporting. Retention is UNBOUNDED by default -- every event ever seen is
+ * kept, under a `MAX_ARCHIVED_EVENTS` safety ceiling -- and the key is written
+ * without an `expirationTtl` so the history never silently lapses. Setting
+ * `RETENTION_DAYS` opts into age-based pruning. See archive.ts for the merge
+ * rules.
  *
  * Discord upstream errors are returned as a generic 502 with CORS headers
  * intact; the bot token is never logged, echoed, or included in responses.
@@ -48,6 +59,14 @@
  * at >= 180s and preserve the one-write-per-miss invariant; `routes.test.ts`
  * pins it.
  *
+ * ⚠️ Retention does NOT change that arithmetic, but it does move freshness out
+ * of KV's expiry and into the stored `fetchedAt`: the key outlives the cache
+ * TTL (indefinitely, in the default unbounded mode), so a plain "is it in
+ * KV?" test would serve stale data forever. A miss is
+ * `now - fetchedAt >= CACHE_TTL_SECONDS`, which preserves the write rate
+ * exactly. Do not add a second key, and do not lower the key's
+ * `expirationTtl` below the cache TTL when one is set.
+ *
  * CORS: the only allowed origin is ALLOWED_ORIGIN (default
  * https://autoboat.aoe.vt.edu). Non-matching browsers are blocked at the
  * browser level; server-side/curl clients can still hit the URL directly.
@@ -55,6 +74,7 @@
  * entirely, so the feed works regardless of the origin lockdown.
  */
 
+import { type EventsCacheEntry, isFresh, KEEP_FOREVER_MS, mergeArchive, parseCacheEntry } from "./archive";
 import {
     type Audience,
     audienceConfigFromEnv,
@@ -71,6 +91,11 @@ interface Env {
     DISCORD_GUILD_ID: string;
     ALLOWED_ORIGIN: string;
     CACHE_TTL_SECONDS: string;
+    /**
+     * Optional age-based pruning, in days. UNSET BY DEFAULT, which keeps every
+     * event forever -- see `parseRetentionMs`.
+     */
+    RETENTION_DAYS?: string;
     /** Display name subscribers see in their calendar app. Optional. */
     CALENDAR_NAME?: string;
     /**
@@ -99,11 +124,22 @@ interface Env {
  * what keeps the Worker inside the free tier's 1,000 writes/day; see the write
  * budget note in the module header. Do not add another key here -- a second
  * per-miss write doubles the daily write rate for no benefit.
+ *
+ * The value is an `EventsCacheEntry` (`{ fetchedAt, events }`), NOT a bare
+ * array: the key's `expirationTtl` is the RETENTION window (days) rather than
+ * the cache TTL (180 s), so freshness has to be carried in the value. The
+ * miss rate -- and therefore the write rate -- is unchanged, because a miss
+ * is decided by `fetchedAt`, not by the key expiring. See archive.ts and the
+ * retention note above `loadEvents`.
  */
 const EVENTS_KV_KEY = "events:v2";
 const WORKER_USER_AGENT = "autoboat-website-worker/1.0";
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 const DISCORD_UPSTREAM_TIMEOUT_MS = 5_000;
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+/** KV's maximum `expirationTtl`, in seconds (Cloudflare caps this at 1 year). */
+const KV_MAX_TTL_SECONDS = 31_536_000;
 
 /** Default display name for the .ics feed when CALENDAR_NAME is unset. */
 const DEFAULT_CALENDAR_NAME = "AutoBoat at Virginia Tech";
@@ -181,9 +217,33 @@ async function fetchDiscordChannels(env: Env): Promise<DiscordChannel[] | null> 
     }
 }
 
+/** Cache TTL in seconds -- how often Discord is refetched. */
 function parseTtlSeconds(env: Env): number {
     const n = Number.parseInt(env.CACHE_TTL_SECONDS, 10);
     return Number.isFinite(n) && n > 0 ? n : 180;
+}
+
+/**
+ * Retention window in ms -- how long a fallen-out event stays on the calendar.
+ *
+ * UNSET BY DEFAULT, which returns `KEEP_FOREVER_MS`: the team asked to keep
+ * EVERY event, and "Discord stopped reporting it" is not a reliable signal
+ * that an event is finished (deletion and completion look identical over the
+ * API), so discarding by age was throwing away real history.
+ *
+ * Setting `RETENTION_DAYS` opts back into age-based pruning. This is a
+ * READ-side policy with no bearing on the KV write budget: the miss rate is
+ * set by the cache TTL alone, and the only cost of a longer window is a
+ * larger stored value (held under `MAX_ARCHIVED_EVENTS`).
+ */
+function parseRetentionMs(env: Env): number {
+    const raw = env.RETENTION_DAYS?.trim();
+    if (!raw) return KEEP_FOREVER_MS;
+    const n = Number.parseFloat(raw);
+    // A malformed value keeps everything rather than silently falling back to
+    // a window -- erring toward retaining history, since losing it is
+    // unrecoverable.
+    return Number.isFinite(n) && n > 0 ? n * MS_PER_DAY : KEEP_FOREVER_MS;
 }
 
 function jsonResponse(body: unknown, init: ResponseInit, env: Env): Response {
@@ -198,9 +258,26 @@ function jsonResponse(body: unknown, init: ResponseInit, env: Env): Response {
 }
 
 /**
- * Load the normalized events, serving from the KV cache when warm and
- * fetching + repopulating it on a miss. Shared by the JSON and .ics routes
- * so the two formats can never drift apart.
+ * Load the normalized events, serving from the KV cache when fresh and
+ * refetching Discord when stale. Shared by the JSON and .ics routes so the
+ * two formats can never drift apart.
+ *
+ * RETENTION. Discord drops an event from its list the moment it reaches the
+ * terminal `COMPLETED`/`CANCELED` status, so a plain cache would forget a
+ * meeting as soon as it ended. On a refresh the freshly fetched events are
+ * therefore merged OVER the stored ones (`mergeArchive`), which keeps the
+ * events Discord has stopped reporting. That is the whole mechanism behind
+ * "past events stay on the calendar"; the website renders whatever it is
+ * handed, and there is no past-event filter on either side.
+ *
+ * Retention is unbounded by default (see `parseRetentionMs`), so the archive
+ * only ever grows within the `MAX_ARCHIVED_EVENTS` safety ceiling.
+ *
+ * WARNING: The write budget is unchanged by retention, and this is the invariant to
+ * protect. A miss is decided by the stored `fetchedAt`, not by the key
+ * expiring, and there is still exactly ONE `put` per miss -- so writes/day
+ * remains `86400 / CACHE_TTL_SECONDS`. Retention only changes the key's
+ * lifetime and the value's size.
  *
  * Throws when Discord is unreachable and the cache is cold; callers map that
  * to a 502.
@@ -208,6 +285,7 @@ function jsonResponse(body: unknown, init: ResponseInit, env: Env): Response {
 async function loadEvents(
     env: Env,
     ctx: ExecutionContext,
+    now: Date,
     /**
      * Whether the audience config is usable. When false, the loaded events are
      * discarded by the route anyway, so this function must NOT persist them:
@@ -217,11 +295,15 @@ async function loadEvents(
      */
     configured: boolean,
 ): Promise<{ events: CalendarEvent[]; cache: "HIT" | "MISS" }> {
-    const ttl = parseTtlSeconds(env);
+    const ttlSeconds = parseTtlSeconds(env);
+    const retentionMs = parseRetentionMs(env);
 
-    const cached = await env.EVENTS_KV.get(EVENTS_KV_KEY, { type: "json", cacheTtl: ttl });
-    if (cached !== null && Array.isArray(cached)) {
-        return { events: cached as CalendarEvent[], cache: "HIT" };
+    // `cacheTtl` still lets Cloudflare's edge cache the read for the cache TTL
+    // so a burst of requests doesn't all pass through to KV.
+    const cached = await env.EVENTS_KV.get(EVENTS_KV_KEY, { type: "json", cacheTtl: ttlSeconds });
+    const entry = parseCacheEntry(cached);
+    if (entry !== null && isFresh(entry, now, ttlSeconds * 1000)) {
+        return { events: entry.events, cache: "HIT" };
     }
 
     const raw = await fetchDiscordEvents(env);
@@ -230,10 +312,29 @@ async function loadEvents(
     // used to happen here and its result was written to KV on every miss, which
     // doubled the write cost against the free tier's 1,000 writes/day for a
     // value only `/audiences` reads. It is now fetched lazily there instead.
-    const events = normalizeEvents(raw, { audienceConfig: audienceConfigFromEnv(env) });
-    // Fire-and-forget KV write -- do not block the response on it.
+    const fresh = normalizeEvents(raw, { audienceConfig: audienceConfigFromEnv(env) });
+    // Merge over whatever was stored. An unreadable/unrecognised value is
+    // treated as an empty archive rather than as a reason to fail -- a cold
+    // start costs history, which a cache-shape change should not compound.
+    const events = mergeArchive(entry?.events ?? [], fresh, now, retentionMs);
+
+    // Fire-and-forget KV write -- do not block the response on it. Exactly ONE
+    // write, always this key.
     if (configured) {
-        ctx.waitUntil(env.EVENTS_KV.put(EVENTS_KV_KEY, JSON.stringify(events), { expirationTtl: ttl }));
+        const next: EventsCacheEntry = { fetchedAt: now.getTime(), events };
+        // WARNING: The key must NOT expire while the archive is unbounded, or the
+        // whole history (and the point of retention) disappears silently when
+        // the TTL lapses -- the next request would see no stored events and
+        // only archive what Discord still reports. So `expirationTtl` is
+        // omitted entirely at KEEP_FOREVER_MS, which is KV's "no expiry". It is
+        // only set when an explicit window was configured, where it is floored
+        // at 2x the cache TTL (never below freshness) and capped at KV's max.
+        const options = Number.isFinite(retentionMs)
+            ? {
+                  expirationTtl: Math.min(KV_MAX_TTL_SECONDS, Math.max(ttlSeconds * 2, Math.ceil(retentionMs / 1000))),
+              }
+            : undefined;
+        ctx.waitUntil(env.EVENTS_KV.put(EVENTS_KV_KEY, JSON.stringify(next), options));
     }
     return { events, cache: "MISS" };
 }
@@ -270,10 +371,11 @@ function upstreamUnavailable(env: Env): Response {
 
 async function handleGetEvents(env: Env, ctx: ExecutionContext, audience: Audience): Promise<Response> {
     const ttl = parseTtlSeconds(env);
+    const now = new Date();
     const configured = audienceIsConfigured(audienceConfigFromEnv(env));
     let loaded: { events: CalendarEvent[]; cache: "HIT" | "MISS" };
     try {
-        loaded = await loadEvents(env, ctx, configured);
+        loaded = await loadEvents(env, ctx, now, configured);
     } catch {
         return upstreamUnavailable(env);
     }
@@ -316,10 +418,11 @@ function icsResponse(body: string, init: ResponseInit, env: Env): Response {
  */
 async function handleGetIcs(env: Env, ctx: ExecutionContext, audience: Audience): Promise<Response> {
     const ttl = parseTtlSeconds(env);
+    const now = new Date();
     const configured = audienceIsConfigured(audienceConfigFromEnv(env));
     let loaded: { events: CalendarEvent[]; cache: "HIT" | "MISS" };
     try {
-        loaded = await loadEvents(env, ctx, configured);
+        loaded = await loadEvents(env, ctx, now, configured);
     } catch {
         return upstreamUnavailable(env);
     }
