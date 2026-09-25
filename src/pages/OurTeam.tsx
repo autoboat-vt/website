@@ -41,13 +41,13 @@ const SUBTEAMS: Subteam[] = [
         techStack: ["KiCAD", "LTSpice", "C++", "Embedded Systems", "PCB Design"],
     },
     {
-        id: "vehicle-dynamics",
-        label: "Vehicle Dynamics",
+        id: "mechanical",
+        label: "mechanical",
         dot: "mechanical",
-        title: "Vehicle Dynamics",
+        title: "mechanical",
         description:
-            "The Vehicle Dynamics Subteam designs, builds, and optimizes the physical structure and propulsion systems of our vessels. We focus on the performance, durability, and maneuverability of the hull, rigging, and mechanical subsystems. Using Orca3D, Fusion 360, SailCad, and principles of airfoil and hydrodynamic theory, we design and optimize hull shapes and wingsails for speed, stability, and control. Our workflow includes CAD modeling, finite element analysis, material selection, fiberglass layups, structural repairs, weight distribution planning, and hands-on fabrication (utilizing 3D printing, CNC machining, laser cutting, and sail patterning/sewing). By transforming ideas into watertight systems, we serve as the physical backbone of the boat. Whether you're interested in naval architecture, aerodynamics, mechanical design, turning wrenches, or making hardware that just works, there's a place for you on our team!",
-        images: SUBTEAM_IMAGES["vehicle-dynamics"],
+            "The Mechanical Subteam designs, builds, and optimizes the physical structure and propulsion systems of our vessels. We focus on the performance, durability, and maneuverability of the hull, rigging, and mechanical subsystems. Using Orca3D, Fusion 360, SailCad, and principles of airfoil and hydrodynamic theory, we design and optimize hull shapes and wingsails for speed, stability, and control. Our workflow includes CAD modeling, finite element analysis, material selection, fiberglass layups, structural repairs, weight distribution planning, and hands-on fabrication (utilizing 3D printing, CNC machining, laser cutting, and sail patterning/sewing). By transforming ideas into watertight systems, we serve as the physical backbone of the boat. Whether you're interested in naval architecture, aerodynamics, mechanical design, turning wrenches, or making hardware that just works, there's a place for you on our team!",
+        images: SUBTEAM_IMAGES.mechanical,
         techStack: ["Orca3D", "Fusion 360", "SailCad", "FEA", "Fiberglass", "3D Printing", "CNC"],
     },
     {

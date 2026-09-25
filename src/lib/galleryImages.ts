@@ -60,7 +60,7 @@ export const SUBTEAM_IMAGES = {
         },
         {
             src: "/images/our_team_images/electronics/electronics2.webp",
-            alt: "Electronics 2",
+            alt: "Jetson Orin Nano",
             caption:
                 "One of our members working with the Jetson Orin Nano, which runs our computer vision and control software on the boat.",
         },
@@ -72,15 +72,32 @@ export const SUBTEAM_IMAGES = {
         { src: "/images/our_team_images/electronics/electronics5.webp", alt: "Electronics 5" },
         { src: "/images/our_team_images/electronics/electronics6.webp", alt: "Electronics 6" },
     ],
-    "vehicle-dynamics": [
-        { src: "/images/our_team_images/navarch/michio_spray_paint.webp", alt: "Hull Design and Construction" },
+    mechanical: [
+        {
+            src: "/images/our_team_images/mechanical/michio_spray_paint.webp",
+            alt: "Hull Design and Construction",
+            caption: "One of our former members spray-painting a hull during the design and construction process.",
+        },
         { src: "/images/our_team_images/mechanical/mech1.webp", alt: "Mechanical fabrication and assembly" },
-        { src: "/images/our_team_images/sail/michio_sail.webp", alt: "Sail Design and Testing" },
-        { src: "/images/our_team_images/navarch/boat1.webp", alt: "Vessel Hull 1" },
+        {
+            src: "/images/our_team_images/mechanical/michio_sail.webp",
+            alt: "Sail Design and Testing",
+            caption: "One of our former members assembling the hard sail which we used on Lumpy.",
+        },
+        { src: "/images/our_team_images/mechanical/boat1.webp", alt: "Vessel Hull 1" },
         { src: "/images/our_team_images/mechanical/mech2.webp", alt: "Mechanical design testing" },
-        { src: "/images/our_team_images/sail/sail1.webp", alt: "Sail construction and rigging" },
-        { src: "/images/our_team_images/navarch/boat2.webp", alt: "Vessel Hull 2" },
-        { src: "/images/our_team_images/mechanical/mech3.webp", alt: "Mechanical assembly work" },
+        { src: "/images/our_team_images/mechanical/sail1.webp", alt: "Sail construction and rigging" },
+        { src: "/images/our_team_images/mechanical/boat2.webp", alt: "Vessel Hull 2" },
+        {
+            src: "/images/our_team_images/mechanical/mech3.webp",
+            alt: "Mechanical assembly work",
+            caption: "The linkage and control system for the dual rudder setup used on Lumpy.",
+        },
+        {
+            src: "/images/our_team_images/mechanical/mech4.webp",
+            alt: "Mechanical assembly work",
+            caption: "Ducky's hull had to be sanded in preparation for repainting.",
+        },
     ],
     business: [] as GalleryImage[],
 } satisfies Record<string, GalleryImage[]>;
