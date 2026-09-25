@@ -12,7 +12,7 @@ interface Subteam {
 const SUBTEAMS: Subteam[] = [
     { id: "software", label: "Software", dot: "software" },
     { id: "electronics", label: "Electronics", dot: "electronics" },
-    { id: "vehicle-dynamics", label: "Vehicle Dynamics", dot: "mechanical" },
+    { id: "mechanical", label: "Mechanical", dot: "mechanical" },
     { id: "business", label: "Business", dot: "business" },
 ];
 
