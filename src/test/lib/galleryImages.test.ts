@@ -45,7 +45,7 @@ describe("gallery image data", () => {
     it("keys the subteam map by the ids used on the Meet the Team page", () => {
         // SUBTEAMS in OurTeam.tsx looks these up by `id`.
         expect(Object.keys(SUBTEAM_IMAGES).sort()).toEqual(
-            ["business", "electronics", "software", "vehicle-dynamics"].sort(),
+            ["business", "electronics", "software", "mechanical"].sort(),
         );
     });
 
