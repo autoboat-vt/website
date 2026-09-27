@@ -163,7 +163,7 @@ export default function CalendarSubscribe({ variant = "public", selectedChannels
                                 : "Add the AutoBoat calendar to your own calendar app. It updates automatically as events change in Discord."}
                         </p>
                         {channelIds.length > 0 && (
-                            <p className="calendar-subscribe__filtered" role="status">
+                            <p className="calendar-subscribe__intro" role="status">
                                 This subscription is narrowed to the subteams selected in Filter. General member events
                                 are always included.
                             </p>
