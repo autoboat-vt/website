@@ -164,8 +164,8 @@ export default function CalendarSubscribe({ variant = "public", selectedChannels
                         </p>
                         {channelIds.length > 0 && (
                             <p className="calendar-subscribe__intro" role="status">
-                                This subscription is narrowed to the subteams selected in Filter. General member events
-                                are always included.
+                                This subscription only includes events from the subteams you selected in the Filter
+                                panel.
                             </p>
                         )}
                     </div>
