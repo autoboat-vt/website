@@ -442,24 +442,36 @@ subteam. The mapping is `SUBTEAM_CHANNELS[].slug` -> a `subteam--<slug>` class
   `.calendar-event` (day dots and swatches are plain spans), so a shared class is
   what keeps them from disagreeing. Adding a surface needs no CSS.
 - **The classes only set `--subteam-color`.** Every colored part of a chip
-  (left border, background tint, hover tint, time text) and the dot/swatch
-  background derives from that one variable, so a subteam's light/dark pair lives
-  only in the token block and can never be half-retinted. Defaults are declared
-  through `:where()` so the subteam override wins on specificity rather than on
-  source order.
-- **Light and dark values are separate tokens, and both are load-bearing.** The
-  light values are shaded well past the raw VT secondary swatches because the
-  hue is worn by the time TEXT, and the chip background is a 12% tint of that
-  same hue -- so the text is measured against a background derived from itself.
-  All five clear WCAG AA (4.5:1) against their own tint and the 20% hover tint;
-  the measured ratios are in the `app.css` comments.
+  (left border, background fill, hover fill) and the dot/swatch background
+  derives from that one variable, so a subteam's light/dark pair lives only in
+  the token block and can never be half-retinted. Defaults are declared through
+  `:where()` so the subteam override wins on specificity rather than on source
+  order.
+- WARNING: **The hue cannot also be the time text, because the fill is a tint of
+  that same hue.** The chips use a fairly opaque branded fill (44% light / 34%
+  dark; 50% / 38% on hover), so the text sits on a background derived from
+  itself and a hue that reads fine as a swatch fails badly as text there
+  (measured: electrical 2.32:1, business 2.26:1 with the raw hue). The time text
+  is therefore `color-mix(in srgb, var(--subteam-color) 33%, var(--color-fontcolor))`
+  -- 33% hue, 67% theme font color. All six chips clear WCAG AA (4.5:1) at rest
+  AND on hover in both themes (light rest 5.34-5.65:1, hover 4.82-5.25:1; dark
+  rest 5.19-6.55:1, hover 4.62-6.28:1).
+- WARNING: **Those three numbers -- the two fill alphas, the 33% text mix, and
+  the hues -- are one set.** Change any of them and re-measure the rest. The mix
+  percentage is the HUE's share, so `33%` means mostly font color; writing `67%`
+  there inverts it and every chip fails AA (this happened once -- the browser
+  check caught it at 2.26-3.57:1). Verify in a browser, not by eye: the computed
+  fill comes back as `color(srgb r g b / a)` with 0-1 floats, so a naive
+  `match(/[\d.]+/g)` reads it as garbage.
 - WARNING: **`--subteam-default` is the base brand maroon** (`--vt-maroon`
   light, `#b8345c` dark), so general member, officer, and channel-less events
   look exactly as they did before this feature. Do not repurpose a subteam hue
   for it. The dark `#b8345c` time text is a pre-existing 2.4:1 -- the dark
   subteam hues are all more readable than that baseline, so they are not a
   regression, and the cancelled/completed states continue to use the AA-safe
-  `--color-hovercolor` rather than a subteam hue.
+  `--color-hovercolor` rather than a subteam hue. NOTE: the same is NOT true of
+  the cancelled mark, which is `--color-cancelled` at 3.44:1 against its 10%
+  fill -- a pre-existing value, left alone.
 - WARNING: **Status and subteam classes are independent and both are always
   applied.** A cancelled Software event keeps `subteam--software` AND
   `calendar-event--canceled`; the cancelled treatment reads through the border,

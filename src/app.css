@@ -31,18 +31,19 @@
      * colors live here so the light and dark value for a subteam sit next to
      * each other and can be retuned without touching component code.
      *
-     * Drawn from the VT secondary palette (Sustainable Teal, Pylon Purple,
-     * Triumphant Yellow, Vibrant Turquoise, Boundless Pink) and shaded or tinted
-     * per brand rules, which explicitly permit both for secondary colors.
+     * CONTRAST IS THE HARD CONSTRAINT HERE, and it is easy to break by eye. The
+     * subteam hue is worn by the TIME TEXT, and the chip's fill is a tint of that
+     * SAME hue over the page -- so the text is measured against a background
+     * derived from itself, and raising the fill opacity pulls the background
+     * toward the text. The fill is therefore deliberately NOT the `--subteam-*`
+     * value used raw: the time text is `color-mix()`ed 33% toward the theme's
+     * font color, which keeps every hue at WCAG AA (4.5:1) against the 44% light
+     * / 34% dark fill and the 50% / 38% hover fill.
      *
-     * The light values are shaded well past the raw swatches -- not for taste but
-     * for contrast. The subteam hue is worn by the TIME TEXT, not just by the
-     * border, and the chip's own background is a 12% tint of that same hue over
-     * the page, so the text is measured against a background derived from itself.
-     * Every value below clears WCAG AA (4.5:1) against its own 12% tint AND
-     * against the darker 20% hover tint; the measured ratios are in the
-     * comments. Re-measure if you change a value here or those alphas in the
-     * chip rules.
+     * WARNING: The three numbers are a set -- the fill alphas in the chip rules,
+     * the 33% text mix in `.calendar-event__time`, and the hues themselves. Change
+     * any one and re-measure all of them; a hue that reads fine as a swatch can
+     * still fail as text on a fill made from itself.
      *
      * WARNING: `--subteam-default` is the base brand maroon, so general member,
      * officer, and channel-less events render exactly as they did before this
@@ -1340,7 +1341,7 @@
         border: 0;
         border-left: 2px solid var(--subteam-color);
         border-radius: 0.375rem;
-        background-color: color-mix(in srgb, var(--subteam-color) 12%, transparent);
+        background-color: color-mix(in srgb, var(--subteam-color) 44%, transparent);
         color: var(--color-fontcolor);
         font-family: inherit;
         font-size: 0.75rem;
@@ -1352,19 +1353,26 @@
         overflow: hidden;
     }
     .calendar-event:hover {
-        background-color: color-mix(in srgb, var(--subteam-color) 20%, transparent);
+        background-color: color-mix(in srgb, var(--subteam-color) 50%, transparent);
     }
     .dark .calendar-event {
-        background-color: color-mix(in srgb, var(--subteam-color) 25%, transparent);
+        background-color: color-mix(in srgb, var(--subteam-color) 34%, transparent);
     }
     .dark .calendar-event:hover {
-        background-color: color-mix(in srgb, var(--subteam-color) 35%, transparent);
+        background-color: color-mix(in srgb, var(--subteam-color) 38%, transparent);
     }
 
     .calendar-event__time {
         font-weight: 700;
         font-size: 0.7rem;
-        color: var(--subteam-color);
+        /* Shaded toward the theme's font color. The hue alone has far too little
+           contrast against the fill above, which is a tint of that same hue --
+           see the warning in the --subteam-* token block.
+           WARNING: the percentage is the HUE's share, so this is 33% hue + 67%
+           font color. Writing 67% here inverts it and every chip fails AA --
+           which is exactly the mistake this comment exists to prevent. 33% is
+           the value that clears AA for every hue in both themes. */
+        color: color-mix(in srgb, var(--subteam-color) 33%, var(--color-fontcolor));
     }
 
     .calendar-event__name {
