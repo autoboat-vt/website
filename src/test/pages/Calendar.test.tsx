@@ -902,7 +902,10 @@ describe("Calendar channel filter", () => {
         expect(screen.getByRole("button", { name: /Mechanical Build Night/i })).toBeInTheDocument();
     });
 
-    it("restores every event when All subteams is chosen", async () => {
+    it("restores every event once every subteam is re-checked", async () => {
+        // There is no dedicated reset button -- re-checking each group is the
+        // path back to "all", and `toggleChannel` collapses a fully-checked set
+        // back to the `null` representation.
         mockFetchOnce(twoChannelEvents());
         renderCalendar();
         await act(async () => {
@@ -910,9 +913,15 @@ describe("Calendar channel filter", () => {
         });
 
         openFilter();
-        fireEvent.click(within(screen.getByText("Software").closest("label") as HTMLElement).getByRole("checkbox"));
+        const boxFor = (label: string) =>
+            within(screen.getByText(label).closest("label") as HTMLElement).getByRole("checkbox");
         await act(async () => {
-            fireEvent.click(screen.getByRole("button", { name: /All subteams/i }));
+            fireEvent.click(boxFor("Software"));
+        });
+        expect(screen.queryByRole("button", { name: /Software Work Session/i })).not.toBeInTheDocument();
+
+        await act(async () => {
+            fireEvent.click(boxFor("Software"));
         });
 
         expect(screen.getByRole("button", { name: /Software Work Session/i })).toBeInTheDocument();

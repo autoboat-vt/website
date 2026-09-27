@@ -68,4 +68,74 @@ describe("Other Pages page", () => {
             expect(card).not.toHaveAttribute("rel");
         }
     });
+
+    it("keeps the original frosted card background", () => {
+        // The color lives on the affordance, not the tile -- the card keeps the
+        // translucent `bg-card` panel. Guards against the tile being filled with
+        // maroon again, which would swallow the description text (it is styled
+        // for the light panel, and reads ~1.1:1 on maroon).
+        renderOtherPages();
+
+        for (const title of ["Live Map", "Calendar", "Gallery", "Documentation"]) {
+            const card = screen.getByText(title).closest("a") as HTMLElement;
+            expect(card.className).toContain("bg-card");
+            expect(card.className).toContain("border-cardborder");
+            expect(card.className).not.toContain("bg-accent");
+        }
+    });
+
+    it("styles the Open/Visit affordance as a maroon button with white text", () => {
+        // The affordance reads as a button but must stay a non-interactive span:
+        // the whole card is already the <a>, and an <a> inside an <a> is invalid
+        // HTML (react-dom warns about it).
+        renderOtherPages();
+
+        for (const title of ["Live Map", "Calendar", "Gallery", "Documentation"]) {
+            const card = screen.getByText(title).closest("a") as HTMLElement;
+            const cta = within(card).getByText(/^(Open|Visit) /);
+            expect(cta.tagName).toBe("SPAN");
+            expect(cta.className).toContain("bg-accent");
+            expect(cta.className).toContain("text-white");
+            // WARNING: these two overrides are required. The shared `.btn:hover`
+            // rule turns the fill near-black, and the global `a:hover` turns the
+            // text near-black too -- either one alone breaks the pairing.
+            expect(cta.className).toContain("hover:text-white");
+            // The hover fill is burnt orange (`hover:bg-accent-2`) -- chosen by
+            // the maintainer, who was shown that white-on-burnt-orange is only
+            // 3.05:1 (below the 4.5:1 AA floor for text this size). Do not
+            // "correct" this to a maroon shade without checking with them; a
+            // shaded maroon was tried and reads as no change at all.
+            expect(cta.className).toContain("hover:bg-accent-2");
+            expect(cta.className).toContain("hover:text-white");
+        }
+    });
+
+    it("carries no nested interactive elements inside the card link", () => {
+        // An <a> or <button> inside the card's <a> would be invalid HTML and
+        // would break keyboard navigation (two tab stops for one destination).
+        // The CTA is a <span> for exactly this reason.
+        renderOtherPages();
+
+        for (const title of ["Live Map", "Calendar", "Gallery", "Documentation"]) {
+            const card = screen.getByText(title).closest("a") as HTMLElement;
+            expect(card.querySelectorAll("a, button, input")).toHaveLength(0);
+        }
+    });
+
+    it("does not move the card or its CTA on hover", () => {
+        // The hover-lift transform was removed site-wide for controls. A lift on
+        // the card is especially bad here: the cards sit in a grid, so one
+        // lifting makes the whole row look like it shifted.
+        renderOtherPages();
+
+        for (const title of ["Live Map", "Calendar", "Gallery", "Documentation"]) {
+            const card = screen.getByText(title).closest("a") as HTMLElement;
+            expect(card.className).not.toMatch(/translate/);
+            expect(card.className).not.toContain("transition-transform");
+            // The arrow used to nudge sideways on card hover.
+            expect(within(card).getByText(/^(Open|Visit) /).parentElement?.innerHTML).not.toContain(
+                "group-hover:translate",
+            );
+        }
+    });
 });

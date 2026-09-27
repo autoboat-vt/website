@@ -96,12 +96,6 @@ describe("CalendarFilter", () => {
         }
     });
 
-    it("marks All subteams as pressed by default", () => {
-        renderFilter();
-        openPanel();
-        expect(screen.getByRole("button", { name: /All subteams/i })).toHaveAttribute("aria-pressed", "true");
-    });
-
     it("emits the complement when one group is unchecked from the default state", () => {
         const { onChange } = renderFilter(null);
         openPanel();
@@ -112,14 +106,6 @@ describe("CalendarFilter", () => {
         expect([...(onChange.mock.calls[0][0] as Set<string>)].sort()).toEqual(["mechanical", "navarch"]);
     });
 
-    it("emits null when All subteams is chosen", () => {
-        const { onChange } = renderFilter(new Set(["software"]));
-        openPanel();
-        fireEvent.click(screen.getByRole("button", { name: /All subteams/i }));
-
-        expect(onChange).toHaveBeenCalledWith(null);
-    });
-
     it("only checks the selected groups in a partial selection", () => {
         renderFilter(new Set(["software"]));
         openPanel();
@@ -127,7 +113,37 @@ describe("CalendarFilter", () => {
         const mech = within(screen.getByText("Mechanical").closest("label") as HTMLElement).getByRole("checkbox");
         expect(sw).toBeChecked();
         expect(mech).not.toBeChecked();
-        expect(screen.getByRole("button", { name: /All subteams/i })).toHaveAttribute("aria-pressed", "false");
+    });
+
+    it("has no All subteams reset control", () => {
+        // Deliberately removed: the reset was a second, redundant way to express
+        // "all" that competed with the checkboxes. Re-checking every group still
+        // collapses back to the `null` "all" state (see `toggleChannel`), so the
+        // state is reachable without a dedicated button.
+        renderFilter(new Set(["software"]));
+        openPanel();
+        expect(screen.queryByRole("button", { name: /All subteams/i })).not.toBeInTheDocument();
+    });
+
+    it("reaches the 'all' state by checking the last remaining group", () => {
+        // The path that replaced the reset button, so it is worth pinning.
+        // Starting from all-but-one is what makes this observable with a static
+        // `selected` prop: each click recomputes from the ORIGINAL prop, so two
+        // clicks in a row cannot accumulate -- the final click has to complete
+        // the set on its own.
+        const { onChange } = renderFilter(new Set(["software", "mechanical"]));
+        openPanel();
+        fireEvent.click(within(screen.getByText("NavArch").closest("label") as HTMLElement).getByRole("checkbox"));
+
+        expect(onChange).toHaveBeenCalledWith(null);
+    });
+
+    it("emits the union when a group is added to a partial selection", () => {
+        const { onChange } = renderFilter(new Set(["software"]));
+        openPanel();
+        fireEvent.click(within(screen.getByText("Mechanical").closest("label") as HTMLElement).getByRole("checkbox"));
+
+        expect([...(onChange.mock.calls[0][0] as Set<string>)].sort()).toEqual(["mechanical", "software"]);
     });
 
     it("has no count badge on the toggle in any state", () => {

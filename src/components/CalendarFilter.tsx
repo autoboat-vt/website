@@ -1,33 +1,8 @@
-import { Check, ChevronDown, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import { useCallback, useId, useState } from "react";
 import type { ChannelSelection, EventChannelGroup } from "../lib/eventChannels";
 import { isAllSelected, toggleChannel } from "../lib/eventChannels";
 import { announceDropdownOpen, useCloseOnOtherDropdownOpen } from "./calendarDropdown";
-
-/**
- * Channel filter for the calendar page.
- *
- * The team schedules each subteam's events in its own Discord voice channel, and
- * the Worker ships that channel id on every event, so the calendar can be
- * narrowed to one or more groups without any extra API surface. This control is
- * the picker; the actual filtering is a one-line predicate in `Calendar.tsx`
- * (`matchesChannelFilter`).
- *
- * Selection semantics (mirrored by `toggleChannel` in `eventChannels.ts`):
- *
- *  - An EMPTY selection means "show everything". That is the initial state and
- *    what "All events" resets to, so there is exactly one representation of
- *    "no filter" and the generated feed URL stays identical to the unfiltered
- *    feed.
- *  - Otherwise the selection is an allow-list of channel keys. Checking every
- *    group collapses back to the empty set so the two do not drift apart.
- *  - Unchecking is always available, including from the initial state, because
- *    toggling materializes the full set before subtracting (see `toggleChannel`).
- *
- * The panel is a dropdown anchored to `.calendar-header`, matching the
- * Subscribe panel's geometry. The two share a mutual-exclusion event so they
- * can never be open at the same time and overlap.
- */
 
 /**
  * Subteam filter for the calendar page.
@@ -50,19 +25,23 @@ import { announceDropdownOpen, useCloseOnOtherDropdownOpen } from "./calendarDro
  *
  * Selection model (mirrored by `toggleChannel` in eventChannels.ts):
  *
- *  - `null` means "all subteams", is the initial state, and is what "All
- *    subteams" resets to.
+ *  - `null` means "all subteams" and is the initial state.
  *  - A set is an allow-list of subteam keys. An empty set is "no subteams",
  *    which is distinct from `null` -- collapsing the two would make a lone
  *    subteam impossible to uncheck.
  *  - Unchecking is always available from the initial state, because toggling
  *    materializes the full set before subtracting.
+ *  - Checking every group collapses back to `null`, so "all checked" and "no
+ *    filter" are one representation with one feed URL.
+ *
+ * There is deliberately NO "All subteams" reset button. Re-checking the groups
+ * already returns to `null` (see `toggleChannel`), so a dedicated control would
+ * be a second way to express the same state, competing with the checkboxes.
  *
  * The panel is a dropdown anchored to `.calendar-header`, matching the
  * Subscribe panel's geometry. The two share a mutual-exclusion event so they
  * can never be open at the same time and overlap.
  */
-
 export interface CalendarFilterProps {
     /** Selectable groups, derived from the loaded events. */
     groups: EventChannelGroup[];
@@ -122,17 +101,6 @@ export default function CalendarFilter({ groups, selected, onChange }: CalendarF
                             subteam are always shown.
                         </p>
                     </div>
-
-                    <button
-                        type="button"
-                        className="calendar-filter__all"
-                        aria-pressed={allSelected}
-                        onClick={() => onChange(null)}
-                    >
-                        <span className="calendar-filter__all-label">All subteams</span>
-                        {allSelected && <Check size={15} aria-hidden="true" />}
-                    </button>
-
                     <ul className="calendar-filter__list">
                         {groups.map((group) => (
                             <li key={group.id}>

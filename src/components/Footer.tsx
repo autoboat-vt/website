@@ -37,7 +37,7 @@ export default function Footer() {
                             <a
                                 key={link.label}
                                 href={link.href}
-                                className="inline-flex items-center gap-2 rounded-lg border border-black/6 bg-black/3 px-3.5 py-1.5 text-[0.95rem] font-semibold text-fontcolor no-underline transition-[background-color,color,border-color,transform] duration-200 hover:-translate-y-px hover:border-fontcolor hover:bg-fontcolor hover:text-bgcolor"
+                                className="inline-flex items-center gap-2 rounded-lg border border-black/6 bg-black/3 px-3.5 py-1.5 text-[0.95rem] font-semibold text-fontcolor no-underline transition-[background-color,color,border-color] duration-200 hover:border-fontcolor hover:bg-fontcolor hover:text-bgcolor"
                                 {...(link.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                             >
                                 <Icon className="h-[1.05em] w-[1.05em] shrink-0" aria-hidden="true" />

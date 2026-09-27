@@ -78,6 +78,26 @@
     --color-accent-2: var(--vt-burntOrange);
 
     /*
+     * Hover fill for maroon buttons: burnt orange (--color-accent-2).
+     *
+     * CHOSEN DELIBERATELY BY THE MAINTAINER, who was shown the numbers and said
+     * burnt orange is fine. Do not "fix" this back to a maroon shade.
+     *
+     * For the record, measured on the actual values: white on burnt orange is
+     * 3.05:1, which is BELOW the 4.5:1 WCAG AA floor for normal text. Two
+     * alternatives were tried and rejected:
+     *   - shaded maroon (#7a1c3b): 10.2:1, but only a 1.11:1 shift from the base
+     *     maroon, so the hover is imperceptible.
+     *   - brightened maroon (#b8345c, matching `.dark .kicker`): 5.70:1 and a
+     *     1.61:1 shift, so visible and AA -- but still not orange.
+     * Impact Orange (#ca4f00) would be the AA-safe orange at 4.54:1 if this ever
+     * needs to change; it is already exposed as `--color-cancelled`.
+     *
+     * The 3.02:1 shift from maroon to orange is large, so the state change is
+     * unmistakable even though the text ratio is low.
+     */
+
+    /*
      * Cancelled-event treatment. Aliases Impact Orange, the brand's sanctioned
      * digital-text orange (WCAG AA; Burnt Orange is too light on these
      * surfaces). Deliberately NOT maroon/orange-accent: a cancelled meeting
@@ -779,15 +799,13 @@
         cursor: pointer;
         transition:
             background-color 200ms,
-            border-color 200ms,
-            transform 200ms;
+            border-color 200ms;
         padding: 0;
     }
     .calendar-nav-btn:hover {
         border-color: var(--color-fontcolor);
         background-color: var(--color-fontcolor);
         color: var(--color-bgcolor);
-        transform: translateY(-1px);
     }
     .dark .calendar-nav-btn {
         border-color: rgba(255, 255, 255, 0.06);
@@ -895,11 +913,9 @@
         transition:
             border-color 200ms,
             background-color 200ms,
-            transform 200ms,
             box-shadow 200ms;
     }
     .calendar-subscribe__provider:hover {
-        transform: translateY(-1px);
         /* Brand-tinted border/glow on hover; maroon alpha via relative color
            syntax rather than tinting the brand color itself. */
         border-color: rgb(from var(--vt-maroon) r g b / 0.5);
@@ -1136,35 +1152,10 @@
         color: var(--color-hovercolor);
     }
 
-    .calendar-filter__all {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem;
-        width: 100%;
-        padding: 0.55rem 0.75rem;
-        border: 1px solid var(--color-cardborder);
-        border-radius: 0.625rem;
-        background-color: var(--color-card);
-        color: var(--color-fontcolor);
-        font-size: 0.875rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition:
-            border-color 200ms,
-            background-color 200ms;
-    }
-    .calendar-filter__all:hover {
-        border-color: var(--color-fontcolor);
-    }
-    .calendar-filter__all[aria-pressed="true"] {
-        border-color: rgb(from var(--vt-maroon) r g b / 0.5);
-        background-color: rgb(from var(--vt-maroon) r g b / 0.08);
-    }
-    .dark .calendar-filter__all[aria-pressed="true"] {
-        border-color: rgb(from var(--vt-burntOrange) r g b / 0.55);
-        background-color: rgb(from var(--vt-burntOrange) r g b / 0.12);
-    }
+    /* No `.calendar-filter__all` rule: the "All subteams" reset button was
+       deliberately removed from CalendarFilter.tsx. Re-checking every group
+       still collapses the selection back to `null` ("all"), so no dedicated
+       reset control is needed. */
 
     .calendar-filter__list {
         display: flex;
@@ -2594,7 +2585,6 @@
         transition:
             background-color 200ms,
             border-color 200ms,
-            transform 200ms,
             color 200ms;
         cursor: pointer;
         padding: 0.5rem 1.25rem;
@@ -2604,14 +2594,14 @@
         background-color: rgba(0, 0, 0, 0.03);
         color: var(--color-fontcolor);
     }
+    /* No hover transform: buttons deliberately do NOT move on hover. The lift
+       was removed at the maintainer's request; the hover feedback is the color
+       swap alone. Do not reintroduce `translateY` here -- several buttons sit in
+       rows, so any lift makes the whole row look like it is shifting. */
     .btn:hover {
-        transform: translateY(-1px);
         border-color: var(--color-fontcolor);
         background-color: var(--color-fontcolor);
         color: var(--color-bgcolor);
-    }
-    .btn:active {
-        transform: translateY(0);
     }
 
     .dark .btn {

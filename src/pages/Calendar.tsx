@@ -554,7 +554,7 @@ export default function Calendar({ variant = "public" }: CalendarProps) {
                                 ? "No events are scheduled yet. Check the team Discord for the latest updates."
                                 : hasAnyVisibleEvent
                                   ? "No events this month. Use the arrows above to look at another month."
-                                  : "No events match the selected subteams. Choose another in Filter, or pick All subteams."}
+                                  : "No events match the selected subteams. Pick different subteams in Filter, or check them all to see every event."}
                         </p>
                     )}
                 </Card>
