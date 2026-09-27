@@ -12,7 +12,7 @@ import {
     OFFICERS_URL,
 } from "../lib/discord";
 import type { ChannelSelection } from "../lib/eventChannels";
-import { eventChannelGroups, matchesChannelFilter } from "../lib/eventChannels";
+import { eventChannelGroups, matchesChannelFilter, subteamSlugFor } from "../lib/eventChannels";
 
 const DAY_HEADINGS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 /** Single-letter labels used on mobile, where the 3-letter forms overflow
@@ -114,14 +114,25 @@ function formatOccurrenceTime(occ: ExpandedOccurrence): string {
  *    Discord. Every occurrence of it is cancelled.
  * Both render with the same treatment, since to a reader they mean the same
  * thing: this meeting is not happening.
+ *
+ * The `subteam--<slug>` class carries the subteam's color. It is a separate
+ * class rather than a `calendar-event--` modifier because the mobile day dots
+ * carry the same hue and are not `.calendar-event` elements -- see the note in
+ * `app.css`. Chip and dot therefore derive the color from one function
+ * (`subteamSlugFor`), so they cannot disagree.
+ *
+ * The status modifiers and the subteam class are independent: a cancelled
+ * subteam event keeps its slug AND gets `--canceled`. Which one wins visually is
+ * the CSS's business, not this function's -- the className just states all the
+ * facts about the occurrence.
  */
 function eventChipClassName(occurrence: ExpandedOccurrence): string {
     const { event, isCancelled } = occurrence;
-    let cls = "calendar-event";
-    if (isCancelled || event.status === "canceled") cls += " calendar-event--canceled";
-    else if (event.status === "completed") cls += " calendar-event--completed";
-    if (event.isRecurring) cls += " calendar-event--recurring";
-    return cls;
+    const cls = ["calendar-event", `subteam--${subteamSlugFor(event)}`];
+    if (isCancelled || event.status === "canceled") cls.push("calendar-event--canceled");
+    else if (event.status === "completed") cls.push("calendar-event--completed");
+    if (event.isRecurring) cls.push("calendar-event--recurring");
+    return cls.join(" ");
 }
 
 function EventChip({
@@ -291,28 +302,26 @@ export default function Calendar({ variant = "public" }: CalendarProps) {
         };
     }, [poll]);
 
-    // Selectable channel groups, derived from the FULL loaded set rather than
+    // Selectable subteam groups, derived from the FULL loaded set rather than
     // the visible month, so a group does not vanish from the picker while the
     // user is looking at a month where that subteam has nothing scheduled.
+    // Deliberately no per-group event count -- see `eventChannelGroups`.
     const channelGroups = useMemo(() => (events === null ? [] : eventChannelGroups(events)), [events]);
 
-    // Apply the channel filter BEFORE recurrence expansion: expansion is the
-    // expensive step, and a filtered-out recurring event should not generate
-    // occurrences at all.
-    const visibleEvents = useMemo(() => {
-        if (events === null) return [];
-        return events.filter((event) => matchesChannelFilter(event, selectedChannels));
-    }, [events, selectedChannels]);
-
     const occurrences = useMemo(() => {
+        if (events === null) return [];
+        // Apply the channel filter BEFORE recurrence expansion: expansion is
+        // the expensive step, and a filtered-out recurring event should not
+        // generate occurrences at all.
+        const visible = events.filter((event) => matchesChannelFilter(event, selectedChannels));
         // Window is padded +/- one week so recurring boundaries at the start
         // or end of the grid still produce the right chips.
         const windowStart = addDays(new Date(monthAnchor.getFullYear(), monthAnchor.getMonth(), 1), -7);
         const windowEnd = addDays(new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0), 7);
         // Pass the tracked clock: expandRecurrences clips cancelled series at
         // `now`, so it must follow the same clock the "today" highlight uses.
-        return expandRecurrences(visibleEvents, windowStart, windowEnd, now);
-    }, [visibleEvents, monthAnchor, now]);
+        return expandRecurrences(visible, windowStart, windowEnd, now);
+    }, [events, selectedChannels, monthAnchor, now]);
 
     const { cells, monthLabel } = useMemo(
         () => buildMonthGrid(monthAnchor, occurrences, now),
@@ -328,7 +337,7 @@ export default function Calendar({ variant = "public" }: CalendarProps) {
      * events are scheduled yet" would misreport the team's calendar, so the two
      * cases get different copy.
      */
-    const hasAnyVisibleEvent = visibleEvents.length > 0;
+    const hasAnyVisibleEvent = events?.some((event) => matchesChannelFilter(event, selectedChannels)) ?? false;
 
     /**
      * Follow month navigation with the agenda selection (1st of the newly
@@ -471,15 +480,19 @@ export default function Calendar({ variant = "public" }: CalendarProps) {
                                         {count > 0 && (
                                             <span className="calendar-day-dots" aria-hidden="true">
                                                 {cell.occurrences.slice(0, 3).map((occ, i) => {
-                                                    let dotCls = "calendar-day-dot";
+                                                    const dotCls = [
+                                                        "calendar-day-dot",
+                                                        `subteam--${subteamSlugFor(occ.event)}`,
+                                                    ];
                                                     if (occ.isCancelled || occ.event.status === "canceled")
-                                                        dotCls += " calendar-day-dot--muted";
+                                                        dotCls.push("calendar-day-dot--muted");
                                                     else if (occ.event.status === "completed")
-                                                        dotCls += " calendar-day-dot--muted";
-                                                    if (occ.event.isRecurring) dotCls += " calendar-day-dot--recurring";
+                                                        dotCls.push("calendar-day-dot--muted");
+                                                    if (occ.event.isRecurring)
+                                                        dotCls.push("calendar-day-dot--recurring");
                                                     return (
                                                         <span
-                                                            className={dotCls}
+                                                            className={dotCls.join(" ")}
                                                             key={`${occ.event.id}-${occ.start.getTime()}-${i}`}
                                                         />
                                                     );

@@ -41,8 +41,11 @@ The **Filter** control on `/calendar` narrows the calendar to one or more
 in. Only subteam events can be filtered: general member events are always
 shown, and officer events are always shown on the page that reaches them. The
 same selection is applied to the subscription feed via a `?channels=` query
-parameter, so a user can subscribe to just their subteam. See "Channel filter"
-in `.github/instructions/discord-events.instructions.md`.
+parameter, so a user can subscribe to just their subteam. Events are also
+**color-coded by subteam** -- on the grid chips, the mobile day dots, and the
+swatch beside each filter row -- so a subteam is recognizable at a glance. See
+"Channel filter" and "Subteam colors" in
+`.github/instructions/discord-events.instructions.md`.
 
 ## Environment variables
 

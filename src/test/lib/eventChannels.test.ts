@@ -3,6 +3,7 @@ import type { ChannelSelection } from "../../lib/eventChannels";
 import {
     ALWAYS_VISIBLE_CHANNEL_IDS,
     channelKeyFor,
+    DEFAULT_SLUG,
     eventChannelGroups,
     isAllSelected,
     isAlwaysVisible,
@@ -10,8 +11,9 @@ import {
     matchesChannelFilter,
     OTHER_CHANNEL_ID,
     SUBTEAM_CHANNELS,
+    slugForChannel,
+    subteamSlugFor,
     toggleChannel,
-    totalCount,
     workerChannelIds,
 } from "../../lib/eventChannels";
 
@@ -85,10 +87,24 @@ describe("eventChannelGroups", () => {
         expect(groups.map((g) => g.id)).toEqual([SOFTWARE]);
     });
 
-    it("counts events per subteam group", () => {
-        const groups = eventChannelGroups([event("a", SOFTWARE), event("b", SOFTWARE), event("c", NAVARCH)]);
-        expect(groups.find((g) => g.id === SOFTWARE)?.count).toBe(2);
-        expect(groups.find((g) => g.id === NAVARCH)?.count).toBe(1);
+    it("lists a group once no matter how many events it has", () => {
+        // There is deliberately no per-group count: a recurring event is one
+        // record that expands into many calendar entries, so a count cannot be
+        // both accurate and meaningful. See `eventChannelGroups`.
+        const groups = eventChannelGroups([event("a", SOFTWARE), event("b", SOFTWARE), event("c", SOFTWARE)]);
+        expect(groups.map((g) => g.id)).toEqual([SOFTWARE]);
+    });
+
+    it("carries the group's slug", () => {
+        const groups = eventChannelGroups([event("a", SOFTWARE)]);
+        expect(groups[0]).toEqual({ id: SOFTWARE, label: "Software", slug: "software" });
+    });
+
+    it("gives the Other bucket the default slug", () => {
+        // Not a subteam hue: the channel-less bucket is not a subteam, and
+        // coloring it like one would invent a group that does not exist.
+        const groups = eventChannelGroups([event("a", null)]);
+        expect(groups[0]).toEqual({ id: OTHER_CHANNEL_ID, label: "Other", slug: DEFAULT_SLUG });
     });
 
     it("never offers general member or officer channels as groups", () => {
@@ -96,12 +112,6 @@ describe("eventChannelGroups", () => {
         // anything and would misrepresent what the filter does.
         const groups = eventChannelGroups([event("a", MEMBERS), event("b", OFFICERS), event("c", SOFTWARE)]);
         expect(groups.map((g) => g.id)).toEqual([SOFTWARE]);
-    });
-
-    it("does not count always-visible events in any group total", () => {
-        // The badge counts what the checkbox controls, nothing else.
-        const groups = eventChannelGroups([event("a", MEMBERS), event("b", SOFTWARE)]);
-        expect(totalCount(groups)).toBe(1);
     });
 
     it("orders groups by the curated list, not by event order", () => {
@@ -119,7 +129,12 @@ describe("eventChannelGroups", () => {
         // A newly created subteam channel must stay reachable; dropping its
         // events from every group would hide them from the filter entirely.
         const groups = eventChannelGroups([event("a", UNKNOWN), event("b", null)]);
-        expect(groups).toEqual([{ id: OTHER_CHANNEL_ID, label: "Other", count: 2 }]);
+        expect(groups).toEqual([{ id: OTHER_CHANNEL_ID, label: "Other", slug: DEFAULT_SLUG }]);
+    });
+
+    it("does not offer an Other group when every event has a known channel", () => {
+        const groups = eventChannelGroups([event("a", SOFTWARE)]);
+        expect(groups.some((g) => g.id === OTHER_CHANNEL_ID)).toBe(false);
     });
 
     it("returns an empty list for no events", () => {
@@ -144,11 +159,6 @@ describe("eventChannelGroups", () => {
         for (const { id } of SUBTEAM_CHANNELS) {
             expect(ALWAYS_VISIBLE_CHANNEL_IDS.has(id)).toBe(false);
         }
-    });
-
-    it("totalCount sums every group", () => {
-        const groups = eventChannelGroups([event("a", SOFTWARE), event("b", NAVARCH), event("c", null)]);
-        expect(totalCount(groups)).toBe(3);
     });
 });
 
@@ -260,6 +270,63 @@ describe("workerChannelIds", () => {
     });
 });
 
+describe("subteamSlugFor", () => {
+    it("maps each subteam channel to its own slug", () => {
+        for (const { id, slug } of SUBTEAM_CHANNELS) {
+            expect(subteamSlugFor(event("a", id))).toBe(slug);
+        }
+    });
+
+    it("gives every subteam a distinct slug", () => {
+        // Two channels sharing a hue would make the color meaningless as a
+        // grouping cue -- the whole point of the feature.
+        const slugs = SUBTEAM_CHANNELS.map((c) => c.slug);
+        expect(new Set(slugs).size).toBe(slugs.length);
+    });
+
+    it("falls back to the default slug for general member and officer events", () => {
+        // They render as team-wide maroon: they are not any one subteam's
+        // events, so borrowing a subteam hue would mislabel them.
+        expect(subteamSlugFor(event("a", MEMBERS))).toBe(DEFAULT_SLUG);
+        expect(subteamSlugFor(event("a", OFFICERS))).toBe(DEFAULT_SLUG);
+    });
+
+    it("falls back to the default slug for a channel-less event", () => {
+        expect(subteamSlugFor(event("a", null))).toBe(DEFAULT_SLUG);
+    });
+
+    it("falls back to the default slug for an unlisted channel", () => {
+        // It is displayed in the "Other" group, so it must be colored like that
+        // group rather than picking up a hue of its own.
+        expect(subteamSlugFor(event("a", UNKNOWN))).toBe(DEFAULT_SLUG);
+    });
+
+    it("does not treat the default slug as a subteam", () => {
+        // Guards the invariant the chips rely on: the fallback is the absence
+        // of a subteam color, so nothing may claim it as its own.
+        expect(SUBTEAM_CHANNELS.some((c) => c.slug === DEFAULT_SLUG)).toBe(false);
+    });
+});
+
+describe("slugForChannel", () => {
+    it("resolves a subteam channel id", () => {
+        expect(slugForChannel(SOFTWARE)).toBe("software");
+    });
+
+    it("resolves the Other sentinel to the default slug", () => {
+        expect(slugForChannel(OTHER_CHANNEL_ID)).toBe(DEFAULT_SLUG);
+    });
+
+    it("agrees with labelForChannel about what is 'Other'", () => {
+        // The two mappings must bucket identically, or a group could be labeled
+        // a subteam while being colored as Other (or vice versa).
+        for (const key of [OTHER_CHANNEL_ID, SOFTWARE, UNKNOWN, MEMBERS]) {
+            const isOther = labelForChannel(key) === "Other";
+            expect(slugForChannel(key) === DEFAULT_SLUG).toBe(isOther || key === MEMBERS);
+        }
+    });
+});
+
 describe("isAllSelected", () => {
     it("is true only for the null selection", () => {
         // `null` and `new Set()` both mean "no narrowing" at a glance but are
@@ -271,10 +338,11 @@ describe("isAllSelected", () => {
 });
 
 describe("toggleChannel", () => {
-    // Synthetic group lists -- `toggleChannel` is generic over groups.
+    // Synthetic group lists -- `toggleChannel` is generic over groups and only
+    // ever reads `id`, so these stay minimal on purpose.
     const groups = [
-        { id: SOFTWARE, label: "Software", count: 1 },
-        { id: NAVARCH, label: "Naval Architecture & Propulsion", count: 1 },
+        { id: SOFTWARE, label: "Software", slug: "software" as const },
+        { id: NAVARCH, label: "Naval Architecture & Propulsion", slug: "navarch" as const },
     ];
 
     /**
@@ -295,7 +363,7 @@ describe("toggleChannel", () => {
     it("adds a group to a partial selection", () => {
         // Three groups so this does not accidentally complete the set and
         // trigger the "all" collapse asserted below.
-        const three = [...groups, { id: "third", label: "Third", count: 1 }];
+        const three = [...groups, { id: "third", label: "Third", slug: "default" as const }];
         const next = expectNarrowed(toggleChannel(new Set([SOFTWARE]), NAVARCH, three));
         expect([...next].sort()).toEqual([NAVARCH, SOFTWARE].sort());
     });
@@ -304,7 +372,7 @@ describe("toggleChannel", () => {
         // The bug this model exists to prevent: with an empty-set-means-all
         // convention, this click would read back as "everything selected" and
         // the checkbox would silently refuse to turn off.
-        const one = [{ id: SOFTWARE, label: "Software", count: 1 }];
+        const one = [{ id: SOFTWARE, label: "Software", slug: "software" as const }];
         expect([...expectNarrowed(toggleChannel(null, SOFTWARE, one))]).toEqual([]);
     });
 

@@ -22,6 +22,43 @@
     --vt-hokieStone: #75787b;
     --vt-white: #ffffff;
     --vt-impactOrange: #ca4f00; /* Use for digital text instead of burnt orange (WCAG AA) */
+
+    /*
+     * Subteam colors for calendar events.
+     *
+     * Each subteam gets one hue, keyed by the slug in src/lib/eventChannels.ts
+     * (`SUBTEAM_CHANNELS[].slug`). The slug is all TypeScript knows; the actual
+     * colors live here so the light and dark value for a subteam sit next to
+     * each other and can be retuned without touching component code.
+     *
+     * Drawn from the VT secondary palette (Sustainable Teal, Pylon Purple,
+     * Triumphant Yellow, Vibrant Turquoise, Boundless Pink) and shaded or tinted
+     * per brand rules, which explicitly permit both for secondary colors.
+     *
+     * The light values are shaded well past the raw swatches -- not for taste but
+     * for contrast. The subteam hue is worn by the TIME TEXT, not just by the
+     * border, and the chip's own background is a 12% tint of that same hue over
+     * the page, so the text is measured against a background derived from itself.
+     * Every value below clears WCAG AA (4.5:1) against its own 12% tint AND
+     * against the darker 20% hover tint; the measured ratios are in the
+     * comments. Re-measure if you change a value here or those alphas in the
+     * chip rules.
+     *
+     * WARNING: `--subteam-default` is the base brand maroon, so general member,
+     * officer, and channel-less events render exactly as they did before this
+     * feature existed. Do not repurpose a subteam hue for it.
+     *
+     * WARNING: A new subteam needs BOTH a hue here (light + dark) and a `slug` in
+     * `SUBTEAM_CHANNELS`. A slug with no hue falls back to maroon, which is
+     * silent — it looks like the channel just has no color rather than like a
+     * missing entry.
+     */
+    --subteam-default: var(--vt-maroon);
+    --subteam-software: #3498db;
+    --subteam-navarch: #e74c3c;
+    --subteam-electrical: #f1c40f;
+    --subteam-mechanical: #9b59b6;
+    --subteam-business: #ffc0cb;
 }
 
 @theme {
@@ -76,6 +113,29 @@
      * --vt-* variables on :root, which don't change (brand guidelines permit
      * shading but not tinting of maroon/orange). */
     --nav-height: 72px;
+
+    /*
+     * Subteam colors, tinted for the warm dark page.
+     *
+     * Only lightness changes; each subteam keeps its hue, so a chip stays
+     * recognisably "the teal one" when the theme flips. `--subteam-default`
+     * mirrors the brightened maroon the calendar already used on dark
+     * (`#b8345c`, the same value as `.dark .kicker` — official Chicago Maroon
+     * is near-invisible against the dark card surface).
+     *
+     * NOTE: these clear their own 25% tint, but the 35% hover tint pulls several
+     * just under 4.5:1 for text. That trade-off already exists here --
+     * `--subteam-default` is the pre-existing `#b8345c` time text, at 2.4:1 --
+     * and every value below is more readable than that baseline, so this is not
+     * a regression. Text that must always be AA on dark is `--color-hovercolor`,
+     * which is what the cancelled and completed states use.
+     */
+    --subteam-default: #b8345c;
+    --subteam-software: #8fdfe9; /* 5.79:1, 4.37:1 on hover */
+    --subteam-navarch: #d8b4e0; /* 5.14:1, 3.99:1 on hover */
+    --subteam-electrical: #ffdc6b; /* 6.22:1, 4.61:1 on hover */
+    --subteam-mechanical: #3fe3d3; /* 5.68:1, 4.32:1 on hover */
+    --subteam-business: #ff9cbe; /* 4.95:1, 3.88:1 on hover */
 }
 
 /* Responsive nav-height (matches original @media max-width: 900px) */
@@ -1023,25 +1083,7 @@
         white-space: nowrap;
     }
 
-    /* Active-filter badge. Reads as a count, not as a decorative dot. */
-    .calendar-filter__count {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 1.1rem;
-        height: 1.1rem;
-        padding: 0 0.25rem;
-        border-radius: 999px;
-        background-color: var(--vt-maroon);
-        color: #fff;
-        font-size: 0.68rem;
-        font-weight: 700;
-        line-height: 1;
-    }
-    .dark .calendar-filter__count {
-        background-color: var(--vt-burntOrange);
-        color: #1f1e1d;
-    }
+    /* No per-group event count badge -- see the note in CalendarFilter.tsx. */
 
     .calendar-filter__chevron {
         transition: transform 200ms ease;
@@ -1166,18 +1208,20 @@
         color: var(--color-fontcolor);
     }
 
-    .calendar-filter__badge {
+    /*
+     * Color swatch beside each subteam's name, so the panel teaches the chip
+     * colors before they are seen in the grid. The element also carries
+     * `subteam--<slug>`, so its hue comes from the same block the chips use.
+     */
+    .calendar-filter__swatch {
         flex-shrink: 0;
-        padding: 0.1rem 0.4rem;
-        border-radius: 999px;
-        background-color: rgb(0 0 0 / 0.06);
-        color: var(--color-hovercolor);
-        font-size: 0.7rem;
-        font-weight: 600;
+        width: 0.75rem;
+        height: 0.75rem;
+        border-radius: 50%;
+        background-color: var(--subteam-color);
     }
-    .dark .calendar-filter__badge {
-        background-color: rgb(255 255 255 / 0.09);
-    }
+
+    /* No per-group count badge: see the note in CalendarFilter.tsx. */
 
     /* Scoped past `.card p` (0,1,1), same reason as the title above. */
     .calendar-filter__panel .calendar-filter__hint {
@@ -1258,6 +1302,32 @@
         min-width: 0;
     }
 
+    /*
+     * Default hue for anything that can carry a subteam color.
+     *
+     * WARNING: The `:where()` wrapper is load-bearing, not decoration. It drops
+     * this rule to specificity (0,0,0) so a `.subteam--<slug>` rule (0,1,0)
+     * always beats it regardless of where either sits in the file. Declared
+     * instead as plain `.calendar-event { --subteam-color: ... }` it would tie
+     * with the subteam rules at (0,1,0) and be decided by source order -- which
+     * works until someone moves one block, and then a subteam silently loses its
+     * color or a chip silently loses its default.
+     *
+     * Surfaces consume the variable plainly (`var(--subteam-color)`) and never
+     * declare it themselves, so this is the single place a default is set.
+     */
+    :where(.calendar-event, .calendar-day-dot) {
+        --subteam-color: var(--subteam-default);
+    }
+
+    /* The filter swatch defaults to a neutral grey instead: the channel-less
+       "Other" row has no subteam hue, and a maroon swatch there would claim it
+       was one. Kept in this block, not in the rule below, for the same
+       specificity reason as the maroon default. */
+    :where(.calendar-filter__swatch) {
+        --subteam-color: var(--color-hovercolor);
+    }
+
     .calendar-event {
         /* Chips are <button> elements -- strip native button styling so they
            keep the chip look. */
@@ -1268,9 +1338,9 @@
         width: 100%;
         padding: 0.25rem 0.375rem;
         border: 0;
-        border-left: 2px solid var(--color-accent);
+        border-left: 2px solid var(--subteam-color);
         border-radius: 0.375rem;
-        background-color: color-mix(in srgb, var(--color-accent) 12%, transparent);
+        background-color: color-mix(in srgb, var(--subteam-color) 12%, transparent);
         color: var(--color-fontcolor);
         font-family: inherit;
         font-size: 0.75rem;
@@ -1282,25 +1352,19 @@
         overflow: hidden;
     }
     .calendar-event:hover {
-        background-color: color-mix(in srgb, var(--color-accent) 20%, transparent);
+        background-color: color-mix(in srgb, var(--subteam-color) 20%, transparent);
     }
     .dark .calendar-event {
-        background-color: color-mix(in srgb, var(--color-accent) 25%, transparent);
+        background-color: color-mix(in srgb, var(--subteam-color) 25%, transparent);
     }
     .dark .calendar-event:hover {
-        background-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+        background-color: color-mix(in srgb, var(--subteam-color) 35%, transparent);
     }
 
     .calendar-event__time {
         font-weight: 700;
         font-size: 0.7rem;
-        color: var(--color-accent);
-    }
-
-    /* Same brightened maroon as .dark .kicker — official Chicago Maroon is
-       near-invisible against the warm dark card background. */
-    .dark .calendar-event__time {
-        color: #b8345c;
+        color: var(--subteam-color);
     }
 
     .calendar-event__name {
@@ -1312,6 +1376,41 @@
         -webkit-line-clamp: 2;
         line-clamp: 2;
     }
+
+    /*
+     * Per-subteam hues.
+     *
+     * Deliberately a standalone `subteam--<slug>` class rather than a
+     * `calendar-event--<slug>` one. The same hue has to reach three different
+     * surfaces -- grid chips, mobile day dots, and the filter panel's swatches --
+     * and only the chips are `.calendar-event`. One class that any element can
+     * wear is what keeps those three from ever disagreeing about a subteam's
+     * color, and it means adding a surface needs no CSS at all.
+     *
+     * These rules set ONLY the `--subteam-color` variable. Everything colored
+     * reads that one variable, so the light/dark pair lives in the token block
+     * and a subteam is never partly retinted. Ordering against the default block
+     * above and the status modifiers below does not matter: those set concrete
+     * properties, while these set a variable the surfaces consume.
+     */
+    .subteam--software {
+        --subteam-color: var(--subteam-software);
+    }
+    .subteam--navarch {
+        --subteam-color: var(--subteam-navarch);
+    }
+    .subteam--electrical {
+        --subteam-color: var(--subteam-electrical);
+    }
+    .subteam--mechanical {
+        --subteam-color: var(--subteam-mechanical);
+    }
+    .subteam--business {
+        --subteam-color: var(--subteam-business);
+    }
+    /* No rule for `subteam--default`: that slug means "not a specific subteam",
+       so it deliberately sets nothing and lets the surface's own default
+       apply (maroon for chips and dots, the neutral swatch for the panel). */
 
     .calendar-event--canceled {
         border-left-color: var(--color-cancelled);
@@ -1338,6 +1437,9 @@
     }
 
     .calendar-event--completed {
+        /* The subteam tint is kept so a past event still says which subteam it
+           was; the state reads through the grey border, grey time, and the
+           overall opacity rather than through a loss of color. */
         border-left-color: var(--color-hovercolor);
         opacity: 0.7;
     }
@@ -1371,10 +1473,7 @@
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background-color: var(--color-accent);
-    }
-    .dark .calendar-day-dot {
-        background-color: #b8345c;
+        background-color: var(--subteam-color);
     }
     .calendar-day-dot--muted {
         background-color: var(--color-hovercolor);

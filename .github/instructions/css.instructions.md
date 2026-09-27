@@ -38,6 +38,23 @@ The file has a fixed structure — keep new CSS in the right slot:
 
 Rules outside any `@layer` block are unlayered and beat all layered normal declarations — use sparingly to avoid breaking the cascade.
 
+# Color-coded variants via one CSS variable
+
+When one of several variants tints the same element differently (e.g. the calendar's per-subteam event colors), set ONE custom property in the variant class and have every colored part of the element read it — never repeat the color in the border, background, and text rules. The calendar does this with `--subteam-color` in the `.calendar-event` / `.calendar-day-dot` / `.calendar-filter__swatch` rules:
+
+```css
+/* Defaults via :where() so a variant wins on SPECIFICITY, not source order. */
+:where(.calendar-event, .calendar-day-dot) {
+    --subteam-color: var(--subteam-default);
+}
+.calendar-event { border-left: 2px solid var(--subteam-color); }
+.subteam--software { --subteam-color: var(--subteam-software); }
+```
+
+- **Declare the default through `:where()`.** A plain `.calendar-event { --subteam-color: ... }` ties with `.subteam--software` at (0,1,0), so which one wins depends on which block comes first in the file — it works until someone reorders, then silently breaks. `:where()` drops the default to (0,0,0) and makes the variant always win.
+- Keep the light/dark pair in the token block (`:root` + `.dark`), not in the variant rules, so a variant can never be half-retinted.
+- This is a three-way split: token block holds the values, variant class picks one, consumer rule uses it. Adding a surface to color costs no new CSS.
+
 # Hash-link navigation
 
 `useEffect` in `App.tsx` watches `useLocation()` and manually scrolls to hash targets offset by `--nav-height` (72px desktop, 64px mobile). Lazy-loaded images shift layout, so the effect re-scrolls on a decay schedule (200/400/700/1100/1600ms). Don't use `window.addEventListener('load', ...)` — the load event can fire before React mounts on client-side navigation.

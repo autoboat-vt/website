@@ -43,6 +43,11 @@ import { announceDropdownOpen, useCloseOnOtherDropdownOpen } from "./calendarDro
  * below states that, because a user who unchecks everything would otherwise
  * assume the calendar is about to go blank.
  *
+ * Each row carries a color swatch matching the hue the grid uses for that
+ * subteam's chips and day dots, so the mapping can be learned from the panel
+ * instead of inferred by comparing the grid against the checkbox list. The hue
+ * comes from `group.slug` -> the shared `subteam--<slug>` class in app.css.
+ *
  * Selection model (mirrored by `toggleChannel` in eventChannels.ts):
  *
  *  - `null` means "all subteams", is the initial state, and is what "All
@@ -74,7 +79,6 @@ export default function CalendarFilter({ groups, selected, onChange }: CalendarF
     useCloseOnOtherDropdownOpen("calendar-filter", close);
 
     const allSelected = isAllSelected(selected);
-    const selectedCount = selected === null ? 0 : selected.size;
     const toggle = () => {
         setOpen((wasOpen) => {
             if (!wasOpen) announceDropdownOpen("calendar-filter");
@@ -104,19 +108,8 @@ export default function CalendarFilter({ groups, selected, onChange }: CalendarF
             >
                 <SlidersHorizontal size={16} aria-hidden="true" />
                 Filter
-                {!allSelected && (
-                    <>
-                        {/* Decorative count; the sr-only span below carries it
-                            into the button's accessible name ("Filter, 2
-                            subteams selected"). A bare aria-label on the badge
-                            span is rejected -- generic elements have no
-                            supported labeling role. */}
-                        <span className="calendar-filter__count" aria-hidden="true">
-                            {selectedCount}
-                        </span>
-                        <span className="sr-only">({selectedCount} subteams selected)</span>
-                    </>
-                )}
+                {/* No count badge here either -- see the note above. The
+                    accessible name stays just "Filter" in every state. */}
                 <ChevronDown size={15} className="calendar-filter__chevron" aria-hidden="true" />
             </button>
 
@@ -125,8 +118,8 @@ export default function CalendarFilter({ groups, selected, onChange }: CalendarF
                     <div className="calendar-filter__header">
                         <h3 className="calendar-filter__title">Subteams</h3>
                         <p className="calendar-filter__intro">
-                            Narrow the calendar to specific subteams. General member and officer events are always
-                            shown.
+                            Select the subteams whose events you like to see. Events not specific to a particular
+                            subteam are always shown.
                         </p>
                     </div>
 
@@ -149,18 +142,18 @@ export default function CalendarFilter({ groups, selected, onChange }: CalendarF
                                         checked={isChecked(group.id)}
                                         onChange={() => onChange(toggleChannel(selected, group.id, groups))}
                                     />
+                                    {/* Swatch teaches the chip colors the grid
+                                        uses. aria-hidden because it only repeats
+                                        the label next to it. */}
+                                    <span
+                                        className={`calendar-filter__swatch subteam--${group.slug}`}
+                                        aria-hidden="true"
+                                    />
                                     <span className="calendar-filter__label">{group.label}</span>
-                                    <span className="calendar-filter__badge">{group.count}</span>
                                 </label>
                             </li>
                         ))}
                     </ul>
-
-                    <p className="calendar-filter__hint">
-                        {allSelected
-                            ? "Showing every subteam. Uncheck one to narrow the calendar."
-                            : "Only the checked subteams are shown, plus all general member and officer events."}
-                    </p>
                 </div>
             )}
         </div>

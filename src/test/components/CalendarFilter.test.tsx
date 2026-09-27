@@ -12,9 +12,9 @@ import type { ChannelSelection, EventChannelGroup } from "../../lib/eventChannel
  */
 
 const GROUPS: EventChannelGroup[] = [
-    { id: "software", label: "Software", count: 4 },
-    { id: "mechanical", label: "Mechanical", count: 2 },
-    { id: "navarch", label: "Naval Architecture & Propulsion", count: 1 },
+    { id: "software", label: "Software", slug: "software" },
+    { id: "mechanical", label: "Mechanical", slug: "mechanical" },
+    { id: "navarch", label: "NavArch", slug: "navarch" },
 ];
 
 function renderFilter(selected: ChannelSelection = null, onChange = jest.fn()) {
@@ -26,27 +26,63 @@ const openPanel = () => fireEvent.click(screen.getByRole("button", { name: /^Fil
 
 describe("CalendarFilter", () => {
     it("keeps the panel closed until the toggle is clicked", () => {
+        // Anchored on the panel's own heading, not on the intro sentence -- the
+        // copy is free to change, the heading is the panel's identity.
         renderFilter();
-        expect(screen.queryByText(/Narrow the calendar to specific subteams/i)).not.toBeInTheDocument();
+        expect(screen.queryByRole("heading", { name: "Subteams" })).not.toBeInTheDocument();
         openPanel();
-        expect(screen.getByText(/Narrow the calendar to specific subteams/i)).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: "Subteams" })).toBeInTheDocument();
     });
 
-    it("says general member and officer events are always shown", () => {
+    it("explains that non-subteam events are always shown", () => {
         // The scope rule has to be visible in the UI, or a user will assume
-        // unchecking everything hides everything.
+        // unchecking everything hides everything. Asserting the individual
+        // phrases (not one long string) keeps this from breaking every time the
+        // sentence is reworded.
         renderFilter();
         openPanel();
-        expect(screen.getByText(/General member and officer events are always shown/i)).toBeInTheDocument();
+        const intro = document.querySelector(".calendar-filter__intro");
+        expect(intro?.textContent).toMatch(/subteam/i);
+        expect(intro?.textContent).toMatch(/always shown/i);
     });
 
-    it("lists every group with its event count", () => {
+    it("lists every group by name and no event counts", () => {
+        // A per-group count could not be made both accurate and meaningful (a
+        // recurring event is one record but many calendar entries), so there is
+        // deliberately no number next to a group. The only spans are the color
+        // swatch and the label.
         renderFilter();
         openPanel();
         for (const group of GROUPS) {
             const option = screen.getByText(group.label).closest("label");
             expect(option).not.toBeNull();
-            expect(within(option as HTMLElement).getByText(String(group.count))).toBeInTheDocument();
+            expect((option as HTMLElement).querySelectorAll("span")).toHaveLength(2);
+        }
+    });
+
+    it("shows a swatch carrying each group's own subteam slug", () => {
+        // The swatch is what teaches the grid's chip colors, so it must use the
+        // same `subteam--<slug>` class the chips do -- a swatch with its own
+        // color logic would be free to disagree with the grid.
+        renderFilter();
+        openPanel();
+        for (const group of GROUPS) {
+            const option = screen.getByText(group.label).closest("label");
+            const swatch = (option as HTMLElement).querySelector(".calendar-filter__swatch");
+            expect(swatch).not.toBeNull();
+            expect(swatch?.classList.contains(`subteam--${group.slug}`)).toBe(true);
+        }
+    });
+
+    it("hides the swatch from assistive tech", () => {
+        // It only repeats the label beside it, so announcing it would just add
+        // noise to the checkbox's name.
+        renderFilter();
+        openPanel();
+        const swatches = document.querySelectorAll(".calendar-filter__swatch");
+        expect(swatches).toHaveLength(GROUPS.length);
+        for (const swatch of swatches) {
+            expect(swatch).toHaveAttribute("aria-hidden", "true");
         }
     });
 
@@ -94,13 +130,14 @@ describe("CalendarFilter", () => {
         expect(screen.getByRole("button", { name: /All subteams/i })).toHaveAttribute("aria-pressed", "false");
     });
 
-    it("shows a count badge on the toggle only when a filter is active", () => {
+    it("has no count badge on the toggle in any state", () => {
+        // The toggle used to show how many subteams were selected. Removed with
+        // the per-group counts -- see the note in CalendarFilter.tsx.
         renderFilter(new Set(["software", "navarch"]));
-        // The badge is decorative; the accessible name carries the count.
-        expect(screen.getByRole("button", { name: /2 subteams selected/i })).toBeInTheDocument();
-    });
+        expect(screen.getByRole("button", { name: /^Filter$/ })).toBeInTheDocument();
+        expect(screen.queryByText(/subteams selected/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/^2$/)).not.toBeInTheDocument();
 
-    it("has no count badge when every subteam is selected", () => {
         renderFilter(null);
         expect(screen.queryByText(/subteams selected/i)).not.toBeInTheDocument();
     });
@@ -115,16 +152,16 @@ describe("CalendarFilter", () => {
         // never be open together.
         renderFilter();
         openPanel();
-        expect(screen.getByText(/Narrow the calendar to specific subteams/i)).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: "Subteams" })).toBeInTheDocument();
 
         fireEvent(document, new CustomEvent("autoboat:calendar-dropdown-open", { detail: "calendar-subscribe" }));
-        expect(screen.queryByText(/Narrow the calendar to specific subteams/i)).not.toBeInTheDocument();
+        expect(screen.queryByRole("heading", { name: "Subteams" })).not.toBeInTheDocument();
     });
 
     it("stays open when its own announcement fires", () => {
         renderFilter();
         openPanel();
         fireEvent(document, new CustomEvent("autoboat:calendar-dropdown-open", { detail: "calendar-filter" }));
-        expect(screen.getByText(/Narrow the calendar to specific subteams/i)).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: "Subteams" })).toBeInTheDocument();
     });
 });

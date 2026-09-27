@@ -1,6 +1,6 @@
 ---
-description: "Use when working on the calendar page, the Discord events client, the subscription affordance, officer-only event visibility, past-event retention, or the Cloudflare Worker that serves Discord guild scheduled events. Covers the no-webhook constraint, the Worker architecture, KV caching + the retention archive, VITE_EVENTS_URL, audience gating via Discord channels, the /calendar.ics feed, and rrule recurrence expansion."
-applyTo: "src/lib/discord.ts, src/lib/eventChannels.ts, src/pages/Calendar.tsx, src/pages/Officers.tsx, src/components/CalendarSubscribe.tsx, src/components/CalendarFilter.tsx, src/components/calendarDropdown.ts, src/test/lib/discord.test.ts, src/test/lib/eventChannels.test.ts, src/test/pages/Calendar.test.tsx, src/test/pages/Officers.test.tsx, src/test/components/CalendarSubscribe.test.tsx, src/test/components/CalendarFilter.test.tsx, src/test/worker/ics.test.ts, src/test/worker/recurrence.test.ts, src/test/worker/events.test.ts, src/test/worker/cancellations.test.ts, src/test/worker/audience.test.ts, src/test/worker/audience-filter.test.ts, src/test/worker/archive.test.ts, src/test/worker/routes.test.ts, worker/**"
+description: "Use when working on the calendar page, the Discord events client, the subscription affordance, the subteam filter, per-subteam event colors, officer-only event visibility, past-event retention, or the Cloudflare Worker that serves Discord guild scheduled events. Covers the no-webhook constraint, the Worker architecture, KV caching + the retention archive, VITE_EVENTS_URL, audience gating via Discord channels, the /calendar.ics feed, and rrule recurrence expansion."
+applyTo: "src/lib/discord.ts, src/lib/eventChannels.ts, src/pages/Calendar.tsx, src/pages/Officers.tsx, src/components/CalendarSubscribe.tsx, src/components/CalendarFilter.tsx, src/components/calendarDropdown.ts, src/app.css, src/test/lib/discord.test.ts, src/test/lib/eventChannels.test.ts, src/test/pages/Calendar.test.tsx, src/test/pages/Officers.test.tsx, src/test/components/CalendarSubscribe.test.tsx, src/test/components/CalendarFilter.test.tsx, src/test/worker/ics.test.ts, src/test/worker/recurrence.test.ts, src/test/worker/events.test.ts, src/test/worker/cancellations.test.ts, src/test/worker/audience.test.ts, src/test/worker/audience-filter.test.ts, src/test/worker/archive.test.ts, src/test/worker/channel-filter.test.ts, src/test/worker/routes.test.ts, worker/**"
 ---
 
 # Discord events + calendar
@@ -393,6 +393,21 @@ picker can filter; `ALWAYS_VISIBLE_CHANNEL_IDS` is what it never can.
 `matchesChannelFilter()` (always shown), so the picker can never offer a control
 that does not work.
 
+WARNING: **No per-group event count, by design.** The picker lists a group name
+and a checkbox, nothing else. A count cannot be made both accurate and
+meaningful: a recurring Discord event is a SINGLE payload record that expands
+into many calendar entries, so a record count reads "1" for a weekly meeting
+that fills the month (measured on the live payload: every subteam channel showed
+`1`). An occurrence count would instead track the visible month and would
+require recurrence expansion just to build a checkbox list. The filter answers
+"which subteam", not "how many". Do not add the badges back.
+
+WARNING: **`eventChannelGroups()` takes `CalendarEvent[]`, not occurrences.**
+Group membership comes from the FULL loaded set (all of history -- the Worker
+archives past events), so a group does not vanish from the picker while you are
+looking at a month where that subteam has nothing on. This is also what keeps it
+independent of the month grid.
+
 WARNING: **The selection is `null | ReadonlySet<string>`, and `null` means "all
 subteams".** An empty set means "no subteams" and is a DIFFERENT state. Do not
 "simplify" this to empty-set-means-all: with only one subteam that has events,
@@ -412,7 +427,48 @@ channel-less "Other" key is dropped -- there is no id to send.
 Subscribe panel and the two share a mutual-exclusion event
 (`src/components/calendarDropdown.ts`, a document-level
 `autoboat:calendar-dropdown-open` CustomEvent) so both -- which occupy the same
-rectangle -- can never be open at once.
+rectangle -- can never be open at once. Each row shows a color swatch beside the
+label, carrying the same `subteam--<slug>` class as the grid chips, so the panel
+teaches the color mapping instead of the user having to infer it.
+
+## Subteam colors
+
+Grid chips, mobile day dots, and the filter's swatches are color-coded by
+subteam. The mapping is `SUBTEAM_CHANNELS[].slug` -> a `subteam--<slug>` class
+(`eventChannels.ts` -> `subteamSlugFor()` -> `app.css`).
+
+- **`subteam--<slug>` is its own class, not a `calendar-event--<slug>`
+  modifier.** The same hue has to reach three surfaces and only one of them is
+  `.calendar-event` (day dots and swatches are plain spans), so a shared class is
+  what keeps them from disagreeing. Adding a surface needs no CSS.
+- **The classes only set `--subteam-color`.** Every colored part of a chip
+  (left border, background tint, hover tint, time text) and the dot/swatch
+  background derives from that one variable, so a subteam's light/dark pair lives
+  only in the token block and can never be half-retinted. Defaults are declared
+  through `:where()` so the subteam override wins on specificity rather than on
+  source order.
+- **Light and dark values are separate tokens, and both are load-bearing.** The
+  light values are shaded well past the raw VT secondary swatches because the
+  hue is worn by the time TEXT, and the chip background is a 12% tint of that
+  same hue -- so the text is measured against a background derived from itself.
+  All five clear WCAG AA (4.5:1) against their own tint and the 20% hover tint;
+  the measured ratios are in the `app.css` comments.
+- WARNING: **`--subteam-default` is the base brand maroon** (`--vt-maroon`
+  light, `#b8345c` dark), so general member, officer, and channel-less events
+  look exactly as they did before this feature. Do not repurpose a subteam hue
+  for it. The dark `#b8345c` time text is a pre-existing 2.4:1 -- the dark
+  subteam hues are all more readable than that baseline, so they are not a
+  regression, and the cancelled/completed states continue to use the AA-safe
+  `--color-hovercolor` rather than a subteam hue.
+- WARNING: **Status and subteam classes are independent and both are always
+  applied.** A cancelled Software event keeps `subteam--software` AND
+  `calendar-event--canceled`; the cancelled treatment reads through the border,
+  strike-through, and opacity rather than through losing the color.
+- WARNING: **A new subteam needs a `slug` in `SUBTEAM_CHANNELS`, a
+  `--subteam-<slug>` token in BOTH the `:root` and `.dark` blocks, and a
+  `subteam--<slug>` rule.** A slug with no token falls back to the default maroon
+  silently, which looks like the channel simply has no color rather than like a
+  missing entry.
 
 Worker side (`worker/src/index.ts`): `parseChannelFilter(url.searchParams)` and
 `filterByChannels(events, ids)`. Both are exported and unit-tested directly.

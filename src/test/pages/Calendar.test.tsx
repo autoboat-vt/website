@@ -747,6 +747,30 @@ describe("Calendar page (mobile branch)", () => {
         expect(todayCell.querySelectorAll(".calendar-day-dot")).toHaveLength(1);
     });
 
+    it("slugs the day dots so mobile keeps the subteam color coding", async () => {
+        // The dots replace the chips on narrow viewports, so they must use the
+        // same `subteam--<slug>` class the chips do -- otherwise the calendar
+        // loses its color coding on exactly the screens that need it most.
+        const now = new Date();
+        const events = [
+            sampleEvent({
+                id: "sw",
+                name: "Software Work Session",
+                start: currentMonth(now.getDate()),
+                channelId: "1550592611859955862",
+            }),
+        ];
+        mockFetchOnce(events);
+        const { container } = renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        const dot = container.querySelector(".calendar-day-dot");
+        expect(dot).not.toBeNull();
+        expect(dot).toHaveClass("subteam--software");
+    });
+
     it("defaults the agenda to today and swaps content when another day is tapped", async () => {
         const now = new Date();
         const today = now.getDate();
@@ -1107,5 +1131,103 @@ describe("Calendar channel filter", () => {
 
         fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
         expect(screen.getByRole("link", { name: /Download .ics/i })).toHaveAttribute("href", EVENTS_ICS_URL);
+    });
+});
+
+describe("Calendar subteam colors", () => {
+    const SOFTWARE = "1550592611859955862";
+    const MECHANICAL = "1550592740486553650";
+    const NAVARCH = "1550592897659707402";
+    /** `member-events`: not a subteam, so it gets the default hue. */
+    const MEMBERS = "1550594275580837921";
+
+    /** The chip button for a named event. */
+    function chipFor(name: RegExp | string) {
+        return screen.getByRole("button", { name });
+    }
+
+    it("tags a chip with its subteam slug", async () => {
+        mockFetchOnce([
+            sampleEvent({ id: "sw", name: "Software Work Session", start: currentMonth(10), channelId: SOFTWARE }),
+            sampleEvent({
+                id: "mech",
+                name: "Mechanical Build Night",
+                start: currentMonth(10),
+                channelId: MECHANICAL,
+            }),
+            sampleEvent({ id: "na", name: "NavArch Hull Talk", start: currentMonth(10), channelId: NAVARCH }),
+        ]);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        expect(chipFor(/Software Work Session/i)).toHaveClass("subteam--software");
+        expect(chipFor(/Mechanical Build Night/i)).toHaveClass("subteam--mechanical");
+        expect(chipFor(/NavArch Hull Talk/i)).toHaveClass("subteam--navarch");
+    });
+
+    it("gives different subteams different slugs", async () => {
+        // The color only works as a grouping cue if the two chips actually
+        // differ -- asserting each class individually would pass even if both
+        // resolved to the same slug.
+        mockFetchOnce([
+            sampleEvent({ id: "sw", name: "Software Work Session", start: currentMonth(10), channelId: SOFTWARE }),
+            sampleEvent({
+                id: "mech",
+                name: "Mechanical Build Night",
+                start: currentMonth(10),
+                channelId: MECHANICAL,
+            }),
+        ]);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        const software = chipFor(/Software Work Session/i).className;
+        const mechanical = chipFor(/Mechanical Build Night/i).className;
+        expect(software).not.toBe(mechanical);
+    });
+
+    it("gives a non-subteam event the default slug, not a subteam one", async () => {
+        // General member events belong to no subteam; borrowing a hue would
+        // claim they did.
+        mockFetchOnce([
+            sampleEvent({ id: "gen", name: "General Body Meeting", start: currentMonth(10), channelId: MEMBERS }),
+        ]);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        const chip = chipFor(/General Body Meeting/i);
+        expect(chip).toHaveClass("subteam--default");
+        for (const slug of ["software", "mechanical", "navarch"]) {
+            expect(chip.classList.contains(`subteam--${slug}`)).toBe(false);
+        }
+    });
+
+    it("keeps the slug on a cancelled event so its status stays visible", async () => {
+        // Cancelled styling reads through the border and the strike-through, not
+        // through losing the color -- a cancelled Software meeting is still a
+        // Software meeting, and the two classes are independent.
+        mockFetchOnce([
+            sampleEvent({
+                id: "sw",
+                name: "Software Work Session",
+                start: currentMonth(10),
+                status: "canceled",
+                channelId: SOFTWARE,
+            }),
+        ]);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        const chip = chipFor(/Software Work Session/i);
+        expect(chip).toHaveClass("calendar-event--canceled");
+        expect(chip).toHaveClass("subteam--software");
     });
 });

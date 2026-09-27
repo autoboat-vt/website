@@ -53,14 +53,48 @@ import type { CalendarEvent } from "./discord";
  */
 export const OTHER_CHANNEL_ID = "__other__";
 
+/**
+ * Stable key for a subteam's color.
+ *
+ * These are a display concern, so they live here as plain strings rather than
+ * hex values: the palette itself is defined once in `src/app.css` (as
+ * `--subteam-*`, with a light and a dark value per slug), and the chips, day
+ * dots, and filter swatches all read it through a class name built from this
+ * slug. Keeping the colors out of TypeScript means the light/dark pair cannot
+ * drift apart across two files, and the whole palette can be retuned without
+ * touching code.
+ *
+ * WARNING: A new slug needs a matching `--subteam-<slug>` token in BOTH the
+ * `:root` and `.dark` blocks of app.css, plus a `subteam--<slug>` rule. A slug
+ * without a token falls back to the default maroon silently, which looks like
+ * the channel simply has no color rather than like a missing entry.
+ */
+export type SubteamSlug = "software" | "navarch" | "electrical" | "mechanical" | "business" | "default";
+
+/**
+ * Slug used for everything that is not a specific subteam.
+ *
+ * That includes general member and officer events, and the channel-less
+ * "Other" bucket. They all get the base brand maroon, which reads as "the
+ * team" rather than as one subteam's color.
+ */
+export const DEFAULT_SLUG: SubteamSlug = "default";
+
 /** One selectable group in the filter. */
 export interface EventChannelGroup {
     /** Filter key: a Discord channel id, or `OTHER_CHANNEL_ID`. */
     id: string;
     /** Label shown in the picker. */
     label: string;
-    /** How many events fall in this group, for the count badge. */
-    count: number;
+    /**
+     * Color slug for the swatch next to the label.
+     *
+     * Carried on the group rather than looked up at render time so the picker
+     * does not need to know how a group maps back to a channel -- and so the
+     * "Other" group can be explicitly slug-less instead of resolving through a
+     * lookup that would have to special-case it.
+     */
+    slug: SubteamSlug;
 }
 
 /**
@@ -92,14 +126,15 @@ export function isAllSelected(selected: ChannelSelection): boolean {
  * guessed from names.
  *
  * Adding an entry here is what makes a channel filterable; the non-subteam
- * event channels live in `ALWAYS_VISIBLE_CHANNEL_IDS` instead.
+ * event channels live in `ALWAYS_VISIBLE_CHANNEL_IDS` instead. The `slug` is
+ * what selects the subteam's color (see `SubteamSlug`).
  */
-export const SUBTEAM_CHANNELS: { id: string; label: string }[] = [
-    { id: "1550592611859955862", label: "Software" },
-    { id: "1550592897659707402", label: "NavArch" },
-    { id: "1550592668105441300", label: "Electrical" },
-    { id: "1550592740486553650", label: "Mechanical" },
-    { id: "1553773762258800703", label: "Business" },
+export const SUBTEAM_CHANNELS: { id: string; label: string; slug: SubteamSlug }[] = [
+    { id: "1550592611859955862", label: "Software", slug: "software" },
+    { id: "1550592897659707402", label: "NavArch", slug: "navarch" },
+    { id: "1550592668105441300", label: "Electrical", slug: "electrical" },
+    { id: "1550592740486553650", label: "Mechanical", slug: "mechanical" },
+    { id: "1553773762258800703", label: "Business", slug: "business" },
 ];
 
 /**
@@ -123,6 +158,7 @@ export const ALWAYS_VISIBLE_CHANNEL_IDS: ReadonlySet<string> = new Set([
 const OTHER_LABEL = "Other";
 
 const LABELS_BY_ID = new Map(SUBTEAM_CHANNELS.map((c) => [c.id, c.label]));
+const SLUGS_BY_ID = new Map(SUBTEAM_CHANNELS.map((c) => [c.id, c.slug]));
 
 /**
  * The filter key for one event.
@@ -146,48 +182,38 @@ export function isAlwaysVisible(event: Pick<CalendarEvent, "channelId">): boolea
     return event.channelId != null && ALWAYS_VISIBLE_CHANNEL_IDS.has(event.channelId);
 }
 
-/** Sum of the counts in a group list, for an "All events" affordance. */
-export function totalCount(groups: EventChannelGroup[]): number {
-    return groups.reduce((sum, g) => sum + g.count, 0);
-}
-
 /**
  * Build the selectable groups from a set of loaded events.
  *
- * Only groups that actually contain events are returned, so an empty subteam
- * does not clutter the picker with a checkbox that filters nothing. Groups are
- * ordered by `SUBTEAM_CHANNELS`, with the channel-less bucket last.
+ * Only channels that actually appear in the events become groups, so a subteam
+ * with nothing scheduled does not offer a checkbox that hides nothing. Groups
+ * are ordered by `SUBTEAM_CHANNELS`, with the channel-less bucket last.
  *
- * NOTE: groups are derived from the full loaded set (which the Worker's archive
- * makes all of history), not from the visible month, so a group does not
- * disappear from the picker as the user navigates to a month where that subteam
- * happens to have nothing scheduled.
+ * Membership is derived from the FULL loaded set (all of history -- the Worker
+ * archives past events), not from the visible month. A group therefore does not
+ * vanish from the picker while you are looking at a month where that subteam
+ * happens to have nothing on.
  */
 export function eventChannelGroups(events: CalendarEvent[]): EventChannelGroup[] {
-    const counts = new Map<string, number>();
+    const present = new Set<string>();
+    let otherPresent = false;
     for (const event of events) {
         // General member and officer channels are never filterable, so they get
-        // no group and are not counted -- a badge next to a group that cannot
-        // be turned off would misrepresent what the filter does.
+        // no group.
         if (isAlwaysVisible(event)) continue;
         const key = channelKeyFor(event);
-        counts.set(key, (counts.get(key) ?? 0) + 1);
+        // An unlisted channel (a new or renamed event channel) is folded into
+        // the channel-less bucket rather than dropped, so its events stay
+        // reachable.
+        if (key === OTHER_CHANNEL_ID || !LABELS_BY_ID.has(key)) otherPresent = true;
+        else present.add(key);
     }
 
     const groups: EventChannelGroup[] = [];
-    for (const { id, label } of SUBTEAM_CHANNELS) {
-        const count = counts.get(id);
-        if (count) groups.push({ id, label, count });
+    for (const { id, label, slug } of SUBTEAM_CHANNELS) {
+        if (present.has(id)) groups.push({ id, label, slug });
     }
-
-    // Any channel not in the curated list (a new or renamed event channel) is
-    // merged into the channel-less bucket rather than dropped, so its events
-    // stay reachable.
-    let otherCount = counts.get(OTHER_CHANNEL_ID) ?? 0;
-    for (const [key, count] of counts) {
-        if (key !== OTHER_CHANNEL_ID && !LABELS_BY_ID.has(key)) otherCount += count;
-    }
-    if (otherCount > 0) groups.push({ id: OTHER_CHANNEL_ID, label: OTHER_LABEL, count: otherCount });
+    if (otherPresent) groups.push({ id: OTHER_CHANNEL_ID, label: OTHER_LABEL, slug: DEFAULT_SLUG });
 
     return groups;
 }
@@ -202,6 +228,31 @@ export function eventChannelGroups(events: CalendarEvent[]): EventChannelGroup[]
 export function labelForChannel(key: string): string {
     if (key === OTHER_CHANNEL_ID) return OTHER_LABEL;
     return LABELS_BY_ID.get(key) ?? OTHER_LABEL;
+}
+
+/**
+ * Resolve a filter key to its color slug.
+ *
+ * An unrecognised channel resolves to `DEFAULT_SLUG` for the same reason
+ * `labelForChannel` folds it into "Other": that channel is displayed in the
+ * "Other" bucket, so it must also be colored like the other bucket's members
+ * rather than picking up a color of its own.
+ *
+ * Always-visible channels (general member, officer) also land here, which is
+ * deliberate -- see `DEFAULT_SLUG`.
+ */
+export function slugForChannel(key: string): SubteamSlug {
+    return SLUGS_BY_ID.get(key) ?? DEFAULT_SLUG;
+}
+
+/**
+ * The color slug for one event.
+ *
+ * The single entry point the calendar uses to color a chip or a day dot, so
+ * both surfaces can never disagree about which color an event gets.
+ */
+export function subteamSlugFor(event: Pick<CalendarEvent, "channelId">): SubteamSlug {
+    return slugForChannel(channelKeyFor(event));
 }
 
 /**
