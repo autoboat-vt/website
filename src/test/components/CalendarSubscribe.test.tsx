@@ -105,4 +105,58 @@ describe("CalendarSubscribe", () => {
         expect(screen.queryByText("Copied")).not.toBeInTheDocument();
         expect(screen.getByText(EVENTS_ICS_URL)).toBeInTheDocument();
     });
+
+    it("appends the selected channels to every advertised URL", () => {
+        render(<CalendarSubscribe selectedChannels={new Set(["111", "222"])} />);
+        fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
+
+        // The always-visible channels ride along so the feed matches the grid.
+        const url = screen.getByRole("link", { name: /Download .ics/i }).getAttribute("href") ?? "";
+        expect(url).toContain("channels=");
+        expect(url).toContain("111");
+        expect(url).toContain("222");
+        expect(url).toContain("1550594275580837921");
+        expect(screen.getByText(url)).toBeInTheDocument();
+        expect(screen.getByTestId("subscribe-webcal")).toHaveAttribute("href", `webcals://${url.slice(8)}`);
+    });
+
+    it("explains that the subscription is narrowed to subteams", () => {
+        render(<CalendarSubscribe selectedChannels={new Set(["111"])} />);
+        fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
+        expect(screen.getByText(/narrowed to the subteams selected/i)).toBeInTheDocument();
+    });
+
+    it("omits the filtered note when nothing is filtered", () => {
+        render(<CalendarSubscribe selectedChannels={null} />);
+        fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
+        expect(screen.queryByText(/narrowed to the subteams selected/i)).not.toBeInTheDocument();
+        expect(screen.getByText(EVENTS_ICS_URL)).toBeInTheDocument();
+    });
+
+    it("does not send the channel-less sentinel to the Worker", () => {
+        // The Worker matches real channel ids; the "Other" bucket has none, so
+        // sending its key would filter every event away.
+        render(<CalendarSubscribe selectedChannels={new Set(["__other__", "111"])} />);
+        fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
+        const url = screen.getByRole("link", { name: /Download .ics/i }).getAttribute("href") ?? "";
+        expect(url).toContain("111");
+        expect(url).not.toContain("__other__");
+    });
+
+    it("keeps the always-visible channels in a filtered subscription", () => {
+        // Member events must survive a subteam filter, matching the grid.
+        render(<CalendarSubscribe selectedChannels={new Set(["111"])} />);
+        fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
+        const url = screen.getByRole("link", { name: /Download .ics/i }).getAttribute("href") ?? "";
+        expect(url).toContain("1550594275580837921");
+    });
+
+    it("closes when the other header dropdown opens", () => {
+        render(<CalendarSubscribe />);
+        fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
+        expect(screen.getByText(EVENTS_ICS_URL)).toBeInTheDocument();
+
+        fireEvent(document, new CustomEvent("autoboat:calendar-dropdown-open", { detail: "calendar-filter" }));
+        expect(screen.queryByText(EVENTS_ICS_URL)).not.toBeInTheDocument();
+    });
 });

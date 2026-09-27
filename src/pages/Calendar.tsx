@@ -1,5 +1,6 @@
 import { AlertCircle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import CalendarFilter from "../components/CalendarFilter";
 import CalendarSubscribe from "../components/CalendarSubscribe";
 import Card from "../components/Card";
 import EventModal from "../components/EventModal";
@@ -10,6 +11,8 @@ import {
     fetchEvents,
     OFFICERS_URL,
 } from "../lib/discord";
+import type { ChannelSelection } from "../lib/eventChannels";
+import { eventChannelGroups, matchesChannelFilter } from "../lib/eventChannels";
 
 const DAY_HEADINGS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 /** Single-letter labels used on mobile, where the 3-letter forms overflow
@@ -204,6 +207,11 @@ export default function Calendar({ variant = "public" }: CalendarProps) {
     const [events, setEvents] = useState<CalendarEvent[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [now, setNow] = useState(() => new Date());
+    // Selected subteam filter keys. `null` MEANS "EVERY SUBTEAM" -- see
+    // `ChannelSelection` in eventChannels.ts for why "all" is a distinct value
+    // rather than an empty set. Deliberately NOT reset when a poll returns, so
+    // a background refresh cannot silently widen the view back to every event.
+    const [selectedChannels, setSelectedChannels] = useState<ChannelSelection>(null);
     const [selectedOccurrence, setSelectedOccurrence] = useState<ExpandedOccurrence | null>(null);
     // Mobile month-grid substitute: the tapped day whose events are listed
     // in the agenda below the grid. Defaults to today so the agenda is
@@ -283,16 +291,28 @@ export default function Calendar({ variant = "public" }: CalendarProps) {
         };
     }, [poll]);
 
-    const occurrences = useMemo(() => {
+    // Selectable channel groups, derived from the FULL loaded set rather than
+    // the visible month, so a group does not vanish from the picker while the
+    // user is looking at a month where that subteam has nothing scheduled.
+    const channelGroups = useMemo(() => (events === null ? [] : eventChannelGroups(events)), [events]);
+
+    // Apply the channel filter BEFORE recurrence expansion: expansion is the
+    // expensive step, and a filtered-out recurring event should not generate
+    // occurrences at all.
+    const visibleEvents = useMemo(() => {
         if (events === null) return [];
+        return events.filter((event) => matchesChannelFilter(event, selectedChannels));
+    }, [events, selectedChannels]);
+
+    const occurrences = useMemo(() => {
         // Window is padded +/- one week so recurring boundaries at the start
         // or end of the grid still produce the right chips.
         const windowStart = addDays(new Date(monthAnchor.getFullYear(), monthAnchor.getMonth(), 1), -7);
         const windowEnd = addDays(new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0), 7);
         // Pass the tracked clock: expandRecurrences clips cancelled series at
         // `now`, so it must follow the same clock the "today" highlight uses.
-        return expandRecurrences(events, windowStart, windowEnd, now);
-    }, [events, monthAnchor, now]);
+        return expandRecurrences(visibleEvents, windowStart, windowEnd, now);
+    }, [visibleEvents, monthAnchor, now]);
 
     const { cells, monthLabel } = useMemo(
         () => buildMonthGrid(monthAnchor, occurrences, now),
@@ -300,6 +320,15 @@ export default function Calendar({ variant = "public" }: CalendarProps) {
     );
 
     const isLoading = events === null && error === null;
+
+    /**
+     * Whether the current filter leaves ANY event to show, in any month.
+     *
+     * Used only to word the empty state. A filtered-out calendar that says "no
+     * events are scheduled yet" would misreport the team's calendar, so the two
+     * cases get different copy.
+     */
+    const hasAnyVisibleEvent = visibleEvents.length > 0;
 
     /**
      * Follow month navigation with the agenda selection (1st of the newly
@@ -386,7 +415,12 @@ export default function Calendar({ variant = "public" }: CalendarProps) {
                             {/* Renders the toggle inline here; its panel is
                                 absolutely positioned so it can't stretch this
                                 nowrap group (see .calendar-subscribe__panel). */}
-                            <CalendarSubscribe variant={variant} />
+                            <CalendarFilter
+                                groups={channelGroups}
+                                selected={selectedChannels}
+                                onChange={setSelectedChannels}
+                            />
+                            <CalendarSubscribe variant={variant} selectedChannels={selectedChannels} />
                         </div>
                     </div>
 
@@ -498,9 +532,16 @@ export default function Calendar({ variant = "public" }: CalendarProps) {
                         </div>
                     )}
 
-                    {events !== null && events.length === 0 && (
+                    {events !== null && occurrences.length === 0 && (
                         <p className="mt-6 text-center text-hovercolor">
-                            No events are scheduled yet. Check the team Discord for the latest updates.
+                            {/* Three distinct causes, worded differently. The raw
+                                event count cannot tell them apart: events in
+                                other months are loaded but not rendered either. */}
+                            {events.length === 0
+                                ? "No events are scheduled yet. Check the team Discord for the latest updates."
+                                : hasAnyVisibleEvent
+                                  ? "No events this month. Use the arrows above to look at another month."
+                                  : "No events match the selected subteams. Choose another in Filter, or pick All subteams."}
                         </p>
                     )}
                 </Card>

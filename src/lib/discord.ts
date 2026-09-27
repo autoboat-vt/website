@@ -65,6 +65,22 @@ export interface CalendarEvent {
     /** RFC 5545 RRULE body (without the leading "RRULE:" prefix), or null. */
     recurrenceRule: string | null;
     /**
+     * Discord voice/stage channel hosting the event, or null for a channel-less
+     * event (`EXTERNAL` events are not hosted in a channel).
+     *
+     * This is the only durable grouping signal on an event, and the calendar's
+     * channel filter keys off it (see `eventChannels.ts`). Unlike `location` it
+     * needs no description parsing -- Discord sets it directly.
+     *
+     * Optional on purpose: the field is read through `channelKeyFor`, which
+     * falls back to the "no channel" bucket, so an older Worker that omits it
+     * degrades to the channel-less group instead of failing validation and
+     * dropping the event entirely. Featured here as `string | null` rather than
+     * required so `isCalendarEvent` does not have to reject payloads without
+     * it.
+     */
+    channelId?: string | null;
+    /**
      * ISO `YYYY-MM-DD` dates whose occurrence is cancelled, parsed by the
      * Worker from the description's `Cancelled:` convention. Discord's API
      * cannot express per-occurrence exceptions, so this is the team's
@@ -291,16 +307,40 @@ export function discordEventUrl(event: CalendarEvent): string {
 export const EVENTS_ICS_URL = `${EVENTS_URL}/calendar.ics`;
 
 /**
- * The feed URL rewritten to the `webcals://` scheme. Clicking a `webcals://`
- * link hands the URL to the OS's registered calendar app (Apple Calendar,
- * Outlook on Windows/macOS) instead of the browser downloading the file.
+ * Rewrite a feed URL to the `webcals://` scheme. Clicking a `webcals://` link
+ * hands the URL to the OS's registered calendar app (Apple Calendar, Outlook
+ * on Windows/macOS) instead of the browser downloading the file.
  *
  * Uses the secure `webcals://` form, not `webcal://`: the plain form is
- * increasingly rejected by OS handlers and apps. Derived from
- * `EVENTS_ICS_URL` so both stay in sync automatically.
+ * increasingly rejected by OS handlers and apps. Idempotent -- a URL that is
+ * already `webcals://` is returned unchanged.
+ */
+export function toWebcal(url: string): string {
+    return url.replace(/^https?:\/\//, "webcals://");
+}
+
+/**
+ * The unfiltered public feed URL in `webcals://` form. See `toWebcal`.
  */
 export function webcalUrl(): string {
-    return EVENTS_ICS_URL.replace(/^https?:\/\//, "webcals://");
+    return toWebcal(EVENTS_ICS_URL);
+}
+
+/**
+ * Append a channel filter to a feed URL: `?channels=<id>,<id>`.
+ *
+ * The Worker's event routes accept this query parameter and keep only events
+ * whose Discord channel id is in the list, so a user can subscribe to just
+ * their subteam's events without a separate feed per subteam.
+ *
+ * An EMPTY list returns the URL unchanged rather than sending `?channels=`, so
+ * "no selection" and "everything" stay the same URL (and the same cache key).
+ * A blank value would also be read as no filter by the Worker, but omitting it
+ * keeps the generated URL clean and identical to the unfiltered feed.
+ */
+export function withChannelFilter(url: string, channelIds: readonly string[]): string {
+    if (channelIds.length === 0) return url;
+    return `${url}?channels=${channelIds.map((id) => encodeURIComponent(id)).join(",")}`;
 }
 
 /**
@@ -321,9 +361,9 @@ export const OFFICERS_URL = `${EVENTS_URL}/officers`;
  */
 export const OFFICERS_ICS_URL = `${OFFICERS_URL}/calendar.ics`;
 
-/** The officer feed URL in `webcals://` form. See `webcalUrl`. */
+/** The officer feed URL in `webcals://` form. See `toWebcal`. */
 export function officersWebcalUrl(): string {
-    return OFFICERS_ICS_URL.replace(/^https?:\/\//, "webcals://");
+    return toWebcal(OFFICERS_ICS_URL);
 }
 
 /**

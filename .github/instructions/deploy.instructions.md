@@ -5,19 +5,35 @@ applyTo: "scripts/**, .github/**"
 
 # Deploying
 
-Deployment is manual via `./scripts/deploy.sh` from a local checkout with VT GitLab credentials cached. There is **no CI deploy** — GitHub Actions (`.github/workflows/build.yml`) does build-only validation on PRs.
+Deployment is manual via `./scripts/deploy.sh` from a local checkout with VT GitLab credentials cached and Cloudflare auth configured. There is **no CI deploy** — GitHub Actions (`.github/workflows/build.yml`) does build-only validation on PRs.
+
+`deploy.sh` deploys **two artifacts to two hosts in one run**: the static site to VT S4/S3, and the Cloudflare Worker in `worker/` to Cloudflare. See "Scripts" below for the step order and why the Worker goes first.
 
 ```bash
-./scripts/deploy.sh              # build + deploy
-./scripts/deploy.sh --skip-build # deploy an existing dist/
+./scripts/deploy.sh               # build + deploy site and Worker
+./scripts/deploy.sh --skip-build  # deploy an existing dist/
+./scripts/deploy.sh --skip-worker # site only; leave the Worker untouched
 ```
+
+`deploy.sh` ships **two artifacts to two hosts**: the site to VT S4/S3, and the Cloudflare Worker in `worker/` to Cloudflare. One command leaves them consistent.
 
 How it works:
 1. `bun run build` -> `dist/` (Vite build + `spa-fallback.mjs` copies `index.html` to each route path)
-2. `git fetch aoe_sites main` -> `git worktree add --detach` (isolated from source tree)
-3. `git rm -rf .` in the worktree, copy `dist/` contents via `tar`
-4. Commit + fast-forward push to `aoe_sites:main` (NO force-push — VT GitLab `main` is protected)
-5. S4 service syncs `aoe_sites:main` -> S3 (a few minutes)
+2. **`wrangler deploy` in `worker/`** (runner is `bunx`, falling back to `npx`) -> Cloudflare
+3. `git fetch aoe_sites main` -> `git worktree add --detach` (isolated from source tree)
+4. `git rm -rf .` in the worktree, copy `dist/` contents via `tar`
+5. Commit + fast-forward push to `aoe_sites:main` (NO force-push — VT GitLab `main` is protected)
+6. S4 service syncs `aoe_sites:main` -> S3 (a few minutes)
+
+WARNING: **The Worker deploy goes FIRST, before either push**, and this ordering is the reason `deploy.sh` is not "site deploy plus a trailing extra step":
+- **Fail fast.** Cloudflare auth (`wrangler login`, or `CLOUDFLARE_API_TOKEN` in CI) is a *different credential* from the cached VT GitLab creds, and it is the likeliest thing to have expired. If it fails, nothing has been pushed and both remotes still describe the previous working state.
+- **Backend before frontend.** A newer Worker with an older site degrades gracefully (the site ignores what it does not use yet); the reverse can leave a deployed site expecting a field the live Worker does not send.
+
+Other Worker notes:
+- It needs no secrets from this script — `DISCORD_BOT_TOKEN` lives in Cloudflare and survives redeploys. Deleting and recreating the Worker DOES drop it; see `worker/README.md`.
+- It is a **real production deploy**. Do not run the script just to update docs; pass `--skip-worker`.
+- `worker/wrangler.jsonc` must exist, or the script errors before pushing anything.
+- `preview_id` in `worker/wrangler.jsonc` is a placeholder (`REPLACE_ME_KV_PREVIEW_ID`); that is fine for `wrangler deploy` and only matters for `wrangler dev --remote`.
 
 **Never run `git rm -rf .` in the source working tree** — it can partially clear `node_modules` and `dist/`. Always use the worktree. macOS `cp` has no `-A` flag — use `tar -C src -cf - . | tar -xf -` for portable copy.
 
@@ -27,7 +43,8 @@ S3 returns 404 for client-side routes (`/sponsors`, `/ourteam`, etc.) because no
 
 ## Scripts
 
-- **`scripts/deploy.sh`**: manual deploy to VT GitLab (`aoe_sites:main`) -> S4 -> S3. Uses a temp worktree (NOT the source tree) to avoid sweeping `node_modules`/`dist/` into the deploy commit. Steps: commit uncommitted source changes -> `bun run build` -> push source to GitHub -> fetch `aoe_sites/main` -> create worktree -> `git rm -rf .` -> copy `dist/` via `tar` (portable, macOS `cp` has no `-A`) -> commit `Deploy: built from <sha>` -> fast-forward push (NO force — `main` is protected). Cleanup trap removes the worktree on exit. Flags: `--skip-build` deploys an existing `dist/`.
+- **`scripts/deploy.sh`**: manual deploy of BOTH artifacts — the site to VT GitLab (`aoe_sites:main`) -> S4 -> S3, and the Cloudflare Worker to Cloudflare. Uses a temp worktree (NOT the source tree) to avoid sweeping `node_modules`/`dist/` into the deploy commit. Steps: commit uncommitted source changes -> `bun run build` -> **`wrangler deploy` in `worker/`** -> push source to GitHub -> fetch `aoe_sites/main` -> create worktree -> `git rm -rf .` -> copy `dist/` via `tar` (portable, macOS `cp` has no `-A`) -> commit `Deploy: built from <sha>` -> fast-forward push (NO force — `main` is protected). Cleanup trap removes the worktree on exit. Flags: `--skip-build` deploys an existing `dist/`; `--skip-worker` leaves the Worker untouched (use it for site-only or docs-only runs). Flags are parsed in a loop, so order does not matter; an unrecognised flag exits 2.
+  - The Worker step picks `bunx` when available and falls back to `npx`, runs in a subshell (`cd worker && ...`) so the worktree steps still run from the repo root, and installs `worker/node_modules` on demand so `bunx` cannot quietly fetch its own unpinned wrangler.
   - Env overrides: `AOE_REMOTE` (default `aoe_sites`), `AOE_BRANCH` (default `main`).
 - **`scripts/spa-fallback.mjs`**: post-build step. Copies `dist/index.html` to each route path (`dist/ourteam/index.html`, etc.) and generates `dist/404.html`. The `ROUTES` array `["/ourteam", "/fleet", "/sponsors", "/other-pages", "/calendar", "/gallery", "/live"]` MUST match `src/App.tsx`. S3 returns 404 for client-side routes otherwise.
 - **`scripts/bump-cicd.sh`**: syncs `external/cicd/` (vendored tracked files, NOT a submodule) with upstream's latest `main` from `code.vt.edu/s4-hosting-sites/cicd`. Clones upstream into a temp dir, copies files over `external/cicd/`, stages the diff, and commits. Uses cached VT GitLab creds (anonymous HTTPS fetch of `code.vt.edu` returns 403 — VT InCommon Federation auth required).

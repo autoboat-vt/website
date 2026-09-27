@@ -42,6 +42,33 @@ nothing on the website filters them. Set `RETENTION_DAYS` to opt into pruning.
 | `GET /officers/calendar.ics` | All events as an iCalendar feed. |
 | `GET /audiences` | Diagnostics: the configured officer channel, plus every category and channel the Worker sees with its resolved audience. |
 
+### Filtering by subteam (`?channels=`)
+
+All four event routes accept an optional `?channels=<id>,<id>` query parameter
+that keeps only events scheduled in those Discord channels:
+
+```bash
+curl 'https://<worker-url>/events?channels=1550592611859955862'
+curl 'https://<worker-url>/calendar.ics?channels=1550592611859955862,1550592740486553650'
+```
+
+The website's **Filter** control generates these URLs, including for the
+subscription feed, so a user can subscribe to just their subteam.
+
+- An **absent, blank, or unparseable** value means "everything" -- never
+  "nothing". A malformed query cannot blank a subscription.
+- An event with **no channel** (an `EXTERNAL` event) never matches a non-empty
+  filter; there is no channel to compare.
+- The **audience filter still runs first**, so `?channels=<officer-channel>` on
+  the public route returns nothing -- the parameter cannot be used to reveal
+  officer events.
+- Filtering is applied after the cache read, so it costs **no extra KV writes**.
+  Do not move it into the cache path.
+
+On the website only **subteam** channels are filterable. General member events
+are always shown, and officer events are always shown on the page that reaches
+them. See `src/lib/eventChannels.ts`.
+
 ## Officer-only events
 
 The team keeps an event internal by hosting it in a voice channel only the
@@ -186,12 +213,24 @@ For the website to hit the local Worker, start it with
 ## Deploy
 
 ```bash
-npx wrangler deploy       # from worker/
+npx wrangler deploy       # from worker/  (or: bunx wrangler deploy)
+```
+
+Or deploy the Worker **and** the website in one shot from the repo root — the
+root `scripts/deploy.sh` runs this same `wrangler deploy` step (picking `bunx`
+when available, else `npx`):
+
+```bash
+./scripts/deploy.sh               # site + Worker
+./scripts/deploy.sh --skip-worker # site only
 ```
 
 The output line ends with the production URL, e.g.
 `https://autoboat-discord-events.<your-account>.workers.dev`. Paste that into
 [src/lib/discord.ts](../src/lib/discord.ts) as the `EVENTS_URL` fallback.
+
+Redeploying does not disturb `DISCORD_BOT_TOKEN` — Cloudflare secrets survive
+`wrangler deploy`. They are lost only if the Worker is deleted and recreated.
 
 ## Subscribing to the calendar
 

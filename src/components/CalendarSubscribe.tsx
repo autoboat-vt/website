@@ -1,7 +1,10 @@
 import { CalendarPlus, Check, ChevronDown, Copy, Link as LinkIcon } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { FaCalendar } from "react-icons/fa6";
-import { EVENTS_ICS_URL, OFFICERS_ICS_URL, officersWebcalUrl, webcalUrl } from "../lib/discord";
+import { EVENTS_ICS_URL, OFFICERS_ICS_URL, toWebcal, withChannelFilter } from "../lib/discord";
+import type { ChannelSelection } from "../lib/eventChannels";
+import { workerChannelIds } from "../lib/eventChannels";
+import { announceDropdownOpen, useCloseOnOtherDropdownOpen } from "./calendarDropdown";
 
 /**
  * "Subscribe" affordance for the calendar page.
@@ -42,15 +45,35 @@ export interface CalendarSubscribeProps {
      * cannot drift.
      */
     variant?: "public" | "officer";
+    /**
+     * The calendar's current channel selection, so a subscription can be
+     * narrowed to the same groups the month grid is showing. EMPTY MEANS "ALL
+     * EVENTS" and produces the unfiltered feed URL unchanged.
+     *
+     * Optional because the panel is rendered on its own in tests; omitting it
+     * behaves exactly like an empty selection.
+     */
+    selectedChannels?: ChannelSelection;
 }
 
-export default function CalendarSubscribe({ variant = "public" }: CalendarSubscribeProps) {
+export default function CalendarSubscribe({ variant = "public", selectedChannels }: CalendarSubscribeProps) {
     const isOfficer = variant === "officer";
-    const icsUrl = isOfficer ? OFFICERS_ICS_URL : EVENTS_ICS_URL;
+    const baseIcsUrl = isOfficer ? OFFICERS_ICS_URL : EVENTS_ICS_URL;
+    // Only real Discord channel ids are sent: the "Other" bucket holding
+    // channel-less events has no id the Worker could match, so it contributes
+    // nothing to the query (see `workerChannelIds`).
+    const channelIds = workerChannelIds(selectedChannels ?? null);
+    // The URLs actually advertised. Both are derived from the same filtered
+    // feed so the webcal button, the copy row, and the download link can never
+    // point at different event sets.
+    const icsUrl = withChannelFilter(baseIcsUrl, channelIds);
     const [open, setOpen] = useState(false);
     const [copied, setCopied] = useState(false);
     const panelId = useId();
     const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const close = useCallback(() => setOpen(false), []);
+    useCloseOnOtherDropdownOpen("calendar-subscribe", close);
 
     useEffect(() => {
         return () => {
@@ -101,7 +124,7 @@ export default function CalendarSubscribe({ variant = "public" }: CalendarSubscr
     const providers: Provider[] = [
         {
             key: "webcal",
-            href: isOfficer ? officersWebcalUrl() : webcalUrl(),
+            href: toWebcal(icsUrl),
             label: "Open in your calendar app",
             hint: "Outlook, Thunderbird, Apple Calendar, etc.",
             icon: FaCalendar,
@@ -116,7 +139,12 @@ export default function CalendarSubscribe({ variant = "public" }: CalendarSubscr
                 className="btn btn--sm calendar-subscribe__toggle"
                 aria-expanded={open}
                 aria-controls={panelId}
-                onClick={() => setOpen((v) => !v)}
+                onClick={() =>
+                    setOpen((wasOpen) => {
+                        if (!wasOpen) announceDropdownOpen("calendar-subscribe");
+                        return !wasOpen;
+                    })
+                }
             >
                 <CalendarPlus size={16} aria-hidden="true" />
                 Subscribe
@@ -134,6 +162,12 @@ export default function CalendarSubscribe({ variant = "public" }: CalendarSubscr
                                 ? "Includes officer-only events, which the public calendar leaves out. Anyone with this link can read it, so keep it inside the team."
                                 : "Add the AutoBoat calendar to your own calendar app. It updates automatically as events change in Discord."}
                         </p>
+                        {channelIds.length > 0 && (
+                            <p className="calendar-subscribe__filtered" role="status">
+                                This subscription is narrowed to the subteams selected in Filter. General member events
+                                are always included.
+                            </p>
+                        )}
                     </div>
 
                     <div className="calendar-subscribe__providers">

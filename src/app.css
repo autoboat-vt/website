@@ -690,12 +690,18 @@
         flex: 1;
     }
 
-    /* Today + Subscribe. The month nav group claims a full row of its own, so
-       this group always wraps onto the row below it and the header's
-       `justify-content: center` centers it at every width. */
+    /* Today + Filter + Subscribe. The month nav group claims a full row of its
+       own, so this group always wraps onto the row below it and the header's
+       `justify-content: center` centers it at every width.
+       `flex-wrap` lets the three buttons stack into two centered rows on a
+       narrow phone rather than overflowing: the buttons are nowrap, so without
+       it the group's intrinsic width would exceed the header and push past the
+       viewport (the same failure mode the nav-links row has). */
     .calendar-header__controls {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
+        justify-content: center;
         gap: 0.5rem;
     }
 
@@ -985,6 +991,197 @@
     /* Scoped past `.card p` (0,1,1), same reason as the title above. */
     .calendar-subscribe__panel .calendar-subscribe__hint {
         margin: 0;
+        font-size: 0.78rem;
+        line-height: 1.4;
+        color: var(--color-hovercolor);
+    }
+
+    /* Filters the subscription panel only, so it is not written as a `.card p`
+       sibling. It reuses the top margin of the intro it follows. */
+    .calendar-subscribe__filtered {
+        margin: 0.5rem 0 0;
+        font-size: 0.78rem;
+        line-height: 1.4;
+        font-weight: 600;
+        color: var(--vt-impactOrange);
+    }
+    .dark .calendar-subscribe__filtered {
+        color: var(--vt-burntOrange);
+    }
+
+    /* --- Calendar channel filter ---
+       A second dropdown in the header controls, matching the Subscribe panel's
+       geometry exactly (same containing block, same anchor, same width cap) so
+       the two do not look like different components. Only one may be open at a
+       time; `calendarDropdown.ts` enforces that with a document event, because
+       both panels occupy the same rectangle. */
+    .calendar-filter {
+        display: inline-flex;
+    }
+
+    .calendar-filter__toggle {
+        white-space: nowrap;
+    }
+
+    /* Active-filter badge. Reads as a count, not as a decorative dot. */
+    .calendar-filter__count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.1rem;
+        height: 1.1rem;
+        padding: 0 0.25rem;
+        border-radius: 999px;
+        background-color: var(--vt-maroon);
+        color: #fff;
+        font-size: 0.68rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+    .dark .calendar-filter__count {
+        background-color: var(--vt-burntOrange);
+        color: #1f1e1d;
+    }
+
+    .calendar-filter__chevron {
+        transition: transform 200ms ease;
+    }
+    .calendar-filter--open .calendar-filter__chevron {
+        transform: rotate(180deg);
+    }
+
+    .calendar-filter__panel {
+        position: absolute;
+        top: calc(100% + 0.5rem);
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        z-index: 20;
+        width: min(22rem, 100%);
+        max-height: min(70vh, 30rem);
+        overflow-y: auto;
+        padding: 1.125rem 1.25rem 1rem;
+        border: 1px solid var(--color-cardborder);
+        border-radius: 0.875rem;
+        background-color: var(--color-bgcolor);
+        box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.35);
+    }
+    .dark .calendar-filter__panel {
+        background-color: #262523;
+        box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.8);
+    }
+
+    .calendar-filter__header {
+        margin-bottom: 0.875rem;
+    }
+
+    /* Doubled-up selector: the panel renders inside `Card`, whose `.card h3` /
+       `.card p` rules (0,1,1) would otherwise beat a single-class rule. */
+    .calendar-filter__panel .calendar-filter__title {
+        margin: 0 0 0.25rem;
+        font-family: var(--font-heading);
+        font-size: 1.05rem;
+        font-weight: 700;
+        text-align: left;
+        color: var(--color-fontcolor);
+    }
+
+    .calendar-filter__panel .calendar-filter__intro {
+        margin: 0;
+        font-size: 0.875rem;
+        line-height: 1.45;
+        color: var(--color-hovercolor);
+    }
+
+    .calendar-filter__all {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        width: 100%;
+        padding: 0.55rem 0.75rem;
+        border: 1px solid var(--color-cardborder);
+        border-radius: 0.625rem;
+        background-color: var(--color-card);
+        color: var(--color-fontcolor);
+        font-size: 0.875rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+            border-color 200ms,
+            background-color 200ms;
+    }
+    .calendar-filter__all:hover {
+        border-color: var(--color-fontcolor);
+    }
+    .calendar-filter__all[aria-pressed="true"] {
+        border-color: rgb(from var(--vt-maroon) r g b / 0.5);
+        background-color: rgb(from var(--vt-maroon) r g b / 0.08);
+    }
+    .dark .calendar-filter__all[aria-pressed="true"] {
+        border-color: rgb(from var(--vt-burntOrange) r g b / 0.55);
+        background-color: rgb(from var(--vt-burntOrange) r g b / 0.12);
+    }
+
+    .calendar-filter__list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+        margin: 0.75rem 0 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    .calendar-filter__option {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding: 0.5rem 0.625rem;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        font-size: 0.875rem;
+        transition: background-color 150ms;
+    }
+    .calendar-filter__option:hover {
+        background-color: rgb(0 0 0 / 0.04);
+    }
+    .dark .calendar-filter__option:hover {
+        background-color: rgb(255 255 255 / 0.06);
+    }
+
+    .calendar-filter__option input[type="checkbox"] {
+        flex-shrink: 0;
+        width: 1rem;
+        height: 1rem;
+        accent-color: var(--vt-maroon);
+        cursor: pointer;
+    }
+    .dark .calendar-filter__option input[type="checkbox"] {
+        accent-color: var(--vt-burntOrange);
+    }
+
+    .calendar-filter__label {
+        flex: 1;
+        min-width: 0;
+        color: var(--color-fontcolor);
+    }
+
+    .calendar-filter__badge {
+        flex-shrink: 0;
+        padding: 0.1rem 0.4rem;
+        border-radius: 999px;
+        background-color: rgb(0 0 0 / 0.06);
+        color: var(--color-hovercolor);
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+    .dark .calendar-filter__badge {
+        background-color: rgb(255 255 255 / 0.09);
+    }
+
+    /* Scoped past `.card p` (0,1,1), same reason as the title above. */
+    .calendar-filter__panel .calendar-filter__hint {
+        margin: 0.875rem 0 0;
         font-size: 0.78rem;
         line-height: 1.4;
         color: var(--color-hovercolor);
@@ -1483,6 +1680,11 @@
            padding on a narrow phone. Its width is clamped with
            `calc(100vw - 2rem)` so it never overflows the viewport. */
         .calendar-subscribe__panel {
+            padding: 0.875rem 0.875rem 0.75rem;
+        }
+
+        /* Same trim for the filter panel, which is anchored identically. */
+        .calendar-filter__panel {
             padding: 0.875rem 0.875rem 0.75rem;
         }
 

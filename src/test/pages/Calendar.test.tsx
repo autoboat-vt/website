@@ -100,6 +100,17 @@ function currentMonth(day: number, isoTime = "T19:00:00.000Z"): string {
     return d.toISOString().slice(0, 10) + isoTime;
 }
 
+/**
+ * A date a full year ahead of the displayed month, so it can never land in the
+ * visible grid (which spans at most a six-week window) or in the recurrence
+ * expansion's +/- one-week padding.
+ */
+function farFuture(day: number, isoTime = "T19:00:00.000Z"): string {
+    const now = new Date();
+    const d = new Date(now.getFullYear() + 1, now.getMonth(), day);
+    return d.toISOString().slice(0, 10) + isoTime;
+}
+
 // --- Tests -----------------------------------------------------------------
 
 describe("Calendar page", () => {
@@ -810,5 +821,291 @@ describe("Calendar page (mobile branch)", () => {
             fireEvent.click(screen.getByRole("button", { name: /Next month/i }));
         });
         expect(container.querySelector(".calendar-agenda__heading")?.textContent).toBe(heading);
+    });
+});
+
+describe("Calendar channel filter", () => {
+    // Channel ids from the real guild (see src/lib/eventChannels.ts).
+    const SOFTWARE = "1550592611859955862";
+    const MECHANICAL = "1550592740486553650";
+    /** `member-events`: always visible, never a group. */
+    const MEMBERS = "1550594275580837921";
+    /** `officer-events`: always visible, never a group. */
+    const OFFICERS = "1550594891766308997";
+
+    /** Two events in the current month, one per subteam channel. */
+    function twoChannelEvents() {
+        return [
+            sampleEvent({ id: "sw", name: "Software Work Session", start: currentMonth(10), channelId: SOFTWARE }),
+            sampleEvent({
+                id: "mech",
+                name: "Mechanical Build Night",
+                start: currentMonth(10),
+                channelId: MECHANICAL,
+            }),
+        ];
+    }
+
+    function openFilter() {
+        fireEvent.click(screen.getByRole("button", { name: /^Filter/ }));
+    }
+
+    it("shows events from every channel by default", async () => {
+        mockFetchOnce(twoChannelEvents());
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        expect(screen.getByRole("button", { name: /Software Work Session/i })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /Mechanical Build Night/i })).toBeInTheDocument();
+    });
+
+    it("hides events from an unchecked channel", async () => {
+        mockFetchOnce(twoChannelEvents());
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        openFilter();
+        const softwareBox = within(screen.getByText("Software").closest("label") as HTMLElement).getByRole("checkbox");
+        await act(async () => {
+            fireEvent.click(softwareBox);
+        });
+
+        expect(screen.queryByRole("button", { name: /Software Work Session/i })).not.toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /Mechanical Build Night/i })).toBeInTheDocument();
+    });
+
+    it("restores every event when All subteams is chosen", async () => {
+        mockFetchOnce(twoChannelEvents());
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        openFilter();
+        fireEvent.click(within(screen.getByText("Software").closest("label") as HTMLElement).getByRole("checkbox"));
+        await act(async () => {
+            fireEvent.click(screen.getByRole("button", { name: /All subteams/i }));
+        });
+
+        expect(screen.getByRole("button", { name: /Software Work Session/i })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /Mechanical Build Night/i })).toBeInTheDocument();
+    });
+
+    it("keeps general member events visible when every subteam is unchecked", async () => {
+        // The scope rule: the picker narrows subteams only, so the main team
+        // meetings cannot be filtered away.
+        mockFetchOnce([
+            sampleEvent({ id: "sw", name: "Software Work Session", start: currentMonth(10), channelId: SOFTWARE }),
+            sampleEvent({ id: "gen", name: "General Body Meeting", start: currentMonth(10), channelId: MEMBERS }),
+        ]);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        openFilter();
+        await act(async () => {
+            fireEvent.click(within(screen.getByText("Software").closest("label") as HTMLElement).getByRole("checkbox"));
+        });
+
+        expect(screen.getByRole("button", { name: /General Body Meeting/i })).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: /Software Work Session/i })).not.toBeInTheDocument();
+    });
+
+    it("keeps officer events visible when another subteam is selected", async () => {
+        // On /calendar/officers the officer's own event must not be filtered
+        // out by narrowing to a subteam.
+        mockFetchOnce([
+            sampleEvent({ id: "sw", name: "Software Work Session", start: currentMonth(10), channelId: SOFTWARE }),
+            sampleEvent({ id: "off", name: "Officer Budget Review", start: currentMonth(10), channelId: OFFICERS }),
+        ]);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        openFilter();
+        await act(async () => {
+            fireEvent.click(within(screen.getByText("Software").closest("label") as HTMLElement).getByRole("checkbox"));
+        });
+
+        expect(screen.getByRole("button", { name: /Officer Budget Review/i })).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: /Software Work Session/i })).not.toBeInTheDocument();
+    });
+
+    it("offers no group for general member or officer channels", async () => {
+        mockFetchOnce([
+            sampleEvent({ id: "gen", name: "General Body Meeting", start: currentMonth(10), channelId: MEMBERS }),
+            sampleEvent({ id: "off", name: "Officer Budget Review", start: currentMonth(10), channelId: OFFICERS }),
+            sampleEvent({ id: "sw", name: "Software Work Session", start: currentMonth(10), channelId: SOFTWARE }),
+        ]);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        openFilter();
+        expect(screen.getByText("Software")).toBeInTheDocument();
+        expect(screen.queryByText("General Members")).not.toBeInTheDocument();
+        expect(screen.queryByText("Officers")).not.toBeInTheDocument();
+    });
+
+    it("explains a filter that matches nothing instead of claiming the calendar is empty", async () => {
+        // Unchecking every subteam leaves only the always-visible events, of
+        // which there are none here -- so the calendar is genuinely blank, but
+        // for a reason the user chose. It must say so rather than report that
+        // the team has nothing scheduled.
+        mockFetchOnce([
+            sampleEvent({ id: "sw", name: "Software Work Session", start: currentMonth(10), channelId: SOFTWARE }),
+            sampleEvent({
+                id: "mech",
+                name: "Mechanical Build Night",
+                start: currentMonth(12),
+                channelId: MECHANICAL,
+            }),
+        ]);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        openFilter();
+        await act(async () => {
+            fireEvent.click(within(screen.getByText("Software").closest("label") as HTMLElement).getByRole("checkbox"));
+        });
+        await act(async () => {
+            fireEvent.click(
+                within(screen.getByText("Mechanical").closest("label") as HTMLElement).getByRole("checkbox"),
+            );
+        });
+
+        expect(screen.getByText(/No events match the selected subteams/i)).toBeInTheDocument();
+        expect(screen.queryByText(/No events are scheduled yet/i)).not.toBeInTheDocument();
+    });
+
+    it("distinguishes 'nothing this month' from 'nothing scheduled'", async () => {
+        // The single remaining event is a year out, so the grid is empty while
+        // the calendar is not. Telling the user to check next month is the
+        // useful message.
+        mockFetchOnce([
+            sampleEvent({ id: "sw", name: "Software Work Session", start: currentMonth(10), channelId: SOFTWARE }),
+            sampleEvent({
+                id: "mech",
+                name: "Mechanical Build Night",
+                start: farFuture(10),
+                channelId: MECHANICAL,
+            }),
+        ]);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        openFilter();
+        await act(async () => {
+            fireEvent.click(within(screen.getByText("Software").closest("label") as HTMLElement).getByRole("checkbox"));
+        });
+
+        expect(screen.getByText(/No events this month/i)).toBeInTheDocument();
+        expect(screen.queryByText(/No events are scheduled yet/i)).not.toBeInTheDocument();
+    });
+
+    it("still says the calendar is empty when there genuinely are no events", async () => {
+        mockFetchOnce([]);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        expect(screen.getByText(/No events are scheduled yet/i)).toBeInTheDocument();
+    });
+
+    it("groups channel-less events under Other and hides them from a channel selection", async () => {
+        mockFetchOnce([
+            sampleEvent({ id: "sw", name: "Software Work Session", start: currentMonth(10), channelId: SOFTWARE }),
+            sampleEvent({ id: "ext", name: "Virtual Info Session", start: currentMonth(10), channelId: null }),
+        ]);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        openFilter();
+        expect(screen.getByText("Other")).toBeInTheDocument();
+
+        // Uncheck Other so only Software remains selected. The channel-less
+        // event must disappear rather than leaking into every filtered view.
+        await act(async () => {
+            fireEvent.click(within(screen.getByText("Other").closest("label") as HTMLElement).getByRole("checkbox"));
+        });
+        expect(screen.queryByRole("button", { name: /Virtual Info Session/i })).not.toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /Software Work Session/i })).toBeInTheDocument();
+    });
+
+    it("shows channel-less events when Other is selected", async () => {
+        mockFetchOnce([
+            sampleEvent({ id: "sw", name: "Software Work Session", start: currentMonth(10), channelId: SOFTWARE }),
+            sampleEvent({ id: "ext", name: "Virtual Info Session", start: currentMonth(10), channelId: null }),
+        ]);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        openFilter();
+        await act(async () => {
+            fireEvent.click(within(screen.getByText("Software").closest("label") as HTMLElement).getByRole("checkbox"));
+        });
+
+        expect(screen.getByRole("button", { name: /Virtual Info Session/i })).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: /Software Work Session/i })).not.toBeInTheDocument();
+    });
+
+    it("carries the selection into the Subscribe feed URL, keeping general member events", async () => {
+        // The subscription must match what the grid is showing: the narrowed
+        // subteam appears, and the always-visible general member channel rides
+        // along so the feed does not silently drop those events.
+        mockFetchOnce([
+            sampleEvent({ id: "sw", name: "Software Work Session", start: currentMonth(10), channelId: SOFTWARE }),
+            sampleEvent({
+                id: "mech",
+                name: "Mechanical Build Night",
+                start: currentMonth(10),
+                channelId: MECHANICAL,
+            }),
+            sampleEvent({ id: "gen", name: "General Body Meeting", start: currentMonth(11), channelId: MEMBERS }),
+        ]);
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        openFilter();
+        await act(async () => {
+            fireEvent.click(within(screen.getByText("Software").closest("label") as HTMLElement).getByRole("checkbox"));
+        });
+
+        fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
+        const href = screen.getByRole("link", { name: /Download .ics/i }).getAttribute("href") ?? "";
+
+        expect(href).toContain("channels=");
+        expect(href).toContain(MECHANICAL);
+        expect(href).toContain(MEMBERS);
+        expect(href).not.toContain(SOFTWARE);
+    });
+
+    it("keeps the unfiltered subscribe URL when nothing is filtered", async () => {
+        mockFetchOnce(twoChannelEvents());
+        renderCalendar();
+        await act(async () => {
+            await flushMicrotasks();
+        });
+
+        fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
+        expect(screen.getByRole("link", { name: /Download .ics/i })).toHaveAttribute("href", EVENTS_ICS_URL);
     });
 });

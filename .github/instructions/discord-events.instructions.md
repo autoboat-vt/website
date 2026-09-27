@@ -1,6 +1,6 @@
 ---
 description: "Use when working on the calendar page, the Discord events client, the subscription affordance, officer-only event visibility, past-event retention, or the Cloudflare Worker that serves Discord guild scheduled events. Covers the no-webhook constraint, the Worker architecture, KV caching + the retention archive, VITE_EVENTS_URL, audience gating via Discord channels, the /calendar.ics feed, and rrule recurrence expansion."
-applyTo: "src/lib/discord.ts, src/pages/Calendar.tsx, src/pages/Officers.tsx, src/components/CalendarSubscribe.tsx, src/test/lib/discord.test.ts, src/test/pages/Calendar.test.tsx, src/test/pages/Officers.test.tsx, src/test/components/CalendarSubscribe.test.tsx, src/test/worker/ics.test.ts, src/test/worker/recurrence.test.ts, src/test/worker/events.test.ts, src/test/worker/cancellations.test.ts, src/test/worker/audience.test.ts, src/test/worker/audience-filter.test.ts, src/test/worker/archive.test.ts, src/test/worker/routes.test.ts, worker/**"
+applyTo: "src/lib/discord.ts, src/lib/eventChannels.ts, src/pages/Calendar.tsx, src/pages/Officers.tsx, src/components/CalendarSubscribe.tsx, src/components/CalendarFilter.tsx, src/components/calendarDropdown.ts, src/test/lib/discord.test.ts, src/test/lib/eventChannels.test.ts, src/test/pages/Calendar.test.tsx, src/test/pages/Officers.test.tsx, src/test/components/CalendarSubscribe.test.tsx, src/test/components/CalendarFilter.test.tsx, src/test/worker/ics.test.ts, src/test/worker/recurrence.test.ts, src/test/worker/events.test.ts, src/test/worker/cancellations.test.ts, src/test/worker/audience.test.ts, src/test/worker/audience-filter.test.ts, src/test/worker/archive.test.ts, src/test/worker/routes.test.ts, worker/**"
 ---
 
 # Discord events + calendar
@@ -36,7 +36,7 @@ actively harmful.
 
 The Worker normalizes Discord's `GuildScheduledEvent` shape into a small `CalendarEvent` record (`src/lib/discord.ts`), which is what the website consumes. The Worker owns:
 
-- **Five routes**, in two audience families. Public: `GET /events` (JSON) and `GET /calendar.ics` (iCalendar). Officer: `GET /officers/events` and `GET /officers/calendar.ics`. Plus `GET /audiences` (diagnostics, see below). All four event routes call `loadEvents()` and then filter, so no two consumers can disagree about visibility. Trailing slashes are normalized, so `/events/` also works.
+- **Five routes**, in two audience families. Public: `GET /events` (JSON) and `GET /calendar.ics` (iCalendar). Officer: `GET /officers/events` and `GET /officers/calendar.ics`. Plus `GET /audiences` (diagnostics, see below). All four event routes call `loadEvents()` and then filter, so no two consumers can disagree about visibility. Trailing slashes are normalized, so `/events/` also works. Every event route also accepts an optional `?channels=<id>,<id>` subteam filter (see "Channel filter" below).
 - CORS (locked to `https://autoboat.aoe.vt.edu` via `ALLOWED_ORIGIN` var). Calendar clients are not browsers -- they ignore CORS entirely, so the `.ics` feed works regardless of the origin lockdown.
 - KV caching. The value under `events:v2` is an ARCHIVE (`{ fetchedAt, events }`), not a bare array: the full set for all audiences, plus when it was fetched. Freshness is `now - fetchedAt < CACHE_TTL_SECONDS` (**180 s** in `wrangler.jsonc`, `parseTtlSeconds` fallback 180 s), and the key itself is written with **no `expirationTtl`** while retention is unbounded (see "Past-event retention"). KV writes are fire-and-forget via `ctx.waitUntil` so the response isn't blocked on them. JSON responses also send `Cache-Control: public, max-age=<TTL>` -- the client must fetch with `cache: "no-store"` or the browser cache defeats background polling.
 
@@ -368,10 +368,80 @@ Secrets (never committed) go in via `wrangler secret put`:
 
 For local `wrangler dev`, drop a `.dev.vars` file in `worker/` (gitignored). See `worker/README.md` for the full one-time setup.
 
+## Channel filter (subteam events only)
+
+Users can narrow the calendar to specific subteams. The team already schedules
+each subteam's events in its own Discord voice channel, so the **channel id is
+the grouping key** -- no extra marker, no second list to maintain. The Worker
+already ships `channelId` on every event, so this needed no new API surface.
+
+**Scope rule (the thing to get right).** The picker narrows SUBTEAM events ONLY:
+
+- **General member events** (`member-events`) are always shown. They are for the
+  whole team, so a filter that could hide them would hide the main meetings from
+  the people they are for.
+- **Officer events** (`officer-events`) are always shown on the page they reach.
+  Their visibility is already the audience filter's job (absent from the public
+  feed, present on `/calendar/officers`), so the picker has nothing to add.
+- **Channel-less events** are the one exception: they are not subteam events, but
+  there is nothing else to group them by, so they get a selectable "Other" group.
+
+`src/lib/eventChannels.ts` owns all of this. `SUBTEAM_CHANNELS` is what the
+picker can filter; `ALWAYS_VISIBLE_CHANNEL_IDS` is what it never can.
+`isAlwaysVisible()` is the shared predicate behind both
+`eventChannelGroups()` (no checkbox for those channels) and
+`matchesChannelFilter()` (always shown), so the picker can never offer a control
+that does not work.
+
+WARNING: **The selection is `null | ReadonlySet<string>`, and `null` means "all
+subteams".** An empty set means "no subteams" and is a DIFFERENT state. Do not
+"simplify" this to empty-set-means-all: with only one subteam that has events,
+unchecking it produces an empty set, which would read back as "everything
+selected" -- the checkbox would silently refuse to turn off. `toggleChannel()`
+materializes the full list before subtracting, and collapses a fully-checked set
+back to `null` so "all checked" and "no filter" cannot become two representations
+with different feed URLs.
+
+WARNING: **`workerChannelIds()` adds `ALWAYS_VISIBLE_CHANNEL_IDS` to every
+non-null selection** (and returns `[]` for `null`, which the Worker reads as "no
+filter"). Without them a subscription would silently drop the general member
+events the page still shows, so the feed and the grid would disagree. The
+channel-less "Other" key is dropped -- there is no id to send.
+
+`src/components/CalendarFilter.tsx` is the dropdown. It anchors exactly like the
+Subscribe panel and the two share a mutual-exclusion event
+(`src/components/calendarDropdown.ts`, a document-level
+`autoboat:calendar-dropdown-open` CustomEvent) so both -- which occupy the same
+rectangle -- can never be open at once.
+
+Worker side (`worker/src/index.ts`): `parseChannelFilter(url.searchParams)` and
+`filterByChannels(events, ids)`. Both are exported and unit-tested directly.
+
+- `?channels=<id>,<id>` on **any** event route (JSON and `.ics`, public and
+  officer), comma-separated; a repeated parameter is merged too.
+- WARNING: **An absent, blank, or unparseable filter means "everything", never
+  "nothing".** A malformed query must never be able to blank someone's
+  subscription, so `filterByChannels` returns the input array unchanged for an
+  empty set.
+- WARNING: **An event with `channelId === null` never matches a non-empty
+  filter.** There is no channel to compare, and including it in every filtered
+  view would make the "Other" checkbox a lie.
+- WARNING: **Filtering costs no extra KV writes.** It runs AFTER the audience
+  filter and is never given to `loadEvents` -- the cached value is always the
+  full set, so any filter reuses the one-write-per-miss path. Do not move it
+  into the cache: a per-filter key would multiply writes/day against the free
+  tier and blank the calendar. `channel-filter.test.ts` pins this.
+- The audience filter runs FIRST, so `?channels=<officer-channel>` on the
+  public route yields nothing -- the query cannot be used to reveal officer
+  events.
+- The empty-state copy in `Calendar.tsx` distinguishes three cases (`events.length
+  === 0`, nothing in the visible month, filter matched nothing). The raw event
+  count cannot tell them apart: events in other months are loaded but not
+  rendered either.
+
 ## Route wiring
 
 For a new page, register the route in `src/App.tsx` and `scripts/spa-fallback.mjs` (see `deploy.instructions.md`). The `/calendar` route specifically is registered in four places, all of which MUST stay in sync:
-
 1. `src/App.tsx` — `<Route path="/calendar" element={<Calendar />} />`.
 2. `scripts/spa-fallback.mjs` — `ROUTES` array includes `"/calendar"` so the S3 SPA fallback writes `dist/calendar/index.html`.
 3. `README.md` — routes table + `VITE_EVENTS_URL` env var description.

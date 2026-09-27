@@ -36,6 +36,14 @@ with the link can read it — so it is intentionally absent from the table above
 and from the site nav. See "Audience gating" in
 `.github/instructions/discord-events.instructions.md`.
 
+The **Filter** control on `/calendar` narrows the calendar to one or more
+**subteams**, grouping events by the Discord voice channel they were scheduled
+in. Only subteam events can be filtered: general member events are always
+shown, and officer events are always shown on the page that reaches them. The
+same selection is applied to the subscription feed via a `?channels=` query
+parameter, so a user can subscribe to just their subteam. See "Channel filter"
+in `.github/instructions/discord-events.instructions.md`.
+
 ## Environment variables
 
 Set these before `bun run dev` or `bun run build`:
@@ -62,14 +70,25 @@ bun run lint           # biome lint
 
 ## Deploying
 
-Deployment is manual via `./scripts/deploy.sh` from a local checkout with VT GitLab credentials cached. There is no CI deploy — GitHub Actions does build-only validation on PRs.
+Deployment is manual via `./scripts/deploy.sh` from a local checkout with VT GitLab credentials cached and Cloudflare auth configured. There is no CI deploy — GitHub Actions does build-only validation on PRs.
+
+The script deploys **both artifacts**: the static site to VT S4/S3, and the Cloudflare Worker in `worker/` to Cloudflare.
 
 ```bash
-./scripts/deploy.sh              # build + deploy
-./scripts/deploy.sh --skip-build # deploy an existing dist/
+./scripts/deploy.sh               # build + deploy site and Worker
+./scripts/deploy.sh --skip-build  # deploy an existing dist/
+./scripts/deploy.sh --skip-worker # site only; leave the Worker untouched
 ```
 
-The script builds, fetches `aoe_sites/main`, replaces the worktree contents with `dist/`, commits, and fast-forward pushes to `code.vt.edu/s4-hosting-sites/aoe/sailbot`. The S4 service then syncs `main` to S3 (a few minutes).
+The script builds, deploys the Worker (via `wrangler deploy`, using `bunx` or `npx`), fetches `aoe_sites/main`, replaces the worktree contents with `dist/`, commits, and fast-forward pushes to `code.vt.edu/s4-hosting-sites/aoe/sailbot`. The S4 service then syncs `main` to S3 (a few minutes).
+
+The Worker deploy runs first, before either push, so expired Cloudflare auth fails before anything is published.
+
+One-time setup (contact the Software Officer for VT GitLab access):
+
+```bash
+git remote add aoe_sites ssh://git@code.vt.edu/s4-hosting-sites/aoe/sailbot
+```
 
 One-time setup (contact the Software Officer for VT GitLab access):
 

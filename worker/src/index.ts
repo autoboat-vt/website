@@ -142,7 +142,7 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const KV_MAX_TTL_SECONDS = 31_536_000;
 
 /** Default display name for the .ics feed when CALENDAR_NAME is unset. */
-const DEFAULT_CALENDAR_NAME = "AutoBoat at Virginia Tech";
+const DEFAULT_CALENDAR_NAME = "AutoBoat Calendar";
 /** XML/JSON-ish content type for the feed. Some clients key off the
  * `text/calendar` type; the charset is explicit because SUMMARY/LOCATION
  * can contain non-ASCII characters. */
@@ -359,6 +359,55 @@ function eventsForRoute(events: CalendarEvent[], audience: Audience): CalendarEv
     return audience === "officer" ? events : publicEvents(events);
 }
 
+/**
+ * Parse the `?channels=` query parameter into a set of Discord channel ids.
+ *
+ * The website's channel filter generates `?channels=<id>,<id>` so a user can
+ * subscribe to just their subteam's events. The parameter is a plain
+ * comma-separated id list; a repeated parameter is also accepted and merged,
+ * because query builders differ on which form they emit.
+ *
+ * Returns an EMPTY set for an absent, blank, or whitespace-only value, which
+ * the caller reads as "no filter". Anything unrecognised degrades to no filter
+ * rather than to an empty calendar: a malformed query must never be able to
+ * blank someone's subscription, and the unfiltered feed is the documented
+ * default. Ids are matched as opaque strings -- only non-empty tokens are kept.
+ */
+export function parseChannelFilter(searchParams: URLSearchParams): Set<string> {
+    const ids = new Set<string>();
+    for (const raw of searchParams.getAll("channels")) {
+        for (const part of raw.split(",")) {
+            const id = part.trim();
+            if (id) ids.add(id);
+        }
+    }
+    return ids;
+}
+
+/**
+ * Keep only the events whose channel is one of `channelIds`.
+ *
+ * WARNING: An EMPTY set means "no filter" and returns `events` UNCHANGED, not an
+ * empty list. That is what makes the unfiltered feed the default and what stops
+ * a blank `?channels=` from blanking a subscription.
+ *
+ * An event with no channel (`channelId === null`, e.g. an `EXTERNAL` event)
+ * can never match a non-empty filter: there is no channel to compare, and the
+ * website's filter treats those events as their own "Other" group rather than
+ * quietly including them in every filtered view.
+ *
+ * This runs AFTER audience filtering and BEFORE serialization, and never
+ * touches KV -- the cached value is always the full set (see `loadEvents`), so
+ * an arbitrary filter costs no extra writes and every route shares one cache
+ * entry. Do NOT move this into `loadEvents`: caching a filtered subset would
+ * key the archive on the caller's query and make the officer routes miss on
+ * every request.
+ */
+export function filterByChannels(events: CalendarEvent[], channelIds: Set<string>): CalendarEvent[] {
+    if (channelIds.size === 0) return events;
+    return events.filter((event) => event.channelId !== null && channelIds.has(event.channelId));
+}
+
 /** Generic 502 for a cold cache plus a Discord upstream failure. The real
  * error is never echoed -- it could carry headers or the token. */
 function upstreamUnavailable(env: Env): Response {
@@ -369,7 +418,12 @@ function upstreamUnavailable(env: Env): Response {
     );
 }
 
-async function handleGetEvents(env: Env, ctx: ExecutionContext, audience: Audience): Promise<Response> {
+async function handleGetEvents(
+    env: Env,
+    ctx: ExecutionContext,
+    audience: Audience,
+    channelFilter: Set<string>,
+): Promise<Response> {
     const ttl = parseTtlSeconds(env);
     const now = new Date();
     const configured = audienceIsConfigured(audienceConfigFromEnv(env));
@@ -382,7 +436,7 @@ async function handleGetEvents(env: Env, ctx: ExecutionContext, audience: Audien
 
     return jsonResponse(
         // Empty when unconfigured -- see eventsForRoute.
-        configured ? eventsForRoute(loaded.events, audience) : [],
+        configured ? filterByChannels(eventsForRoute(loaded.events, audience), channelFilter) : [],
         {
             status: 200,
             headers: {
@@ -416,7 +470,12 @@ function icsResponse(body: string, init: ResponseInit, env: Env): Response {
  * force-downloading the file when someone opens the URL directly (a download
  * prompt is what makes users think "subscribe" is broken).
  */
-async function handleGetIcs(env: Env, ctx: ExecutionContext, audience: Audience): Promise<Response> {
+async function handleGetIcs(
+    env: Env,
+    ctx: ExecutionContext,
+    audience: Audience,
+    channelFilter: Set<string>,
+): Promise<Response> {
     const ttl = parseTtlSeconds(env);
     const now = new Date();
     const configured = audienceIsConfigured(audienceConfigFromEnv(env));
@@ -427,7 +486,7 @@ async function handleGetIcs(env: Env, ctx: ExecutionContext, audience: Audience)
         return upstreamUnavailable(env);
     }
 
-    const visible = configured ? eventsForRoute(loaded.events, audience) : [];
+    const visible = configured ? filterByChannels(eventsForRoute(loaded.events, audience), channelFilter) : [];
     const defaultName = audience === "officer" ? "AutoBoat Officers" : DEFAULT_CALENDAR_NAME;
     const body = buildCalendar(visible, {
         calendarName: env.CALENDAR_NAME?.trim() || defaultName,
@@ -564,11 +623,11 @@ export default {
 
         switch (route.kind) {
             case "ics":
-                return handleGetIcs(env, ctx, route.audience);
+                return handleGetIcs(env, ctx, route.audience, parseChannelFilter(url.searchParams));
             case "audiences":
                 return handleGetAudiences(env);
             default:
-                return handleGetEvents(env, ctx, route.audience);
+                return handleGetEvents(env, ctx, route.audience, parseChannelFilter(url.searchParams));
         }
     },
     // Exported so `wrangler types` picks up the Env shape for editor use.
