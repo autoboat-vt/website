@@ -67,11 +67,16 @@
  * exactly. Do not add a second key, and do not lower the key's
  * `expirationTtl` below the cache TTL when one is set.
  *
- * CORS: `ALLOWED_ORIGIN` is a comma-separated allowlist (default includes
- * https://autoboat.aoe.vt.edu and http://localhost:3000). The response echoes
- * the caller's own origin when it is on the list; otherwise
- * `Access-Control-Allow-Origin` is OMITTED, which is what makes the browser
- * reject the response. A blank value allows nothing; `*` allows every origin.
+ * CORS: `ALLOWED_ORIGIN` is a comma-separated allowlist of PUBLIC origins
+ * (default: the apex and www hosts). The response echoes the caller's own
+ * origin when it is allowed; otherwise `Access-Control-Allow-Origin` is
+ * OMITTED, which is what makes the browser reject the response. A blank value
+ * allows nothing; a lone `*` allows every origin. Loopback hosts on any port
+ * are allowed automatically -- see `LOCAL_DEV_ORIGIN_PATTERN`.
+ *
+ * WARNING: `www.` must stay on the list. The www host SERVES the site rather than
+ * redirecting to the apex, so it is a genuinely different origin; omitting it
+ * left the calendar working at the apex and blocked on www.
  *
  * WARNING: Echoing the request origin rather than always sending the configured one
  * is load-bearing. This used to send the configured value verbatim, so any
@@ -207,7 +212,26 @@ function corsHeaders(env: Env): HeadersInit {
     return headers;
 }
 
-/** Parse the `ALLOWED_ORIGIN` allowlist (comma-separated, trimmed, no blanks). */
+/**
+ * Hostnames treated as local development, which are allowed automatically.
+ *
+ * WARNING: This list exists because `localhost` and `127.0.0.1` are DISTINCT
+ * origins to CORS even though they reach the same dev server, and so is every
+ * port. Enumerating spellings in `ALLOWED_ORIGIN` therefore means the calendar
+ * silently breaks whenever someone opens the site from the other name or
+ * `vite preview` picks a different port -- which is what happened. These hosts
+ * can only resolve to the machine the browser is already running on, so
+ * allowing them is not a meaningful widening of access.
+ *
+ * Note the port is deliberately NOT constrained: any local port is allowed for
+ * these hosts. A non-loopback origin (including the deployed site) must still
+ * be listed explicitly in `ALLOWED_ORIGIN`.
+ */
+const LOCAL_DEV_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+
+/**
+ * Parse the `ALLOWED_ORIGIN` allowlist (comma-separated, trimmed, no blanks).
+ */
 function parseAllowedOrigins(raw: string | undefined): Set<string> {
     return new Set(
         (raw ?? "")
@@ -220,16 +244,13 @@ function parseAllowedOrigins(raw: string | undefined): Set<string> {
 /**
  * The `Access-Control-Allow-Origin` value to send back, or `null` to omit it.
  *
- * Echoes the caller's own `Origin` when it is on the allowlist. Echoing the
- * REQUEST's origin (rather than always sending the configured value) is the
- * whole point: CORS compares the response header against the origin the browser
- * sent, so a fixed unrelated value can never match for a different caller.
+ * Echoes the caller's own `Origin` when it is allowed. Echoing the REQUEST's
+ * origin (rather than always sending the configured value) is the whole point:
+ * CORS compares the response header against the origin the browser sent, so a
+ * fixed unrelated value can never match for a different caller.
  *
- * `ALLOWED_ORIGIN` is a comma-separated list, so a local dev origin can be
- * allowed alongside production without turning the lockdown off with `*`.
- * `npm run dev` serves on `http://localhost:3000` -- Vite reads that port from
- * `server.port` in vite.config.ts, so changing the port means changing this
- * value too (or the dev calendar goes empty again).
+ * Allowed means either an exact entry in the `ALLOWED_ORIGIN` list or a local
+ * dev origin (see `LOCAL_DEV_ORIGIN_PATTERN`).
  *
  * WARNING: `*` is honored only as the SOLE entry, and it means "allow every
  * origin". It is a lockdown-off switch, not a wildcard-subdomain pattern, so
@@ -244,10 +265,14 @@ export function resolveAllowedOrigin(
 ): string | null {
     if (!requestOrigin) return null;
     const allowed = parseAllowedOrigins(allowedOriginConfig);
+    // A lone "*" is the whole-config escape hatch.
+    if (allowed.size === 1 && allowed.has("*")) return "*";
     // Exact membership, so neither a lookalike host nor a `*` that has been
     // appended to a longer list can widen access by accident.
-    if (allowed.size === 1 && allowed.has("*")) return "*";
-    return allowed.has(requestOrigin) ? requestOrigin : null;
+    if (allowed.has(requestOrigin)) return requestOrigin;
+    // Local dev needs no configuration entry: the name and the port both vary.
+    if (LOCAL_DEV_ORIGIN_PATTERN.test(requestOrigin)) return requestOrigin;
+    return null;
 }
 
 /** GET a Discord REST path with the bot token, returning the parsed JSON. */

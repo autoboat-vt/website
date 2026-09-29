@@ -14,20 +14,30 @@
         // Not a secret -- anyone in the guild can see this. Fill in after
         // creating the Discord application (see README.md).
         "DISCORD_GUILD_ID": "1017960606403416085",
-        // Comma-separated allowlist of browser origins permitted to call this
-        // Worker. The response echoes the caller's own Origin when it matches;
+        // Comma-separated allowlist of PUBLIC origins permitted to call this
+        // Worker (the response echoes the caller's own Origin when it matches;
         // otherwise no Access-Control-Allow-Origin is sent and the browser
-        // blocks the response.
+        // blocks the response).
         //
-        // WARNING: This must list EVERY origin the calendar is opened from, and the
-        // failure mode is silent-ish: the Worker returns 200 and the page shows
-        // "NetworkError when attempting to fetch resource." http://localhost:3000
-        // is `server.port` from vite.config.ts -- if that port changes, change
-        // this too, or the calendar goes empty in dev.
+        // WARNING: `www.` is included deliberately, and it is not cosmetic. The www
+        // host SERVES the site rather than redirecting to the apex (verified: it
+        // 302s /calendar to /calendar/ and returns 200), so a visitor on
+        // https://www.autoboat.aoe.vt.edu is genuinely at a DIFFERENT origin.
+        // Omitting it produced exactly this: the calendar worked at the apex and
+        // failed on www with a CORS block. The canonical tag pointing at the
+        // apex does not help a browser -- it is a crawler hint, not a redirect.
+        //
+        // Local dev needs NO entry here: localhost / 127.0.0.1 / [::1] on any
+        // port are allowed automatically (see LOCAL_DEV_ORIGIN_PATTERN in
+        // src/index.ts), because the hostname and port both vary and enumerating
+        // them is how this broke the first time.
+        //
+        // http:// variants are not listed: they 301 to https before the app
+        // runs, so they can never be the page's origin.
         //
         // Blank allows nothing (safe). A lone "*" allows every origin, which is
         // a lockdown-off switch; a "*" mixed into a longer list fails closed.
-        "ALLOWED_ORIGIN": "https://autoboat.aoe.vt.edu, http://localhost:3000",
+        "ALLOWED_ORIGIN": "https://autoboat.aoe.vt.edu, https://www.autoboat.aoe.vt.edu",
         // How long to cache the Discord events payload in KV, in seconds.
         //
         // WARNING: This value is budgeted against the Workers KV FREE TIER, which

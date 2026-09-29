@@ -914,6 +914,53 @@ describe("CORS allowlist", () => {
         expect(resolveAllowedOrigin(undefined, PROD_ORIGIN)).toBeNull();
     });
 
+    it("allows every local dev spelling and port without configuration", () => {
+        // The regression: `localhost` and `127.0.0.1` are DISTINCT origins to
+        // CORS, and so is every port. Enumerating them in ALLOWED_ORIGIN meant
+        // the calendar silently broke for whichever spelling was missing, so
+        // loopback is allowed by host instead.
+        for (const origin of [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:4173",
+            "http://[::1]:3000",
+            "https://localhost:3000",
+        ]) {
+            expect(resolveAllowedOrigin("", origin)).toBe(origin);
+        }
+    });
+
+    it("allows the www host when it is listed", () => {
+        // www. SERVES the site rather than redirecting to the apex, so it is a
+        // genuinely different origin -- and omitting it blocked the calendar
+        // for anyone who arrived on the www URL.
+        const config = `${PROD_ORIGIN}, https://www.autoboat.aoe.vt.edu`;
+        expect(resolveAllowedOrigin(config, "https://www.autoboat.aoe.vt.edu")).toBe("https://www.autoboat.aoe.vt.edu");
+    });
+
+    it("does not treat the www host as equivalent to the apex", () => {
+        // They are separate origins; listing one must not allow the other.
+        expect(resolveAllowedOrigin(PROD_ORIGIN, "https://www.autoboat.aoe.vt.edu")).toBeNull();
+    });
+
+    it("does not allow a loopback LOOKALIKE", () => {
+        // The loopback rule matches the whole host, not a prefix.
+        for (const origin of [
+            "http://localhost.evil.example:3000",
+            "http://127.0.0.1.evil.example",
+            "http://notlocalhost:3000",
+            "https://localhost.evil.example",
+        ]) {
+            expect(resolveAllowedOrigin("", origin)).toBeNull();
+        }
+    });
+
+    it("still requires non-loopback origins to be listed explicitly", () => {
+        expect(resolveAllowedOrigin("", "https://staging.example")).toBeNull();
+        expect(resolveAllowedOrigin("", "https://autoboat.aoe.vt.edu")).toBeNull();
+    });
+
     it("ignores blank entries in the list", () => {
         expect(resolveAllowedOrigin(`, ${PROD_ORIGIN} ,`, PROD_ORIGIN)).toBe(PROD_ORIGIN);
         expect(resolveAllowedOrigin(",", PROD_ORIGIN)).toBeNull();

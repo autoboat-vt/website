@@ -263,20 +263,32 @@ serialized in UTC.
 Set via `vars` in `wrangler.jsonc` (public, non-secret):
 
 - `DISCORD_GUILD_ID` — Discord server ID.
-- `ALLOWED_ORIGIN` — **comma-separated allowlist** of browser origins allowed
+- `ALLOWED_ORIGIN` — **comma-separated allowlist** of public origins allowed
   to call this Worker. Default:
-  `https://autoboat.aoe.vt.edu, http://localhost:3000`.
+  `https://autoboat.aoe.vt.edu, https://www.autoboat.aoe.vt.edu`.
   The response echoes the caller's own `Origin` when it matches and omits
   `Access-Control-Allow-Origin` otherwise, which is what makes the browser
   block the response. Blank allows nothing; a lone `*` allows every origin
   (don't use it in production), and a `*` mixed into a longer list fails closed.
 
-  WARNING: **If this list is missing an origin, the calendar silently shows
-  "NetworkError when attempting to fetch resource."** — the Worker still returns
-  200, so it looks like an outage rather than a CORS rejection. `http://localhost:3000`
-  is `server.port` from `vite.config.ts`; if that port changes, update this value
-  too. The website now detects this case and says so explicitly instead of
-  surfacing the raw browser error.
+  Local development needs **no** entry here: `localhost`, `127.0.0.1`, and
+  `[::1]` on any port are allowed automatically. That is deliberate — the
+  hostname and port both vary, and enumerating them is how the calendar broke:
+  `localhost` and `127.0.0.1` are *different origins* to CORS even though they
+  reach the same dev server.
+
+  WARNING: **`www.autoboat.aoe.vt.edu` must stay listed.** The www host serves the
+  site rather than redirecting to the apex, so a visitor on the www URL is at a
+  genuinely different origin. Omitting it made the calendar work at the apex and
+  fail on www. A canonical tag pointing at the apex does not help — that is a
+  crawler hint, not a browser redirect. `http://` variants need no entry; they
+  301 to https before the app loads.
+
+  WARNING: **If this list is missing an origin, the calendar shows "NetworkError
+  when attempting to fetch resource."** — the Worker still returns 200, so it
+  looks like an outage rather than a CORS rejection. The website now names the
+  blocked origin in the error message, which is the fastest way to see which
+  entry is missing.
 - `CACHE_TTL_SECONDS` — how long a cached payload is considered fresh, in
   seconds. **180** (3 minutes), and must stay at or above it (see "KV write
   budget"). This is the refetch rate, not the key's lifetime.

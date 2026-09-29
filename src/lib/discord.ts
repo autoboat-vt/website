@@ -192,9 +192,10 @@ async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
             const reachable = await probeReachableIgnoringCors(url);
             throw new DiscordError(
                 reachable
-                    ? `The browser blocked the events response (CORS). ` +
-                          `This origin is probably missing from the Worker's ALLOWED_ORIGIN list -- ` +
-                          `see "CORS" in worker/README.md.`
+                    ? `The browser blocked the events response (CORS) from origin ${window.location.origin}. ` +
+                          `Add that exact string to ALLOWED_ORIGIN in worker/wrangler.jsonc and redeploy the Worker ` +
+                          `(cd worker && npx wrangler deploy). Note that localhost and 127.0.0.1 are DIFFERENT ` +
+                          `origins to CORS, so both must be listed.`
                     : networkErrorMessage(url, cause),
             );
         }
