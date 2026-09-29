@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import Footer from "./components/Footer";
 import Header from "./components/Header";
+import { usePageMeta } from "./hooks/usePageMeta";
 import Calendar from "./pages/Calendar";
 import Fleet from "./pages/Fleet";
 import Gallery from "./pages/Gallery";
@@ -14,6 +15,10 @@ import Sponsors from "./pages/Sponsors";
 
 export default function App() {
     const location = useLocation();
+
+    // Per-route <title>, description, canonical, and Open Graph tags.
+    // Route metadata lives in src/lib/seoRoutes.json.
+    usePageMeta();
 
     // Scroll to top on route change, or to the #hash target if present.
     // React Router doesn't trigger the browser's native :target scroll on

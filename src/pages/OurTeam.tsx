@@ -96,6 +96,10 @@ export default function OurTeam() {
 
     return (
         <div className="page-ourteam">
+            {/* sr-only: the visible headings are the per-subteam h2s, so the
+                document outline started at level 2. Kept outside the grid
+                below so it cannot affect the card spacing. */}
+            <h1 className="sr-only">Meet the Team</h1>
             <div id="subteams-section" className="section mx-auto grid max-w-275 gap-4 px-4 pt-10 pb-12">
                 {SUBTEAMS.map((subteam, i) => (
                     <div key={subteam.id} className="contents">

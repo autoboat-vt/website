@@ -82,12 +82,14 @@ src/
   app.css               # Tailwind entry, theme tokens, component-layer CSS
   components/           # shared UI (Header, Footer, Card, Gallery, etc.)
   pages/                # one component per route (Home, OurTeam, Fleet, ...)
-  hooks/                # useBoatHistory, useTheme
-  lib/                  # telemetry.ts (REST client), discord.ts, eventChannels.ts (subteam grouping + filter), vtColors.ts, galleryImages.ts (shared gallery data)
+  hooks/                # useBoatHistory, useTheme, usePageMeta (per-route SEO tags)
+  lib/                  # telemetry.ts (REST client), discord.ts, eventChannels.ts (subteam grouping + filter), vtColors.ts, galleryImages.ts (shared gallery data), seo.ts + seoRoutes.json (route metadata)
   test/                 # jest tests + __mocks__/
 scripts/
   deploy.sh             # manual deploy: site to VT GitLab (S4 -> S3) AND the Cloudflare Worker
-  spa-fallback.mjs      # copies index.html to route paths for S3 SPA routing
+  spa-fallback.mjs      # copies index.html to route paths for S3 SPA routing (route list derived from src/lib/seoRoutes.json)
+  prerender-meta.mjs    # bakes per-route title/description/canonical/OG into each built index.html
+  generate-sitemap.mjs  # writes dist/sitemap.xml from src/lib/seoRoutes.json
   bump-cicd.sh          # pulls upstream cicd files into external/cicd/ (vendored, not a submodule)
 worker/                 # Cloudflare Worker proxying Discord scheduled events for /calendar
   wrangler.jsonc        # worker config (KV binding, env vars)
@@ -136,7 +138,7 @@ WARNING: **Officer events are identified by VOICE CHANNEL ID, not by category** 
 
 WARNING: Two different `/officers` paths exist and they are NOT the same thing: the **page** is `/calendar/officers` (nested under the public `/calendar`), while the **Worker API route** is `<worker-url>/officers/events` / `/officers/calendar.ics`, which is an origin-level path on the Worker itself and is unrelated to site routing. Don't "harmonize" one to match the other.
 
-If you add a route, update **all four**: `src/App.tsx`, `scripts/spa-fallback.mjs` route list, the README routes table, and — if the page is a non-nav feature page — `FEATURE_PAGES` in `src/pages/OtherPages.tsx` so the hub advertises it. The `scripts/spa-fallback.mjs` `ROUTES` array must mirror the routes in `App.tsx` exactly — S3 returns 404 for any route not listed.
+If you add a route, update **all four**: `src/App.tsx`, `src/lib/seoRoutes.json` (title/description/canonical/sitemap entry), the README routes table, and — if the page is a non-nav feature page — `FEATURE_PAGES` in `src/pages/OtherPages.tsx` so the hub advertises it. WARNING: `scripts/spa-fallback.mjs` derives its route list from `src/lib/seoRoutes.json`, so it no longer needs hand-editing — but it still cannot verify that `App.tsx` agrees, and a route missing from the JSON gets no SPA fallback and no per-route metadata. `src/test/lib/seo.test.ts` cross-checks the JSON against `App.tsx`'s `<Route>` elements and fails if they drift; keep that test passing rather than trusting the two files by eye.
 
 Don't add a feature page to `NAV_LINKS` unless you've checked the horizontal width budget. The nav row is a single non-wrapping flex line, so its width is fixed at any given viewport; if the row's natural width exceeds the space left for the middle grid column, the overflow pushes the theme toggle off the right edge of the screen (the row cannot shrink, and the grid column will not shrink below its content). The `max-[1099px]:` / `max-[999px]:` / `max-[799px]:` / `max-[599px]:` / `max-[499px]:` step-downs in `Header.tsx` are what keep it fitting; below 500px the whole row falls back to the hamburger dropdown (`@media (max-width: 499px)` in `app.css`).
 
@@ -241,13 +243,37 @@ Tailwind v4's layer order is `theme, base, utilities`; `@layer components` in `s
 - `BoatMarker` uses `/images/boat-icon.webp` (50px square, centered anchor) — keep this asset in `public/images/`.
 - Lazy-load gallery and below-the-fold images (`loading="lazy"`) — they shift layout, which is why the hash-link scroll effect re-scrolls on a decay schedule.
 - `public/_redirects` is for Netlify/Cloudflare Pages hosts only. On raw S3 it's ignored — SPA routing is handled by `scripts/spa-fallback.mjs` instead.
-- `public/googleeba451f5e3aecfef.html` and `public/robots.txt` / `public/sitemap.xml` are SEO files — don't modify without checking Search Console ownership.
+- `public/robots.txt` is a real, deployed file (Vite copies `public/` into `dist/`). WARNING: it carries `Disallow: /images/`, which blocks Google **Images** from the whole photo library — the team chose to keep it. Note this is not an Open Graph problem: social/link-preview crawlers ignore `robots.txt`.
+- `sitemap.xml` is NOT in `public/` — it is generated at build time into `dist/` by `scripts/generate-sitemap.mjs`. The old hand-written root-level `robots.txt` / `sitemap.xml` were never deployed (Vite only reads `public/`) and were deleted; don't recreate either at the repo root.
+- `public/googleeba451f5e3aecfef.html` is the Google Search Console verification file — don't modify without checking Search Console ownership.
+
+### SEO
+
+Route metadata lives in **one** JSON file, `src/lib/seoRoutes.json` (`siteUrl`, `siteName`, `ogImagePath`, and a `routes` array of `{ path, title, description, changefreq, priority, indexable }`). It has **three** consumers, deliberately:
+
+| Consumer | When | What it does |
+| --- | --- | --- |
+| `src/hooks/usePageMeta.ts` | runtime (called from `App.tsx`) | upserts `<title>`, description, canonical, `robots`, and OG/Twitter tags per route |
+| `scripts/prerender-meta.mjs` | build | rewrites the same tags in each built `index.html` for non-JS crawlers |
+| `scripts/generate-sitemap.mjs` | build | writes `dist/sitemap.xml` |
+
+Why three: this is a client-rendered SPA, so every route used to ship an identical `<head>`. Google executes JS and saw the runtime tags, but link-preview bots, social crawlers, and plain `curl` all read the raw HTML and saw the home page's title on every URL.
+
+WARNING: `scripts/spa-fallback.mjs` also derives its route list from this JSON, so adding a route there updates the SPA fallback, the sitemap, and the metadata together. But **`src/App.tsx` is checked by nothing at build time** — `src/test/lib/seo.test.ts` cross-checks the two and is the only thing that catches drift.
+
+WARNING: `indexable` drives BOTH the sitemap listing and the `robots` meta tag, so a route cannot be advertised in the sitemap while asking not to be indexed. `/calendar/officers` is `false` (unlisted, but reachable by URL). JSON is untyped, so a missing/typo'd key would read as falsy and silently de-index a page — `seo.ts` validates the field at module load and throws instead. Two routes were briefly left on a stale `inSitemap` key because of exactly that.
+
+WARNING: canonical and sitemap URLs for non-root routes carry a **trailing slash** (`/fleet/`). S3 serves each page from `<route>/index.html`, so the bare `/fleet` returns a **302** to `/fleet/` rather than a 301. Since the redirect is temporary, the canonical tag is the only thing that consolidates the two addresses — so it must name the URL that actually returns 200. Verified against production.
+
+WARNING: `og:image` must be an **absolute URL in a raster format**. It was a relative `/images/favicon.ico`, which no crawler can resolve or render, so shared links had no preview image. It is now `https://autoboat.aoe.vt.edu/images/gallery/14.webp` (the Home hero image, set by `ogImagePath` in the JSON).
+
+`vite.config.ts` has no SEO plugin and `index.html`'s head is the **home-page default**, not the whole story — do not treat its values as authoritative.
 
 ### `index.html` metadata
 
 - `<meta name="theme-color">` — both light (`#f0eee6`) and dark (`#1f1e1d`) variants via `media="(prefers-color-scheme: ...)"`. Controls the mobile browser UI bar color.
-- Open Graph tags (`og:type`, `og:title`, `og:description`, `og:image`) — social share preview. `og:image` currently points to `/images/favicon.ico` (not a dedicated preview image).
-- `<meta name="description">` — SEO description ("AutoBoat at Virginia Tech designs and builds autonomous sailboats and electric motorboats...").
+- The `<head>` also carries default canonical/`robots`/OG/Twitter tags and a JSON-LD `@graph` (`Organization` + `WebSite`, including `sameAs` social profiles). Those defaults describe the home page; the build and runtime writers overwrite the per-route ones. Static because they describe the site as a whole.
+- WARNING: `scripts/prerender-meta.mjs` **upserts** these tags rather than requiring them, specifically so that reverting or editing `index.html` cannot fail the build with an error pointing at the script instead of the missing tag.
 - Favicon: `/images/favicon.ico`.
 
 ### Git hooks
@@ -295,5 +321,7 @@ This repo doesn't enforce conventional commits, but the existing history uses sh
 - Using `applyTo: ["a", "b"]` array form in any `.instructions.md` frontmatter - VS Code Copilot rejects it; use the comma-separated string form.
 - Running bare `biome lint` / `biome check` without `--config-path=./biome.json` - a parent directory's `biome.json`/`biome.jsonc` will be picked up instead. All `package.json` scripts already pass the flag; keep it that way.
 - Adding per-component CSS files - component styles go in `@layer components` in `src/app.css` (imported once in `src/main.tsx`).
-- Modifying `public/googleeba451f5e3aecfef.html`, `public/robots.txt`, or `public/sitemap.xml` without checking Search Console ownership.
+- Modifying `public/googleeba451f5e3aecfef.html` (the Search Console verification file) without checking Search Console ownership.
+- Recreating `robots.txt` or a hand-written `sitemap.xml` at the **repo root** — neither is deployed (Vite only copies `public/`), and the sitemap is generated into `dist/` at build time by `scripts/generate-sitemap.mjs`.
+- Hard-coding a page title, description, or canonical URL in a component or a build script. They all come from `src/lib/seoRoutes.json`, which is the single source of truth for the app, the prerendered HTML, and the sitemap.
 - Committing `.env`, `.env.local`, or personal `.vscode/` files (only `.vscode/settings.json` is committed, for the shared Biome config-discovery fix). Build outputs `dist/` and `coverage/` are gitignored too — don't `git add` them.

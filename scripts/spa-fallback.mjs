@@ -13,7 +13,7 @@
  *
  * Run automatically as part of `bun run build` (see package.json scripts).
  */
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -21,20 +21,24 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = resolve(__dirname, "..", "dist");
 const indexHtml = join(distDir, "index.html");
 
-// Must match the routes defined in src/App.tsx.
-const ROUTES = [
-    "/ourteam",
-    "/fleet",
-    "/sponsors",
-    "/other-pages",
-    "/calendar",
-    "/gallery",
-    "/live",
-    // Nested under /calendar by URL only. Writes dist/calendar/officers/
-    // index.html alongside dist/calendar/index.html -- the two coexist, and
-    // mkdirSync(recursive) creates the nested directory.
-    "/calendar/officers",
-];
+/**
+ * Route list, derived from `src/lib/seoRoutes.json`.
+ *
+ * WARNING: This used to be a hand-maintained array that had to be kept in sync
+ * with `src/App.tsx` by hand, and it silently drifted -- three routes were
+ * reachable in the app but missing here, so S3 returned 404 for them. Deriving
+ * it means adding a route to seoRoutes.json updates the SPA fallback, the
+ * sitemap, and the runtime metadata at once.
+ *
+ * Every route still needs a matching <Route> in src/App.tsx; this list and
+ * that file cannot be cross-checked automatically. Exported so
+ * `generate-sitemap.mjs` can assert the sitemap does not reference a path that
+ * has no fallback file.
+ */
+export const ROUTES = JSON.parse(readFileSync(join(__dirname, "..", "src", "lib", "seoRoutes.json"), "utf8"))
+    .routes.map((route) => route.path)
+    // The root is served by dist/index.html itself, so it needs no copy.
+    .filter((path) => path !== "/");
 
 for (const route of ROUTES) {
     const dest = join(distDir, `${route}/index.html`);

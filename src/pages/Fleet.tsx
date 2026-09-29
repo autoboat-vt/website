@@ -435,6 +435,12 @@ export default function Fleet() {
 
     return (
         <section className="section mx-auto grid max-w-275 gap-4 px-4 py-6" id="fleet-section">
+            {/* sr-only: the visible headings on this page are the per-vessel
+                h2s, so there was no h1 and the document outline started at
+                level 2. This restores one h1 without adding a visible heading
+                above the first vessel card. Absolutely positioned by
+                `sr-only`, so it does not take a grid track or add a gap. */}
+            <h1 className="sr-only">Our Fleet</h1>
             {/* Order is deliberate: active vessels first (Ducky, Theseus),
                 then the retired one (Lumpy). Because the id is derived from
                 the name, renaming a vessel silently changes its anchor --

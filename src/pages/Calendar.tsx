@@ -370,6 +370,13 @@ export default function Calendar({ variant = "public" }: CalendarProps) {
 
     return (
         <section className="section mx-auto grid max-w-275 gap-8 px-4 py-16">
+            {/* sr-only page heading, PUBLIC VARIANT ONLY.
+                This is a shared component: Officers.tsx renders its own
+                <h1>Officers Calendar</h1> around `<Calendar variant="officer" />`,
+                so emitting one unconditionally would put two h1s on that page.
+                Rendering it only for the public variant keeps both pages at
+                exactly one. */}
+            {variant === "public" && <h1 className="sr-only">Calendar</h1>}
             {error && (
                 <Card className="calendar-error" role="alert">
                     <h3>Couldn't load events</h3>
@@ -407,7 +414,10 @@ export default function Calendar({ variant = "public" }: CalendarProps) {
                             >
                                 <ChevronLeft size={18} />
                             </button>
-                            <h2 className="calendar-month-label">{monthLabel}</h2>
+                            <h2 className="calendar-month-label">
+                                <span className="sr-only">Calendar: </span>
+                                {monthLabel}
+                            </h2>
                             <button
                                 type="button"
                                 className="calendar-nav-btn"

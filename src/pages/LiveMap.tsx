@@ -269,7 +269,13 @@ export default function LiveMap() {
         <section className="section mx-auto grid max-w-275 gap-6 px-4 py-10 lg:max-w-350">
             <Card>
                 <span className="kicker">Live Telemetry</span>
-                <h3>Boat Tracker</h3>
+                <h3>
+                    {/* sr-only prefix: this heading already names the content,
+                        and the kicker above plus the section context read as
+                        boilerplate when announced on their own. */}
+                    <span className="sr-only">Live Map: </span>
+                    Boat Tracker
+                </h3>
                 <p>
                     Real-time positions of AutoBoat vessels reporting to the{" "}
                     <a

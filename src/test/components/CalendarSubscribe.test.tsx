@@ -123,13 +123,18 @@ describe("CalendarSubscribe", () => {
     it("explains that the subscription is narrowed to subteams", () => {
         render(<CalendarSubscribe selectedChannels={new Set(["111"])} />);
         fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
-        expect(screen.getByText(/narrowed to the subteams selected/i)).toBeInTheDocument();
+        // Anchored on the live region rather than the exact sentence: this copy
+        // has already been reworded once, and a free-text assertion silently
+        // rots every time it changes. Assert the meaning instead.
+        const note = screen.getByRole("status");
+        expect(note).toHaveTextContent(/subteams/i);
+        expect(note).toHaveTextContent(/Filter/i);
     });
 
     it("omits the filtered note when nothing is filtered", () => {
         render(<CalendarSubscribe selectedChannels={null} />);
         fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
-        expect(screen.queryByText(/narrowed to the subteams selected/i)).not.toBeInTheDocument();
+        expect(screen.queryByRole("status")).not.toBeInTheDocument();
         expect(screen.getByText(EVENTS_ICS_URL)).toBeInTheDocument();
     });
 

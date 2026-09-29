@@ -18,7 +18,7 @@ Deployment is manual via `./scripts/deploy.sh` from a local checkout with VT Git
 `deploy.sh` ships **two artifacts to two hosts**: the site to VT S4/S3, and the Cloudflare Worker in `worker/` to Cloudflare. One command leaves them consistent.
 
 How it works:
-1. `bun run build` -> `dist/` (Vite build + `spa-fallback.mjs` copies `index.html` to each route path)
+1. `bun run build` -> `dist/` (Vite build + `spa-fallback.mjs` copies `index.html` to each route path + `prerender-meta.mjs` bakes per-route metadata + `generate-sitemap.mjs` writes `dist/sitemap.xml`)
 2. **`wrangler deploy` in `worker/`** (runner is `bunx`, falling back to `npx`) -> Cloudflare
 3. `git fetch aoe_sites main` -> `git worktree add --detach` (isolated from source tree)
 4. `git rm -rf .` in the worktree, copy `dist/` contents via `tar`
@@ -46,14 +46,16 @@ S3 returns 404 for client-side routes (`/sponsors`, `/ourteam`, etc.) because no
 - **`scripts/deploy.sh`**: manual deploy of BOTH artifacts — the site to VT GitLab (`aoe_sites:main`) -> S4 -> S3, and the Cloudflare Worker to Cloudflare. Uses a temp worktree (NOT the source tree) to avoid sweeping `node_modules`/`dist/` into the deploy commit. Steps: commit uncommitted source changes -> `bun run build` -> **`wrangler deploy` in `worker/`** -> push source to GitHub -> fetch `aoe_sites/main` -> create worktree -> `git rm -rf .` -> copy `dist/` via `tar` (portable, macOS `cp` has no `-A`) -> commit `Deploy: built from <sha>` -> fast-forward push (NO force — `main` is protected). Cleanup trap removes the worktree on exit. Flags: `--skip-build` deploys an existing `dist/`; `--skip-worker` leaves the Worker untouched (use it for site-only or docs-only runs). Flags are parsed in a loop, so order does not matter; an unrecognised flag exits 2.
   - The Worker step picks `bunx` when available and falls back to `npx`, runs in a subshell (`cd worker && ...`) so the worktree steps still run from the repo root, and installs `worker/node_modules` on demand so `bunx` cannot quietly fetch its own unpinned wrangler.
   - Env overrides: `AOE_REMOTE` (default `aoe_sites`), `AOE_BRANCH` (default `main`).
-- **`scripts/spa-fallback.mjs`**: post-build step. Copies `dist/index.html` to each route path (`dist/ourteam/index.html`, etc.) and generates `dist/404.html`. The `ROUTES` array `["/ourteam", "/fleet", "/sponsors", "/other-pages", "/calendar", "/gallery", "/live"]` MUST match `src/App.tsx`. S3 returns 404 for client-side routes otherwise.
+- **`scripts/spa-fallback.mjs`**: post-build step. Copies `dist/index.html` to each route path (`dist/ourteam/index.html`, etc.) and generates `dist/404.html`. WARNING: The route list is **derived from `src/lib/seoRoutes.json`**, not hand-maintained — it used to be a literal `ROUTES` array that drifted from `src/App.tsx` and left `/other-pages`, `/live`, and `/calendar` 404ing on S3. Adding a route now means adding it to that JSON (which also gives it metadata and a sitemap entry) and registering it in `src/App.tsx`; `src/test/lib/seo.test.ts` fails if the two disagree.
+- **`scripts/prerender-meta.mjs`**: post-build step. Rewrites `<title>`, description, canonical, `robots`, and OG/Twitter tags in each built `index.html` so non-JS crawlers (link-preview bots, `curl`) see the right metadata per route. Upserts missing tags rather than requiring them.
+- **`scripts/generate-sitemap.mjs`**: post-build step. Writes `dist/sitemap.xml` with an absolute, trailing-slashed `<loc>` per indexable route, and throws if a listed route has no built HTML file.
 - **`scripts/bump-cicd.sh`**: syncs `external/cicd/` (vendored tracked files, NOT a submodule) with upstream's latest `main` from `code.vt.edu/s4-hosting-sites/cicd`. Clones upstream into a temp dir, copies files over `external/cicd/`, stages the diff, and commits. Uses cached VT GitLab creds (anonymous HTTPS fetch of `code.vt.edu` returns 403 — VT InCommon Federation auth required).
 
 ## Continuous integration
 
 `.github/workflows/build.yml` runs on PRs (build-only validation, no deploy). It has two jobs:
 - `webp-convert` (push-to-`main` only): diffs the pushed commit range for `public/images/**` PNG/JPG changes, converts any new/changed originals to WebP in place (`cwebp`), deletes the originals, and commits as `github-actions[bot]` (scoped `contents: write` on the job, not the workflow). No-ops when no image files changed. The `GITHUB_TOKEN` push does not re-trigger workflows, so no self-loop. The old standalone `manual.yml` workflow was folded into this job.
-- `build`: `needs: webp-convert`, then installs deps with `bun install`, runs `bun run lint`, `bun run test`, and `bun run build` (Vite build + `spa-fallback.mjs`), and uploads `dist/` as an artifact.
+- `build`: `needs: webp-convert`, then installs deps with `bun install`, runs `bun run lint`, `bun run test`, and `bun run build` (Vite build + `spa-fallback.mjs` + `prerender-meta.mjs` + `generate-sitemap.mjs`), and uploads `dist/` as an artifact.
 - Triggers: `push` to `main`, PRs to `main`, `workflow_dispatch`.
 - Concurrency: `build-${{ github.ref }}` with `cancel-in-progress: true` (cancels superseded runs on the same ref).
 

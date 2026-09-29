@@ -12,6 +12,12 @@ export default function Gallery() {
                 It sat at 24px with the old mt-6, which read as cramped against
                 the header. */}
             <div className="mx-4 mt-14 mb-8 text-center">
+                {/* sr-only: the visible "Gallery" text below is a section
+                    heading (h2). Every page needs exactly one h1 for its
+                    document outline, and this page's title is really the
+                    same word, so an outline-only h1 avoids duplicating it
+                    on screen. */}
+                <h1 className="sr-only">Gallery</h1>
                 <h2 className="font-heading text-[clamp(22px,3vw,36px)] font-extrabold">Gallery</h2>
             </div>
             {/* Two columns on mobile (matching the Our Team gallery) rather

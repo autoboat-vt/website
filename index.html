@@ -5,8 +5,18 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta
             name="description"
-            content="AutoBoat at Virginia Tech designs and builds autonomous sailboats and electric motorboats for robotics competitions. Join our team!"
+            content="AutoBoat at Virginia Tech designs and builds autonomous sailboats and electric motorboats for robotics competitions. Join our student-led team."
         >
+
+        <!-- Canonical + robots.
+             WARNING: These are DEFAULTS for the home page. Every other route is
+             served this same HTML shell, so `scripts/prerender-meta.mjs`
+             rewrites this block per route at build time and
+             `src/hooks/usePageMeta.ts` re-applies the same values at runtime.
+             Keep all three in sync -- the source of truth is
+             `src/lib/seoRoutes.json`. -->
+        <link rel="canonical" href="https://autoboat.aoe.vt.edu/">
+        <meta name="robots" content="index, follow">
 
         <!-- Theme: mobile browser UI bar color (light + dark variants) -->
         <meta name="theme-color" content="#f0eee6" media="(prefers-color-scheme: light)">
@@ -15,16 +25,74 @@
         <!-- Favicon -->
         <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
 
-        <!-- Social: Open Graph -->
+        <!-- Social: Open Graph + Twitter.
+             WARNING: og:image MUST be an absolute URL with a raster format.
+             It was a relative `/images/favicon.ico` before, which no crawler
+             can resolve or render, so shared links had no preview image. -->
         <meta property="og:type" content="website">
-        <meta property="og:title" content="AutoBoat | Virginia Tech">
+        <meta property="og:site_name" content="AutoBoat at Virginia Tech">
+        <meta property="og:title" content="AutoBoat at Virginia Tech | Autonomous Robot Boats">
         <meta
             property="og:description"
-            content="AutoBoat at Virginia Tech designs and builds autonomous sailboats and electric motorboats for robotics competitions. Join our team!"
+            content="AutoBoat at Virginia Tech designs and builds autonomous sailboats and electric motorboats for robotics competitions. Join our student-led team."
         >
-        <meta property="og:image" content="/images/favicon.ico">
+        <meta property="og:url" content="https://autoboat.aoe.vt.edu/">
+        <meta property="og:image" content="https://autoboat.aoe.vt.edu/images/gallery/14.webp">
+        <meta property="og:image:alt" content="AutoBoat at Virginia Tech autonomous vessel on the water">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="AutoBoat at Virginia Tech | Autonomous Robot Boats">
+        <meta
+            name="twitter:description"
+            content="AutoBoat at Virginia Tech designs and builds autonomous sailboats and electric motorboats for robotics competitions. Join our student-led team."
+        >
+        <meta name="twitter:image" content="https://autoboat.aoe.vt.edu/images/gallery/14.webp">
 
-        <title>AutoBoat | Virginia Tech</title>
+        <!-- Structured data: which organization the site belongs to, and the
+             site itself. Static because these describe the site as a whole,
+             not any one route. -->
+        <script type="application/ld+json">
+            {
+                "@context": "https://schema.org",
+                "@graph": [
+                    {
+                        "@type": "Organization",
+                        "@id": "https://autoboat.aoe.vt.edu/#organization",
+                        "name": "AutoBoat at Virginia Tech",
+                        "alternateName": "AutoBoat",
+                        "url": "https://autoboat.aoe.vt.edu/",
+                        "logo": "https://autoboat.aoe.vt.edu/images/logo.svg",
+                        "email": "autoboat@vt.edu",
+                        "foundingDate": "2012",
+                        "parentOrganization": {
+                            "@type": "CollegeOrUniversity",
+                            "name": "Virginia Tech",
+                            "url": "https://www.vt.edu/"
+                        },
+                        "address": {
+                            "@type": "PostalAddress",
+                            "addressLocality": "Blacksburg",
+                            "addressRegion": "VA",
+                            "addressCountry": "US"
+                        },
+                        "sameAs": [
+                            "https://github.com/autoboat-vt",
+                            "https://www.instagram.com/autoboatvt",
+                            "https://www.linkedin.com/company/abvt"
+                        ]
+                    },
+                    {
+                        "@type": "WebSite",
+                        "@id": "https://autoboat.aoe.vt.edu/#website",
+                        "url": "https://autoboat.aoe.vt.edu/",
+                        "name": "AutoBoat at Virginia Tech",
+                        "publisher": { "@id": "https://autoboat.aoe.vt.edu/#organization" },
+                        "inLanguage": "en-US"
+                    }
+                ]
+            }
+        </script>
+
+        <title>AutoBoat at Virginia Tech | Autonomous Robot Boats</title>
     </head>
     <body>
         <script>

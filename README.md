@@ -17,6 +17,11 @@ React + TypeScript + Vite site for Virginia Tech's AutoBoat team, styled with Ta
 | `/calendar`    | Calendar      |
 | `/gallery`     | Gallery       |
 
+Per-route `<title>`, description, canonical URL, and social tags all come from
+one file, `src/lib/seoRoutes.json`. Add a route there (and register it in
+`src/App.tsx`) and the SPA fallback, the sitemap, and the metadata follow. See
+"SEO" in [`AGENTS.md`](./AGENTS.md).
+
 The top nav only carries the five primary pages (`/`, `/ourteam`, `/fleet`,
 `/sponsors`, `/other-pages`). `/live`, `/calendar`, and `/gallery` are still public
 routes reachable directly by URL — `/other-pages` is the hub that links to them.

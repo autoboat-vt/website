@@ -137,10 +137,31 @@ describe("route registration", () => {
     it("writes an SPA fallback for the nested path", async () => {
         // Without this entry S3 404s on a hard navigation to /calendar/officers,
         // even though client-side navigation to it works.
+        //
+        // The route list is no longer written out here verbatim -- it is
+        // derived from src/lib/seoRoutes.json so it cannot drift from the app.
+        // So assert the derivation AND that the path is in the source of truth.
         const { readFileSync } = await import("node:fs");
         const { resolve } = await import("node:path");
         const spa = readFileSync(resolve(__dirname, "../../../scripts/spa-fallback.mjs"), "utf8");
-        expect(spa).toContain('"/calendar/officers"');
+        expect(spa).toContain("seoRoutes.json");
+
+        const seoRoutes = JSON.parse(readFileSync(resolve(__dirname, "../../lib/seoRoutes.json"), "utf8"));
+        const paths = seoRoutes.routes.map((route: { path: string }) => route.path);
+        expect(paths).toContain("/calendar/officers");
+    });
+
+    it("is excluded from the sitemap and marked noindex", async () => {
+        // Stronger than not-mentioning-the-path: the page is reachable by URL,
+        // so the only thing keeping it out of search results is this flag.
+        // `sitemapRoutes()` and the robots meta tag both read it.
+        const { readFileSync } = await import("node:fs");
+        const { resolve } = await import("node:path");
+        const seoRoutes = JSON.parse(readFileSync(resolve(__dirname, "../../lib/seoRoutes.json"), "utf8"));
+        const entry = seoRoutes.routes.find((route: { path: string }) => route.path === "/calendar/officers");
+
+        expect(entry).toBeDefined();
+        expect(entry.indexable).toBe(false);
     });
 
     it("stays unlisted on every public surface", async () => {

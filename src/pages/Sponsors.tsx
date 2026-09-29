@@ -76,6 +76,11 @@ function SponsorCard({ sponsor }: { sponsor: Sponsor }) {
 export default function Sponsors() {
     return (
         <section className="section mx-auto grid max-w-275 gap-8 px-4 py-16">
+            {/* sr-only: the visible page heading is "Our Sponsors" further
+                down, and this page's subject is broader than that section.
+                Kept outline-only so the h1 count stays at one without
+                adding a second visible heading. */}
+            <h1 className="sr-only">Sponsors</h1>
             <Card>
                 <h3>Thank You</h3>
                 <p>
