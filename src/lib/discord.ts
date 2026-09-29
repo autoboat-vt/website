@@ -123,6 +123,42 @@ export class DiscordError extends Error {
 const FETCH_TIMEOUT_MS = 8_000;
 
 /**
+ * `fetch` collapses every transport-level failure into one opaque
+ * `TypeError: NetworkError when attempting to fetch resource.` -- a DNS
+ * failure, an offline tab, a connection reset, and a CORS rejection (the
+ * response arrived but the browser refused to hand it to us) are all
+ * indistinguishable from that message.
+ *
+ * WARNING: A CORS rejection is the one worth naming, because it is
+ * self-inflicted and otherwise looks like a server outage: the Worker returns
+ * 200 and the browser discards the response. That is exactly what happened when
+ * the Worker echoed a fixed `Access-Control-Allow-Origin` instead of the
+ * caller's origin -- production worked and local dev showed `NetworkError` for
+ * every request. Distinguishing the case requires one opaque-mode probe of the
+ * same URL: a CORS rejection still yields a readable response there, so an
+ * opaque request that succeeds while a normal one failed can only mean the
+ * browser blocked the response we already received.
+ */
+function networkErrorMessage(url: string, cause: unknown): string {
+    return (
+        `Couldn't reach the events service at ${url}. ` +
+        `If the site loads in production but not here, the Worker's ALLOWED_ORIGIN ` +
+        `list is missing this origin (browser error: ${cause instanceof Error ? cause.message : String(cause)}).`
+    );
+}
+
+/** True when `url` responds to an opaque request, i.e. the failure is CORS and
+ * not connectivity. Exported for tests. */
+export async function probeReachableIgnoringCors(url: string): Promise<boolean> {
+    try {
+        await fetch(url, { mode: "no-cors", cache: "no-store" });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Fetch + JSON-parse with a hard timeout and a caller-supplied abort signal,
  * mirroring the wrapper in `src/lib/telemetry.ts`.
  */
@@ -138,15 +174,30 @@ async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
     }
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-        const response = await fetch(url, {
-            headers: { Accept: "application/json" },
-            mode: "cors",
-            // The worker sends `Cache-Control: public, max-age=<TTL>`; without
-            // no-store the browser would serve its own cached response and the
-            // calendar's background polls would never see fresher data.
-            cache: "no-store",
-            signal: controller.signal,
-        });
+        let response: Response;
+        try {
+            response = await fetch(url, {
+                headers: { Accept: "application/json" },
+                mode: "cors",
+                // The worker sends `Cache-Control: public, max-age=<TTL>`; without
+                // no-store the browser would serve its own cached response and the
+                // calendar's background polls would never see fresher data.
+                cache: "no-store",
+                signal: controller.signal,
+            });
+        } catch (cause) {
+            // A caller-driven abort is a normal control path, not a failure --
+            // rethrow so the caller's `signal.aborted` check still recognizes it.
+            if (controller.signal.aborted) throw cause;
+            const reachable = await probeReachableIgnoringCors(url);
+            throw new DiscordError(
+                reachable
+                    ? `The browser blocked the events response (CORS). ` +
+                          `This origin is probably missing from the Worker's ALLOWED_ORIGIN list -- ` +
+                          `see "CORS" in worker/README.md.`
+                    : networkErrorMessage(url, cause),
+            );
+        }
         if (!response.ok) {
             throw new DiscordError(
                 `Events request failed with status ${response.status} (${response.statusText})`,

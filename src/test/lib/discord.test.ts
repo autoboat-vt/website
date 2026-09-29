@@ -277,6 +277,49 @@ describe("discord events client", () => {
             await expect(fetchEvents()).rejects.toThrow(/not valid JSON/);
         });
 
+        describe("network failures name CORS when CORS is the cause", () => {
+            // The bug: the Worker used to echo a fixed Access-Control-Allow-Origin
+            // instead of the caller's, so from any other origin the Worker returned
+            // 200 and the browser discarded the response -- surfacing only as the
+            // opaque "NetworkError when attempting to fetch resource." That looked
+            // like a server outage when it was a one-line origin mismatch.
+            it("calls out CORS when an opaque probe succeeds", async () => {
+                const mode: string[] = [];
+                global.fetch = jest.fn((_url: unknown, init?: RequestInit) => {
+                    mode.push(init?.mode ?? "cors");
+                    // The normal request fails the way a CORS rejection does; the
+                    // opaque probe is allowed through, which is what proves the
+                    // server is reachable and only the response was blocked.
+                    if (init?.mode === "no-cors") {
+                        return Promise.resolve({ type: "opaque" } as unknown as MockResponse);
+                    }
+                    return Promise.reject(new TypeError("NetworkError when attempting to fetch resource."));
+                }) as unknown as typeof fetch;
+
+                await expect(fetchEvents()).rejects.toThrow(/CORS/i);
+                await expect(fetchEvents()).rejects.toThrow(/ALLOWED_ORIGIN/);
+                expect(mode).toContain("no-cors");
+            });
+
+            it("reports unreachable, not CORS, when the probe also fails", async () => {
+                global.fetch = jest.fn(() =>
+                    Promise.reject(new TypeError("NetworkError when attempting to fetch resource.")),
+                ) as unknown as typeof fetch;
+
+                const err = (await fetchEvents().catch((e: unknown) => e)) as Error;
+                expect(err.message).toMatch(/Couldn't reach the events service/);
+                expect(err.message).not.toMatch(/blocked the events response/i);
+            });
+
+            it("still rejects with DiscordError, so callers keep one error type", async () => {
+                global.fetch = jest.fn(() =>
+                    Promise.reject(new TypeError("NetworkError when attempting to fetch resource.")),
+                ) as unknown as typeof fetch;
+
+                await expect(fetchEvents()).rejects.toThrow(DiscordError);
+            });
+        });
+
         it("aborts the fetch when the caller's signal fires", async () => {
             // A fetch that stays pending forever unless the abort fires.
             let abortFired = false;

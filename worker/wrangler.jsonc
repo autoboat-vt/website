@@ -14,10 +14,20 @@
         // Not a secret -- anyone in the guild can see this. Fill in after
         // creating the Discord application (see README.md).
         "DISCORD_GUILD_ID": "1017960606403416085",
-        // Only allow browsers on the public AutoBoat site to call this Worker.
-        // Change to "*" during local UI development if you need to hit the
-        // deployed Worker from localhost; prefer `wrangler dev` for that instead.
-        "ALLOWED_ORIGIN": "https://autoboat.aoe.vt.edu",
+        // Comma-separated allowlist of browser origins permitted to call this
+        // Worker. The response echoes the caller's own Origin when it matches;
+        // otherwise no Access-Control-Allow-Origin is sent and the browser
+        // blocks the response.
+        //
+        // WARNING: This must list EVERY origin the calendar is opened from, and the
+        // failure mode is silent-ish: the Worker returns 200 and the page shows
+        // "NetworkError when attempting to fetch resource." http://localhost:3000
+        // is `server.port` from vite.config.ts -- if that port changes, change
+        // this too, or the calendar goes empty in dev.
+        //
+        // Blank allows nothing (safe). A lone "*" allows every origin, which is
+        // a lockdown-off switch; a "*" mixed into a longer list fails closed.
+        "ALLOWED_ORIGIN": "https://autoboat.aoe.vt.edu, http://localhost:3000",
         // How long to cache the Discord events payload in KV, in seconds.
         //
         // WARNING: This value is budgeted against the Workers KV FREE TIER, which

@@ -9,7 +9,7 @@
  */
 
 import { DEFAULT_OFFICERS_CHANNEL_ID, GUILD_CATEGORY } from "../../../worker/src/audience";
-import worker from "../../../worker/src/index";
+import worker, { resolveAllowedOrigin } from "../../../worker/src/index";
 
 /**
  * Route-level tests for the Worker itself.
@@ -28,6 +28,8 @@ import worker from "../../../worker/src/index";
 const EVENTS_CATEGORY = "1000";
 const OFFICER_VOICE = "1002";
 const SOFTWARE_VOICE = "2001";
+/** The production site origin; `ENV.ALLOWED_ORIGIN` is exactly this value. */
+const PROD_ORIGIN = "https://autoboat.aoe.vt.edu";
 
 const CHANNELS = [
     { id: EVENTS_CATEGORY, name: "Events", type: GUILD_CATEGORY, parent_id: null },
@@ -83,7 +85,7 @@ function makeKv(store: Record<string, unknown> = {}) {
 const ENV = {
     DISCORD_BOT_TOKEN: "test-token",
     DISCORD_GUILD_ID: "999",
-    ALLOWED_ORIGIN: "https://autoboat.aoe.vt.edu",
+    ALLOWED_ORIGIN: PROD_ORIGIN,
     CACHE_TTL_SECONDS: "60",
     OFFICERS_CHANNEL_ID: OFFICER_VOICE,
 };
@@ -129,13 +131,17 @@ async function get(
         failChannels?: boolean;
         method?: string;
         env?: Record<string, string>;
+        /** Sets the request's `Origin` header, which is what CORS keys off. */
+        origin?: string;
     } = {},
 ) {
     const kv = opts.kv ?? makeKv();
     stubDiscord(opts);
     const { ctx, promises } = makeCtx();
+    const headers = new Headers();
+    if (opts.origin) headers.set("Origin", opts.origin);
     const res = await worker.fetch(
-        new Request(`https://worker.test${path}`, { method: opts.method ?? "GET" }),
+        new Request(`https://worker.test${path}`, { method: opts.method ?? "GET", headers }),
         { ...ENV, ...opts.env, EVENTS_KV: kv } as never,
         ctx as never,
     );
@@ -845,9 +851,9 @@ describe("protocol handling", () => {
     });
 
     it("204s a preflight with CORS headers", async () => {
-        const { res } = await get("/events", { method: "OPTIONS" });
+        const { res } = await get("/events", { method: "OPTIONS", origin: PROD_ORIGIN });
         expect(res.status).toBe(204);
-        expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://autoboat.aoe.vt.edu");
+        expect(res.headers.get("Access-Control-Allow-Origin")).toBe(PROD_ORIGIN);
     });
 
     it("405s a non-GET method", async () => {
@@ -856,7 +862,114 @@ describe("protocol handling", () => {
     });
 
     it("sets CORS on the officer routes too", async () => {
-        const { res } = await get("/officers/events");
-        expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://autoboat.aoe.vt.edu");
+        const { res } = await get("/officers/events", { origin: PROD_ORIGIN });
+        expect(res.headers.get("Access-Control-Allow-Origin")).toBe(PROD_ORIGIN);
+    });
+});
+
+/**
+ * CORS regression tests.
+ *
+ * The bug these pin: the response used to send the CONFIGURED origin verbatim,
+ * regardless of who asked. Browsers reject a response whose
+ * `Access-Control-Allow-Origin` is not the origin they sent, so every caller
+ * other than that one exact origin failed with `NetworkError` -- the Worker
+ * returned 200 the whole time, which made it look like a network problem
+ * rather than a CORS one. Production worked; `npm run dev` did not.
+ */
+describe("CORS allowlist", () => {
+    const DEV_ORIGIN = "http://localhost:3000";
+
+    it("echoes an allowlisted origin", () => {
+        expect(resolveAllowedOrigin(PROD_ORIGIN, PROD_ORIGIN)).toBe(PROD_ORIGIN);
+    });
+
+    it("echoes a second origin from the same comma-separated list", () => {
+        const config = `${PROD_ORIGIN}, ${DEV_ORIGIN}`;
+        expect(resolveAllowedOrigin(config, DEV_ORIGIN)).toBe(DEV_ORIGIN);
+        expect(resolveAllowedOrigin(config, PROD_ORIGIN)).toBe(PROD_ORIGIN);
+    });
+
+    it("refuses an origin that is not on the list", () => {
+        // null => the header is omitted, which is what makes the browser block it.
+        expect(resolveAllowedOrigin(PROD_ORIGIN, "https://evil.example")).toBeNull();
+    });
+
+    it("is not fooled by a lookalike origin", () => {
+        // A naive `startsWith`/`includes` check would accept both of these.
+        expect(resolveAllowedOrigin(PROD_ORIGIN, "https://autoboat.aoe.vt.edu.evil.example")).toBeNull();
+        expect(resolveAllowedOrigin(PROD_ORIGIN, "https://notautoboat.aoe.vt.edu")).toBeNull();
+    });
+
+    it("refuses a request with no Origin at all", () => {
+        expect(resolveAllowedOrigin(PROD_ORIGIN, null)).toBeNull();
+    });
+
+    it("allows everything when the config is a bare star", () => {
+        expect(resolveAllowedOrigin("*", "https://anything.example")).toBe("*");
+    });
+
+    it("treats a blank config as allowing nothing", () => {
+        expect(resolveAllowedOrigin("", PROD_ORIGIN)).toBeNull();
+        expect(resolveAllowedOrigin(undefined, PROD_ORIGIN)).toBeNull();
+    });
+
+    it("ignores blank entries in the list", () => {
+        expect(resolveAllowedOrigin(`, ${PROD_ORIGIN} ,`, PROD_ORIGIN)).toBe(PROD_ORIGIN);
+        expect(resolveAllowedOrigin(",", PROD_ORIGIN)).toBeNull();
+    });
+
+    it("does not treat a star inside a larger list as a wildcard", () => {
+        // Only a bare "*" turns the lockdown off. A star mixed into a longer
+        // list is a misconfiguration and fails closed, so a careless append
+        // cannot silently open the Worker to every origin. A typo like
+        // "*.aoe.vt.edu" never matches anything either.
+        expect(resolveAllowedOrigin(`*, ${PROD_ORIGIN}`, "https://evil.example")).toBeNull();
+        expect(resolveAllowedOrigin(`*, ${PROD_ORIGIN}`, PROD_ORIGIN)).toBe(PROD_ORIGIN);
+        expect(resolveAllowedOrigin("*.aoe.vt.edu", "https://evil.example")).toBeNull();
+    });
+
+    it("sends the caller's origin, not the configured one, on the response", async () => {
+        const { res } = await get("/events", {
+            origin: DEV_ORIGIN,
+            env: { ALLOWED_ORIGIN: `${PROD_ORIGIN}, ${DEV_ORIGIN}` },
+        });
+        expect(res.headers.get("Access-Control-Allow-Origin")).toBe(DEV_ORIGIN);
+    });
+
+    it("omits the header for a disallowed origin on a success response", async () => {
+        const { res } = await get("/events", { origin: "https://evil.example" });
+        // Still 200 -- CORS is enforced by the browser, not the Worker.
+        expect(res.status).toBe(200);
+        expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
+    });
+
+    it("omits the header for a disallowed origin on an error response", async () => {
+        // The 404/405 paths build their own response, so they need the same
+        // decision applied -- otherwise an allowed origin gets no ACAO on a
+        // typo'd path and the failure looks like a network error.
+        const notFound = await get("/nope", { origin: "https://evil.example" });
+        expect(notFound.res.headers.get("Access-Control-Allow-Origin")).toBeNull();
+
+        const methodNotAllowed = await get("/events", { method: "POST", origin: "https://evil.example" });
+        expect(methodNotAllowed.res.headers.get("Access-Control-Allow-Origin")).toBeNull();
+    });
+
+    it("emits Vary: Origin on every response, allowed or not", async () => {
+        // Without Vary, a shared cache could serve an allowed caller's response
+        // (which carries the header) to a disallowed one.
+        const allowed = await get("/events", { origin: PROD_ORIGIN });
+        expect(allowed.res.headers.get("Vary")).toContain("Origin");
+
+        const disallowed = await get("/events", { origin: "https://evil.example" });
+        expect(disallowed.res.headers.get("Vary")).toContain("Origin");
+    });
+
+    it("carries the CORS decision onto the .ics feed", async () => {
+        const ok = await get("/calendar.ics", { origin: PROD_ORIGIN });
+        expect(ok.res.headers.get("Access-Control-Allow-Origin")).toBe(PROD_ORIGIN);
+
+        const blocked = await get("/calendar.ics", { origin: "https://evil.example" });
+        expect(blocked.res.headers.get("Access-Control-Allow-Origin")).toBeNull();
     });
 });

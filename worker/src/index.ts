@@ -67,11 +67,19 @@
  * exactly. Do not add a second key, and do not lower the key's
  * `expirationTtl` below the cache TTL when one is set.
  *
- * CORS: the only allowed origin is ALLOWED_ORIGIN (default
- * https://autoboat.aoe.vt.edu). Non-matching browsers are blocked at the
- * browser level; server-side/curl clients can still hit the URL directly.
+ * CORS: `ALLOWED_ORIGIN` is a comma-separated allowlist (default includes
+ * https://autoboat.aoe.vt.edu and http://localhost:3000). The response echoes
+ * the caller's own origin when it is on the list; otherwise
+ * `Access-Control-Allow-Origin` is OMITTED, which is what makes the browser
+ * reject the response. A blank value allows nothing; `*` allows every origin.
+ *
+ * WARNING: Echoing the request origin rather than always sending the configured one
+ * is load-bearing. This used to send the configured value verbatim, so any
+ * other origin got a header it could never match and the browser failed the
+ * request with `NetworkError` (not a CORS message) even though the Worker
+ * returned 200 -- the calendar loaded in production and was empty in local dev.
  * Calendar clients fetching the .ics are not browsers and ignore CORS
- * entirely, so the feed works regardless of the origin lockdown.
+ * entirely, so the feed works regardless of the allowlist.
  */
 
 import { type EventsCacheEntry, isFresh, KEEP_FOREVER_MS, mergeArchive, parseCacheEntry } from "./archive";
@@ -89,7 +97,28 @@ import { buildCalendar } from "./ics";
 interface Env {
     DISCORD_BOT_TOKEN: string;
     DISCORD_GUILD_ID: string;
+    /**
+     * Comma-separated allowlist of browser origins (see `resolveAllowedOrigin`).
+     * Blank allows none; `*` allows every origin (lockdown off).
+     */
     ALLOWED_ORIGIN: string;
+    /**
+     * The `Access-Control-Allow-Origin` value for THIS request, resolved from
+     * the caller's `Origin` header by `resolveAllowedOrigin` at the top of
+     * `fetch`. `undefined` means the origin is not allowed, and the header is
+     * omitted.
+     *
+     * WARNING: This is per-request scratch state written by `fetch`, not a binding.
+     * It exists so the response helpers can stay env-only -- they are called
+     * with `env` everywhere and threading an extra argument through every call
+     * site would be noisier and easier to get wrong.
+     *
+     * WARNING: Do NOT "clean this up" by building a per-request copy with
+     * `{ ...env }`. Cloudflare bindings expose their methods on the prototype,
+     * so a spread copy drops `EVENTS_KV.get`/`.put` and the cache silently
+     * stops working.
+     */
+    origin?: string;
     CACHE_TTL_SECONDS: string;
     /**
      * Optional age-based pruning, in days. UNSET BY DEFAULT, which keeps every
@@ -149,18 +178,76 @@ const DEFAULT_CALENDAR_NAME = "AutoBoat Calendar";
 const ICS_CONTENT_TYPE = "text/calendar; charset=utf-8";
 
 /**
- * Build the CORS headers shared by every response. We always send
- * `Vary: Origin` so shared caches don't serve a response carved for a
- * different origin.
+ * Build the CORS headers shared by every response.
+ *
+ * WARNING: `Access-Control-Allow-Origin` is emitted ONLY when `env.origin` is set,
+ * and `env.origin` is resolved per request from the caller's own `Origin`
+ * header against the allowlist (see `resolveAllowedOrigin`). This function
+ * previously always sent the configured `ALLOWED_ORIGIN` verbatim, which meant
+ * every origin except that exact one got a header it could never match --
+ * browsers block a response whose `Access-Control-Allow-Origin` differs from
+ * the origin that was sent, so the request failed with `NetworkError` even
+ * though the Worker had returned 200. That is why the calendar was empty in
+ * local dev while working in production.
+ *
+ * `Vary: Origin` is always sent, including for responses with no ACAO, so a
+ * shared cache can never serve one origin's response to another.
  */
 function corsHeaders(env: Env): HeadersInit {
-    return {
-        "Access-Control-Allow-Origin": env.ALLOWED_ORIGIN,
+    const headers: Record<string, string> = {
         "Access-Control-Allow-Methods": "GET, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
         "Access-Control-Max-Age": "86400",
         Vary: "Origin",
     };
+    // Omitted entirely (rather than set to a non-matching value) when the
+    // caller's origin is not allowed -- the absence of the header is what makes
+    // the browser reject the response.
+    if (env.origin) headers["Access-Control-Allow-Origin"] = env.origin;
+    return headers;
+}
+
+/** Parse the `ALLOWED_ORIGIN` allowlist (comma-separated, trimmed, no blanks). */
+function parseAllowedOrigins(raw: string | undefined): Set<string> {
+    return new Set(
+        (raw ?? "")
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean),
+    );
+}
+
+/**
+ * The `Access-Control-Allow-Origin` value to send back, or `null` to omit it.
+ *
+ * Echoes the caller's own `Origin` when it is on the allowlist. Echoing the
+ * REQUEST's origin (rather than always sending the configured value) is the
+ * whole point: CORS compares the response header against the origin the browser
+ * sent, so a fixed unrelated value can never match for a different caller.
+ *
+ * `ALLOWED_ORIGIN` is a comma-separated list, so a local dev origin can be
+ * allowed alongside production without turning the lockdown off with `*`.
+ * `npm run dev` serves on `http://localhost:3000` -- Vite reads that port from
+ * `server.port` in vite.config.ts, so changing the port means changing this
+ * value too (or the dev calendar goes empty again).
+ *
+ * WARNING: `*` is honored only as the SOLE entry, and it means "allow every
+ * origin". It is a lockdown-off switch, not a wildcard-subdomain pattern, so
+ * `*.aoe.vt.edu` never matches anything. A `*` mixed into a longer list is
+ * treated as a misconfiguration and allows nothing (fail closed), rather than
+ * silently opening the Worker to every origin. A blank value also allows
+ * nothing, which is the safe misconfiguration.
+ */
+export function resolveAllowedOrigin(
+    allowedOriginConfig: string | undefined,
+    requestOrigin: string | null,
+): string | null {
+    if (!requestOrigin) return null;
+    const allowed = parseAllowedOrigins(allowedOriginConfig);
+    // Exact membership, so neither a lookalike host nor a `*` that has been
+    // appended to a longer list can widen access by accident.
+    if (allowed.size === 1 && allowed.has("*")) return "*";
+    return allowed.has(requestOrigin) ? requestOrigin : null;
 }
 
 /** GET a Discord REST path with the bot token, returning the parsed JSON. */
@@ -608,6 +695,11 @@ export default {
         // (calendar clients and users paste URLs with either form).
         const pathname = url.pathname.replace(/\/+$/, "") || "/";
         const method = request.method.toUpperCase();
+
+        // Resolve CORS for this request BEFORE dispatching, so every response
+        // -- including the 404/405/preflight branches below -- carries the same
+        // decision. See `Env.origin`.
+        env.origin = resolveAllowedOrigin(env.ALLOWED_ORIGIN, request.headers.get("Origin")) ?? undefined;
 
         const route = ROUTES[pathname];
         if (!route) {
