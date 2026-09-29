@@ -708,7 +708,14 @@ describe("KV write budget", () => {
         // the free tier over budget, which blanks the calendar until 00:00 UTC.
         // Asserted both with unbounded retention (the default) and with an
         // explicit window.
-        for (const env of [{}, { RETENTION_DAYS: "365" }]) {
+        //
+        // WARNING: The array is annotated rather than inlined into the `for`. Without
+        // it TypeScript widens `[{}, { RETENTION_DAYS: "365" }]` to a union whose
+        // first member is `{ RETENTION_DAYS?: undefined }`, and `undefined` is not
+        // assignable to the `Record<string, string>` that `get`'s `env` option
+        // expects -- so an empty case cannot be written as a bare `{}`.
+        const retentionCases: Record<string, string>[] = [{}, { RETENTION_DAYS: "365" }];
+        for (const env of retentionCases) {
             const { kv } = await get("/events", { env });
             expect(Object.keys(kv.writes)).toEqual(["events:v2"]);
         }
