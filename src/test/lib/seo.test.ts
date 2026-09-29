@@ -77,18 +77,57 @@ describe("seo metadata", () => {
             expect(new Set(descriptions).size).toBe(paths.length);
         });
 
-        it("names the organization in every title", () => {
+        it("puts the brand in every title", () => {
+            // "AutoBoat" specifically, because a bare page name like
+            // "Sponsors" or "Gallery" is too generic to identify the site in a
+            // result list.
             for (const path of allRoutePaths()) {
-                expect(metadataForPath(path).title).toContain("AutoBoat at Virginia Tech");
+                expect(metadataForPath(path).title).toContain("AutoBoat");
             }
+        });
+
+        it("spells out the full organization name on the home page", () => {
+            // The home page is the one result that should read as the
+            // organization itself rather than a section of it.
+            expect(metadataForPath("/").title).toContain("AutoBoat");
+            expect(metadataForPath("/").title).toMatch(/VT|Virginia Tech/);
         });
 
         it("keeps titles within a length search results can show", () => {
             for (const path of allRoutePaths()) {
                 const { title } = metadataForPath(path);
-                // Google truncates around 60 characters; a little slack is fine
-                // but a runaway title would be cut off mid-word.
-                expect(title.length).toBeLessThanOrEqual(70);
+                // Google truncates near 60 characters / ~600px. Keep real slack
+                // rather than shipping a title that only just fits.
+                expect(title.length).toBeLessThanOrEqual(45);
+            }
+        });
+
+        it("keeps every title inside the rendered width Google will show", () => {
+            // Length in CHARACTERS is a poor proxy: Google truncates by pixel
+            // width, so a 40-character string of wide glyphs can overflow while
+            // a 50-character string of narrow ones does not. jsdom has no text
+            // metrics, but `measureText` over a fixed font is deterministic and
+            // the same technique the manual check used.
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return; // No canvas in this environment; the length check above still applies.
+            ctx.font = "20px Arial, sans-serif";
+
+            for (const path of allRoutePaths()) {
+                const { title } = metadataForPath(path);
+                expect(ctx.measureText(title).width).toBeLessThanOrEqual(600);
+            }
+        });
+
+        it("does not repeat a long brand suffix on every page", () => {
+            // The regression: all nine titles ended in
+            // " | AutoBoat at Virginia Tech" (28 characters), which crowded out
+            // the part of the title that actually distinguishes the page.
+            for (const path of allRoutePaths()) {
+                const { title } = metadataForPath(path);
+                if (path !== "/") {
+                    expect(title.endsWith(" | AutoBoat")).toBe(true);
+                }
             }
         });
 

@@ -5,7 +5,7 @@
     "routes": [
         {
             "path": "/",
-            "title": "AutoBoat at Virginia Tech | Autonomous Robot Boats",
+            "title": "AutoBoat | VT Autonomous Boat Team",
             "description": "AutoBoat at Virginia Tech designs and builds autonomous sailboats and electric motorboats for robotics competitions. Join our student-led team.",
             "changefreq": "monthly",
             "priority": "1.0",
@@ -13,7 +13,7 @@
         },
         {
             "path": "/ourteam",
-            "title": "Meet the Team | AutoBoat at Virginia Tech",
+            "title": "Meet the Team | AutoBoat",
             "description": "Meet the four AutoBoat subteams -- software, electronics, mechanical, and business -- designing and building autonomous boats in Virginia Tech's Ware Lab.",
             "changefreq": "monthly",
             "priority": "0.8",
@@ -21,7 +21,7 @@
         },
         {
             "path": "/fleet",
-            "title": "Our Fleet | AutoBoat at Virginia Tech",
+            "title": "Our Fleet | AutoBoat",
             "description": "Explore the AutoBoat fleet: Ducky, our autonomous jet ski; Theseus, our high-speed electric motorboat; and Lumpy, our retired robotic sailboat.",
             "changefreq": "monthly",
             "priority": "0.9",
@@ -29,7 +29,7 @@
         },
         {
             "path": "/sponsors",
-            "title": "Sponsors | AutoBoat at Virginia Tech",
+            "title": "Sponsors | AutoBoat",
             "description": "The companies and organizations that fund, supply, and mentor AutoBoat at Virginia Tech, a student-led autonomous boat design team in the Ware Lab.",
             "changefreq": "monthly",
             "priority": "0.6",
@@ -37,7 +37,7 @@
         },
         {
             "path": "/other-pages",
-            "title": "Other Pages | AutoBoat at Virginia Tech",
+            "title": "Other Pages | AutoBoat",
             "description": "Explore AutoBoat's live boat tracker, team calendar, photo gallery, and technical documentation.",
             "changefreq": "monthly",
             "priority": "0.6",
@@ -45,7 +45,7 @@
         },
         {
             "path": "/gallery",
-            "title": "Gallery | AutoBoat at Virginia Tech",
+            "title": "Gallery | AutoBoat",
             "description": "Photos of the AutoBoat team designing, building, and testing autonomous sailboats and electric motorboats at Virginia Tech.",
             "changefreq": "monthly",
             "priority": "0.6",
@@ -53,7 +53,7 @@
         },
         {
             "path": "/calendar",
-            "title": "Calendar | AutoBoat at Virginia Tech",
+            "title": "Calendar | AutoBoat",
             "description": "Meeting times, work sessions, and competition dates for AutoBoat at Virginia Tech, pulled from our Discord server. Subscribe from your own calendar app.",
             "changefreq": "weekly",
             "priority": "0.5",
@@ -61,7 +61,7 @@
         },
         {
             "path": "/live",
-            "title": "Live Boat Map | AutoBoat at Virginia Tech",
+            "title": "Live Boat Map | AutoBoat",
             "description": "Follow AutoBoat vessels in real time: GPS positions, waypoints, speed, and battery telemetry from our autonomous boats.",
             "changefreq": "weekly",
             "priority": "0.5",
@@ -69,7 +69,7 @@
         },
         {
             "path": "/calendar/officers",
-            "title": "Officers Calendar | AutoBoat at Virginia Tech",
+            "title": "Officers Calendar | AutoBoat",
             "description": "Officer-only calendar for the AutoBoat at Virginia Tech design team.",
             "changefreq": "weekly",
             "priority": "0.0",

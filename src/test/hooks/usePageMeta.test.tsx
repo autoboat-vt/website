@@ -38,7 +38,7 @@ describe("usePageMeta", () => {
 
     it("sets the document title for the current route", () => {
         renderAt("/fleet");
-        expect(document.title).toBe("Our Fleet | AutoBoat at Virginia Tech");
+        expect(document.title).toBe("Our Fleet | AutoBoat");
     });
 
     it("sets a description matching the route, not the home default", () => {
@@ -64,8 +64,8 @@ describe("usePageMeta", () => {
 
     it("sets Open Graph and Twitter titles to the route title", () => {
         renderAt("/gallery");
-        expect(metaContent('meta[property="og:title"]')).toBe("Gallery | AutoBoat at Virginia Tech");
-        expect(metaContent('meta[name="twitter:title"]')).toBe("Gallery | AutoBoat at Virginia Tech");
+        expect(metaContent('meta[property="og:title"]')).toBe("Gallery | AutoBoat");
+        expect(metaContent('meta[name="twitter:title"]')).toBe("Gallery | AutoBoat");
         expect(metaContent('meta[name="twitter:card"]')).toBe("summary_large_image");
     });
 
@@ -83,18 +83,18 @@ describe("usePageMeta", () => {
         // noindex is not the same as "no metadata" -- the page can still be
         // shared by URL, so the preview tags must be populated.
         renderAt("/calendar/officers");
-        expect(document.title).toBe("Officers Calendar | AutoBoat at Virginia Tech");
+        expect(document.title).toBe("Officers Calendar | AutoBoat");
     });
 
     it("does not confuse /calendar with /calendar/officers", () => {
         renderAt("/calendar");
-        expect(document.title).toBe("Calendar | AutoBoat at Virginia Tech");
+        expect(document.title).toBe("Calendar | AutoBoat");
         expect(metaContent('meta[name="robots"]')).toBe("index, follow");
     });
 
     it("applies home metadata to an unknown path", () => {
         renderAt("/not-a-real-page");
-        expect(document.title).toBe("AutoBoat at Virginia Tech | Autonomous Robot Boats");
+        expect(document.title).toBe("AutoBoat | VT Autonomous Boat Team");
     });
 
     it("does not stack duplicate tags when navigating between routes", () => {
