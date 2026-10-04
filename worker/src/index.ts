@@ -47,11 +47,21 @@
  * `RETENTION_DAYS` opts into age-based pruning. See archive.ts for the merge
  * rules.
  *
+ * DELETION. The list endpoint cannot distinguish a finished event from a
+ * deleted one, but the guild audit log can: an entry of action type 102
+ * (`GUILD_SCHEDULED_EVENT_DELETE`) names the deleted event's id. Each refresh
+ * therefore also reads `GET /guilds/{id}/audit-logs?action_type=102`, and the
+ * ids it reports are dropped from the archive -- so deleting an event in
+ * Discord removes it from the calendar instead of leaving it behind as history.
+ * See audit.ts. The audit read is best-effort: if it fails (or the bot lacks
+ * VIEW_AUDIT_LOG) the archive keeps its default keep-everything behavior, which
+ * is the same as before this signal existed.
+ *
  * Discord upstream errors are returned as a generic 502 with CORS headers
  * intact; the bot token is never logged, echoed, or included in responses.
  *
- * ⚠️ WRITE BUDGET. The `/guilds/{id}/channels` fetch used to run on this path
- * and its result was written to KV too, so every cache miss cost TWO writes.
+ * WARNING: WRITE BUDGET. The `/guilds/{id}/channels` fetch used to run on this
+ * path and its result was written to KV too, so every cache miss cost TWO writes.
  * The free tier allows 1,000 writes/day, and a miss is what consumes one, so
  * `CACHE_TTL_SECONDS` is a hard budget: at 60s the Worker exceeded the daily
  * limit and the calendar went empty until 00:00 UTC. Classification no longer
@@ -59,8 +69,8 @@
  * at >= 180s and preserve the one-write-per-miss invariant; `routes.test.ts`
  * pins it.
  *
- * ⚠️ Retention does NOT change that arithmetic, but it does move freshness out
- * of KV's expiry and into the stored `fetchedAt`: the key outlives the cache
+ * WARNING: Retention does NOT change that arithmetic, but it does move freshness
+ * out of KV's expiry and into the stored `fetchedAt`: the key outlives the cache
  * TTL (indefinitely, in the default unbounded mode), so a plain "is it in
  * KV?" test would serve stale data forever. A miss is
  * `now - fetchedAt >= CACHE_TTL_SECONDS`, which preserves the write rate
@@ -96,6 +106,7 @@ import {
     listCategories,
     listChannels,
 } from "./audience";
+import { GUILD_SCHEDULED_EVENT_DELETE, parseDeletedEventIds } from "./audit";
 import { type CalendarEvent, type DiscordGuildScheduledEvent, normalizeEvents, publicEvents } from "./events";
 import { buildCalendar } from "./ics";
 
@@ -308,6 +319,40 @@ async function fetchDiscordEvents(env: Env): Promise<DiscordGuildScheduledEvent[
 }
 
 /**
+ * The ids of events the guild audit log says were deleted.
+ *
+ * WHY THIS EXISTS. The scheduled-events list drops a completed event and a
+ * deleted one identically, so the archive (which keeps everything Discord stops
+ * reporting, see archive.ts) cannot tell them apart and would keep a deleted
+ * event forever. The audit log is the only place the distinction exists: an
+ * entry of action type 102 names the deleted event's id.
+ *
+ * WARNING: Best-effort, and the failure must stay silent. When this returns null
+ * (request failed, or the bot lacks VIEW_AUDIT_LOG) the caller passes an empty
+ * set, which is exactly the pre-deletion-signal behavior -- a deleted event
+ * lingers as history, which is the archive's default. Failing the whole response
+ * because an enhancement's source was unavailable would blank the calendar.
+ *
+ * `action_type` is filtered server-side, so this asks for the smallest useful
+ * page. `limit=100` is Discord's maximum; a busy 45-day window could hold more
+ * deletions than that, but a missed deletion merely falls back to the archive's
+ * keep-everything default, and 45 days of >100 event deletions is not a real
+ * case for this team.
+ */
+async function fetchDeletedEventIds(env: Env): Promise<Set<string> | null> {
+    try {
+        const data = await discordGet(
+            env,
+            `/guilds/${env.DISCORD_GUILD_ID}/audit-logs?action_type=${GUILD_SCHEDULED_EVENT_DELETE}&limit=100`,
+        );
+        return parseDeletedEventIds(data);
+    } catch {
+        // Deliberately swallowed: see the WARNING above.
+        return null;
+    }
+}
+
+/**
  * Fetch the guild's channels.
  *
  * WARNING: Used ONLY by the `/audiences` diagnostics route. Classification does
@@ -425,10 +470,17 @@ async function loadEvents(
     // doubled the write cost against the free tier's 1,000 writes/day for a
     // value only `/audiences` reads. It is now fetched lazily there instead.
     const fresh = normalizeEvents(raw, { audienceConfig: audienceConfigFromEnv(env) });
+    // Deletions, from the audit log. This is a SECOND Discord request, but only
+    // on the miss path and with NO extra KV write, so the write budget (one
+    // write per miss) is unchanged. It is best-effort: a failed audit fetch
+    // yields an empty set, which is the archive's keep-everything default, so
+    // an event the team deleted survives as history exactly as it did before
+    // this signal existed. See fetchDeletedEventIds.
+    const deletedIds = (await fetchDeletedEventIds(env)) ?? new Set<string>();
     // Merge over whatever was stored. An unreadable/unrecognised value is
     // treated as an empty archive rather than as a reason to fail -- a cold
     // start costs history, which a cache-shape change should not compound.
-    const events = mergeArchive(entry?.events ?? [], fresh, now, retentionMs);
+    const events = mergeArchive(entry?.events ?? [], fresh, now, retentionMs, deletedIds);
 
     // Fire-and-forget KV write -- do not block the response on it. Exactly ONE
     // write, always this key.

@@ -32,6 +32,14 @@ event Discord has stopped reporting. **Retention is unbounded: every event the
 Worker has ever seen is kept.** That is what keeps past events on the calendar;
 nothing on the website filters them. Set `RETENTION_DAYS` to opt into pruning.
 
+DELETION is the one exception. The list endpoint cannot tell a finished event
+from a deleted one, but the guild audit log can: an entry of action type 102
+(`GUILD_SCHEDULED_EVENT_DELETE`) names the deleted event's id. Each refresh also
+reads `GET .../audit-logs?action_type=102` and drops those ids from the
+archive, so deleting an event in Discord removes it from the calendar. The
+audit read is best-effort and costs no extra KV write; if it fails the archive
+keeps everything, exactly as before.
+
 ## Routes
 
 | Route | Contents |
@@ -156,10 +164,21 @@ link it from any public page.
 
    - Left sidebar -> **OAuth2** -> **URL Generator**.
    - Scopes: check `bot`.
-   - Bot Permissions: only **View Channels**. (Reading scheduled events
-     requires `VIEW_CHANNEL`; no other permission is needed.)
+   - Bot Permissions: **View Channels** and **View Audit Log**. (Reading
+     scheduled events requires `VIEW_CHANNEL`. Deleting an event removes it from
+     the calendar via the audit log, which requires the `VIEW_AUDIT_LOG`
+     permission; without it a deleted event lingers as history.)
    - Open the generated URL in a browser and pick the team server. You need
      the **Manage Server** permission in that server to complete the invite.
+   - Shortcut: the two permissions together are **1152**
+     (`VIEW_CHANNEL` 1024 + `VIEW_AUDIT_LOG` 128), so the invite URL can be
+     built by hand:
+     `https://discord.com/oauth2/authorize?client_id=<APP_ID>&scope=bot&permissions=1152`
+
+   WARNING: The invite URL only sets permissions on **first** invite. A server
+   that already has the bot will not pick up a new permission by re-opening the
+   link -- it redirects with no error and changes nothing. Update the granted
+   permissions instead; see "Granting a permission to an already-invited bot".
 
 3. **Get the guild (server) ID.**
 
@@ -197,6 +216,55 @@ link it from any public page.
    ```
    DISCORD_BOT_TOKEN=<your-token-here>
    ```
+
+### Granting a permission to an already-invited bot
+
+The bot needs **two** permissions, and re-opening the invite URL is NOT how you
+add one to a server that already has the bot:
+
+| Permission | Value | Needed for |
+| --- | --- | --- |
+| `VIEW_CHANNEL` | 1024 (`1 << 10`) | reading scheduled events and the audit log |
+| `VIEW_AUDIT_LOG` | 128 (`1 << 7`) | seeing that an event was deleted (vs. merely finishing) |
+
+Combined: **1152**.
+
+WARNING: **The invite URL sets permissions only on FIRST invite.** If the bot is
+already in the server, re-opening
+`https://discord.com/oauth2/authorize?client_id=<APP_ID>&scope=bot&permissions=1152`
+does nothing -- it redirects to the app's page with no error and grants nothing.
+This is the trap: it looks like it worked, and the audit read then fails
+silently (the archive just keeps deleted events as history).
+
+To update an existing install, use the **bot's auto-created role**:
+
+1. Discord client -> **Server Settings -> Roles**.
+2. Find the role named after the bot (Discord creates one per bot and it is
+   assigned automatically).
+3. Enable **View Audit Log**. Leave **View Channels** enabled too.
+4. Save. No redeploy is needed -- the Worker reads the permission fresh on each
+   audit request.
+
+NOTE: The bot's own role can only be edited by someone whose highest role is
+above it, and by the server owner. If the role is not editable, the bot was
+invited with `ADMINISTRATOR` (which already includes `VIEW_AUDIT_LOG`, so
+nothing needs doing) or the account lacks **Manage Roles**.
+
+WARNING: Do NOT edit channel-level permission overwrites to grant this. Audit
+logs are a **guild-level** permission with no channel scope, so a channel
+overwrite cannot grant it -- the role is the only place it applies.
+
+Verify it took effect:
+
+1. Note the id of an event you no longer need (`GET <worker-url>/events`).
+2. Delete that event in Discord.
+3. Within one cache TTL (<= 180 s) it must be gone from `GET <worker-url>/events`.
+
+WARNING: If it is still there, the audit read is being rejected and the failure is
+**silent** -- `fetchDeletedEventIds` swallows the error on purpose, because a
+failed audit read must never blank the calendar. The event then simply stays as
+history. Confirm the permission in Server Settings -> Roles, or check the
+Cloudflare Worker logs for the audit request's status.
 
 ## Local development
 
@@ -352,18 +420,26 @@ are merged over the stored ones:
 
 1. **Fresh wins** -- an event still in Discord's list is taken verbatim, since
    its name, description, or start time may have changed.
-2. **Every event that fell out of the list is kept** -- this is unbounded by
-   default. It is deliberately unconditional, because Discord drops an event
-   for exactly two reasons (it completed, or it was removed) and the API cannot
-   tell them apart.
+2. **An event the audit log says was deleted is dropped.** `src/audit.ts` turns
+   `GET .../audit-logs?action_type=102` into the deleted event ids, and
+   `mergeArchive` removes exactly those -- so deleting an event takes it off the
+   calendar rather than leaving it as history. This is the one exception to
+   keep-everything, it is checked before the age rules, and it only drops an id
+   that is absent from Discord's fresh list. It is best-effort: a failed audit
+   read (or a bot without `VIEW_AUDIT_LOG`) yields an empty set, which restores
+   the default keep-everything behavior.
+3. **Every other event that fell out of the list is kept** -- this is unbounded
+   by default. It is deliberately unconditional, because the list endpoint drops
+   an event for two reasons (it completed, or it was removed) and cannot tell
+   them apart, so without an audit signal the archive keeps both.
    - an event that had **ended** is marked `completed`, so the calendar renders
      it as history;
    - an event that had **not ended** keeps its status, since marking it
      `completed` would claim a meeting happened that never did;
    - an already-`canceled` event keeps its status, which is styled differently.
-3. **Malformed events are dropped** -- a record whose dates cannot be parsed
+4. **Malformed events are dropped** -- a record whose dates cannot be parsed
    can neither be reasoned about nor aged out.
-4. **Nothing is dropped for being old** unless `RETENTION_DAYS` is set. The
+5. **Nothing is dropped for being old** unless `RETENTION_DAYS` is set. The
    result is still held under `MAX_ARCHIVED_EVENTS`, which is a safety ceiling
    rather than a retention policy (roughly a 600 KB value, ~50 years of weekly
    meetings).

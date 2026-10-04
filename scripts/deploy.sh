@@ -11,7 +11,7 @@
 #
 # Strategy: fast-forward commit on top of existing main (NO force push).
 #   1. Commit any uncommitted changes (prompts for message)
-#   2. Build the site with `bun run build` → dist/
+#   2. Build the site with `bun run build` into dist/
 #   3. Deploy the Cloudflare Worker (`wrangler deploy` in worker/)
 #   4. Push source to GitHub (origin/main)
 #   5. Fetch the latest aoe_sites/main
@@ -245,6 +245,6 @@ if ! git push "$REMOTE" "HEAD:$REMOTE_BRANCH" 2>/tmp/push-err.log; then
 fi
 
 echo
-echo "✅ Deployed to $REMOTE/$REMOTE_BRANCH"
+echo "Deployed to $REMOTE/$REMOTE_BRANCH"
 echo "   Live site: https://autoboat.aoe.vt.edu/"
 echo "   (Give the VT server ~30s to refresh; hard-refresh your browser to bypass cache.)"

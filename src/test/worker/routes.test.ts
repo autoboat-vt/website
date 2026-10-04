@@ -105,7 +105,16 @@ function makeCtx() {
 }
 
 /** Stub Discord so both resources resolve. */
-function stubDiscord(opts: { failChannels?: boolean; channels?: typeof CHANNELS; events?: typeof RAW_EVENTS } = {}) {
+function stubDiscord(
+    opts: {
+        failChannels?: boolean;
+        channels?: typeof CHANNELS;
+        events?: typeof RAW_EVENTS;
+        /** Audit-log payload; defaults to an empty log. Set `failAudit` to error. */
+        auditLogEntries?: { action_type: number; target_id: string }[];
+        failAudit?: boolean;
+    } = {},
+) {
     const calls: string[] = [];
     global.fetch = (async (input: RequestInfo | URL) => {
         const url = String(input);
@@ -115,6 +124,12 @@ function stubDiscord(opts: { failChannels?: boolean; channels?: typeof CHANNELS;
                 return new Response("nope", { status: 500 });
             }
             return new Response(JSON.stringify(opts.channels ?? CHANNELS), { status: 200 });
+        }
+        if (url.includes("/audit-logs")) {
+            if (opts.failAudit) {
+                return new Response("nope", { status: 403 });
+            }
+            return new Response(JSON.stringify({ audit_log_entries: opts.auditLogEntries ?? [] }), { status: 200 });
         }
         if (url.includes("/scheduled-events")) {
             return new Response(JSON.stringify(opts.events ?? RAW_EVENTS), { status: 200 });
@@ -281,6 +296,9 @@ describe("past-event retention", () => {
         fresh?: ReturnType<typeof discordEvent>[];
         env?: Record<string, string>;
         path?: string;
+        /** Audit log to serve alongside the fresh events. */
+        auditLogEntries?: { action_type: number; target_id: string }[];
+        failAudit?: boolean;
     }) {
         const kv = makeKv({
             "events:v2": {
@@ -288,7 +306,7 @@ describe("past-event retention", () => {
                 events: opts.stored,
             },
         });
-        stubDiscord({ events: opts.fresh ?? [] });
+        stubDiscord({ events: opts.fresh ?? [], auditLogEntries: opts.auditLogEntries, failAudit: opts.failAudit });
         const { ctx, promises } = makeCtx();
         const res = await worker.fetch(
             new Request(`https://worker.test${opts.path ?? "/events"}`),
@@ -500,6 +518,153 @@ describe("past-event retention", () => {
         const written = kv.writes["events:v2"] as { events: { id: string }[] };
 
         expect(written.events.map((e) => e.id)).toContain("completed-1");
+    });
+});
+
+describe("deleting an event removes it from the calendar", () => {
+    // WHY THIS SUITE EXISTS. The archive keeps every event that falls out of
+    // Discord's list, because a completed event and a deleted one vanish
+    // identically from that endpoint. The guild audit log is the only place the
+    // distinction exists, so the Worker reads it on every refresh and drops the
+    // events it names. These tests drive the real handler, which is the only
+    // way to observe the whole path (list + audit -> merge -> KV write).
+
+    function daysFromNow(days: number): string {
+        return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+    }
+    function storedEvent(id: string, startDays: number) {
+        return {
+            id,
+            name: id,
+            description: null,
+            start: daysFromNow(startDays),
+            end: daysFromNow(startDays + 1 / 24),
+            status: "scheduled",
+            location: null,
+            userCount: null,
+            isRecurring: false,
+            image: null,
+            recurrenceRule: null,
+            channelId: SOFTWARE_VOICE,
+            audience: "public",
+            cancelledDates: [],
+        };
+    }
+    const DELETE = 102;
+
+    /** Seed a stale cache with `stored`, serve `fresh` + an audit log, refetch. */
+    async function refetch(opts: {
+        stored: Record<string, unknown>[];
+        fresh?: ReturnType<typeof discordEvent>[];
+        auditLogEntries?: { action_type: number; target_id: string }[];
+        failAudit?: boolean;
+    }) {
+        const kv = makeKv({
+            "events:v2": { fetchedAt: Date.now() - 600_000, events: opts.stored },
+        });
+        stubDiscord({ events: opts.fresh ?? [], auditLogEntries: opts.auditLogEntries, failAudit: opts.failAudit });
+        const { ctx, promises } = makeCtx();
+        const res = await worker.fetch(
+            new Request("https://worker.test/events"),
+            { ...ENV, EVENTS_KV: kv } as never,
+            ctx as never,
+        );
+        await Promise.all(promises);
+        return { body: (await res.json()) as { id: string }[], kv };
+    }
+
+    it("drops an event the audit log says was deleted", async () => {
+        // The headline behavior. Without the audit read this event would be
+        // archived as history and keep rendering.
+        const { body } = await refetch({
+            stored: [storedEvent("deleted-1", -7)],
+            auditLogEntries: [{ action_type: DELETE, target_id: "deleted-1" }],
+        });
+
+        expect(body.map((e) => e.id)).not.toContain("deleted-1");
+    });
+
+    it("drops a deleted UPCOMING event, not just past ones", async () => {
+        // The case the team is likeliest to hit: create a meeting, then delete
+        // it. It must not linger as an upcoming meeting that no longer exists.
+        const { body } = await refetch({
+            stored: [storedEvent("deleted-1", 14)],
+            auditLogEntries: [{ action_type: DELETE, target_id: "deleted-1" }],
+        });
+
+        expect(body).toEqual([]);
+    });
+
+    it("persists the deletion, so the NEXT request does not resurrect it", async () => {
+        // A deletion that is served but not written back would come straight
+        // back from KV on the following refresh.
+        const { kv } = await refetch({
+            stored: [storedEvent("deleted-1", -7)],
+            auditLogEntries: [{ action_type: DELETE, target_id: "deleted-1" }],
+        });
+        const written = kv.writes["events:v2"] as { events: { id: string }[] };
+
+        expect(written.events.map((e) => e.id)).not.toContain("deleted-1");
+    });
+
+    it("keeps an event that merely completed", async () => {
+        // The complement: a completed event produces no 102 entry, so it must
+        // still be archived as history. This is the regression guard that stops
+        // the deletion signal from clearing past events wholesale.
+        const { body } = await refetch({
+            stored: [storedEvent("completed-1", -7)],
+            auditLogEntries: [{ action_type: 101, target_id: "completed-1" }],
+        });
+
+        expect(body.map((e) => e.id)).toContain("completed-1");
+    });
+
+    it("still serves the calendar when the audit log is unavailable", async () => {
+        // WARNING: The audit read is best-effort. If it fails (or the bot lacks
+        // VIEW_AUDIT_LOG) the archive falls back to keeping everything, exactly
+        // as before this feature -- it must NEVER fail the whole response, or a
+        // permission problem would blank the calendar.
+        const { body } = await refetch({
+            stored: [storedEvent("completed-1", -7)],
+            failAudit: true,
+        });
+
+        expect(body.map((e) => e.id)).toContain("completed-1");
+    });
+
+    it("reads the audit log only on a cache miss", async () => {
+        // The audit read is a second Discord request, so it must not run on the
+        // warm path (which is pure reads today). It also adds no KV write.
+        const seeded = [{ ...discordEvent("public-1", "Software Work Session", SOFTWARE_VOICE), audience: "public" }];
+        const kv = makeKv({ "events:v2": { fetchedAt: Date.now(), events: seeded } });
+        const calls = stubDiscord();
+        const { ctx } = makeCtx();
+
+        const res = await worker.fetch(
+            new Request("https://worker.test/events"),
+            { ...ENV, EVENTS_KV: kv } as never,
+            ctx as never,
+        );
+
+        expect(res.headers.get("X-Cache")).toBe("HIT");
+        expect(calls.filter((u) => u.includes("/audit-logs"))).toHaveLength(0);
+        expect(kv.writes).toEqual({});
+    });
+
+    it("queries only the deletion action type, not the whole audit log", async () => {
+        // Filtering server-side keeps the request small and the parse trivial;
+        // this pins the query so it cannot silently degrade to an unfiltered
+        // read.
+        const calls = stubDiscord();
+        const { ctx } = makeCtx();
+        await worker.fetch(
+            new Request("https://worker.test/events"),
+            { ...ENV, EVENTS_KV: makeKv() } as never,
+            ctx as never,
+        );
+
+        const auditCall = calls.find((u) => u.includes("/audit-logs"));
+        expect(auditCall).toContain("action_type=102");
     });
 });
 

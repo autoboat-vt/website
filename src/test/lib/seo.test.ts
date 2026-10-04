@@ -15,6 +15,7 @@ import {
 // regardless of which directory Jest is invoked from.
 const APP_TSX = resolve(__dirname, "../../App.tsx");
 const SPA_FALLBACK_MJS = resolve(__dirname, "../../../scripts/spa-fallback.mjs");
+const INDEX_HTML = resolve(__dirname, "../../../index.html");
 
 describe("seo metadata", () => {
     describe("SITE_URL", () => {
@@ -251,6 +252,46 @@ describe("seo metadata", () => {
                 // The root is the only path allowed a trailing slash.
                 if (path !== "/") expect(path.endsWith("/")).toBe(false);
             }
+        });
+    });
+
+    describe("index.html defaults stay in sync with seoRoutes.json", () => {
+        // WHY THIS EXISTS. `index.html` hard-codes the HOME page's title and
+        // social tags; every other route is this same shell, rewritten per
+        // route by `scripts/prerender-meta.mjs` at build time. So the two files
+        // describe the same values and must agree.
+        //
+        // They silently drifted once: the titles in seoRoutes.json were reverted
+        // to a longer form while `index.html` was left on the short one. Nothing
+        // caught it -- this suite only read the JSON, and `prerender-meta.mjs`
+        // UPSERTS, so it quietly overwrote index.html to match the JSON and the
+        // revert reached production. Asserting the pair here is what makes that
+        // class of change fail in CI instead of shipping.
+        const html = readFileSync(INDEX_HTML, "utf8");
+        const home = metadataForPath("/");
+
+        function attr(pattern: RegExp): string | null {
+            return html.match(pattern)?.[1] ?? null;
+        }
+
+        it("found the tags in index.html at all", () => {
+            // Guards the regexes themselves: a reformat of index.html's head
+            // would otherwise make every assertion below vacuously pass.
+            expect(attr(/<title>([^<]*)<\/title>/)).not.toBeNull();
+            expect(attr(/<meta\s+property="og:title"\s+content="([^"]*)"/)).not.toBeNull();
+        });
+
+        it("uses the home title from seoRoutes.json", () => {
+            expect(attr(/<title>([^<]*)<\/title>/)).toBe(home.title);
+        });
+
+        it("uses the home title for og:title and twitter:title", () => {
+            expect(attr(/<meta\s+property="og:title"\s+content="([^"]*)"/)).toBe(home.title);
+            expect(attr(/<meta\s+name="twitter:title"\s+content="([^"]*)"/)).toBe(home.title);
+        });
+
+        it("uses the home description", () => {
+            expect(attr(/<meta\s+name="description"\s+content="([^"]*)"/)).toBe(home.description);
         });
     });
 

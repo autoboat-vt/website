@@ -98,6 +98,63 @@ describe("mergeArchive", () => {
         });
     });
 
+    describe("deleted events (from the audit log)", () => {
+        it("drops a past event the audit log says was deleted", () => {
+            // The whole point: a deleted event must LEAVE the archive instead of
+            // being kept as history, which is what the retention rules would
+            // otherwise do because a deleted event looks identical to a
+            // completed one over the list endpoint.
+            const out = mergeArchive([pastEvent("deleted-1", 7)], [], NOW, RETENTION_MS, new Set(["deleted-1"]));
+
+            expect(out).toEqual([]);
+        });
+
+        it("drops a deleted event even under unbounded retention", () => {
+            // Deleting is a positive signal, so it wins over the keep-everything
+            // default rather than being subject to it.
+            const out = mergeArchive([pastEvent("deleted-1", 7)], [], NOW, KEEP_FOREVER_MS, new Set(["deleted-1"]));
+
+            expect(out).toEqual([]);
+        });
+
+        it("drops a FUTURE event that was deleted", () => {
+            // The likeliest real case: someone schedules a meeting, then deletes
+            // it before it happens. Without the audit signal this would be kept
+            // and rendered as an upcoming meeting that no longer exists.
+            const out = mergeArchive([futureEvent("deleted-1", 30)], [], NOW, KEEP_FOREVER_MS, new Set(["deleted-1"]));
+
+            expect(out).toEqual([]);
+        });
+
+        it("drops only the named event and keeps the rest", () => {
+            // Guards against a blunt "if any deletion, clear the archive"
+            // implementation.
+            const stored = [pastEvent("keep-1", 7), pastEvent("deleted-1", 5), pastEvent("keep-2", 3)];
+            const out = mergeArchive(stored, [], NOW, RETENTION_MS, new Set(["deleted-1"]));
+
+            expect(out.map((e) => e.id).sort()).toEqual(["keep-1", "keep-2"]);
+        });
+
+        it("does NOT drop a deleted event that Discord still reports", () => {
+            // The fresh list is the source of truth for "this still exists". A
+            // stale (or re-created) audit entry must never race a live event out
+            // of the calendar.
+            const live = futureEvent("live-1", 3);
+            const out = mergeArchive([live], [live], NOW, RETENTION_MS, new Set(["live-1"]));
+
+            expect(out.map((e) => e.id)).toEqual(["live-1"]);
+        });
+
+        it("keeps an event that merely completed when nothing was deleted", () => {
+            // The default path must be unchanged: with no deletion signal, a
+            // fallen-out event is still archived as history.
+            const out = mergeArchive([pastEvent("completed-1", 7)], [], NOW, RETENTION_MS, new Set());
+
+            expect(out.map((e) => e.id)).toEqual(["completed-1"]);
+            expect(out[0]?.status).toBe("completed");
+        });
+    });
+
     describe("what must NOT be archived", () => {
         it("does not archive an event that is still in the fresh payload", () => {
             const fresh = [futureEvent("live-1", 3)];

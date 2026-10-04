@@ -18,8 +18,13 @@
  * category, so the category tells you nothing about visibility. The channel id
  * is the setting, and this script lists channel ids.
  *
- * It is READ-ONLY -- it issues one GET and never creates, edits, or deletes
- * anything.
+ * It is READ-ONLY -- it issues two GETs (the channel list, and a one-entry
+audit-log probe) and never creates, edits, or deletes anything.
+ *
+ * It also reports whether the bot can read the audit log, because that
+ * permission (`VIEW_AUDIT_LOG`) is what makes a DELETED event leave the
+ * calendar, and without it the failure is silent -- the event simply stays as
+ * history. See "Granting a permission to an already-invited bot" in README.md.
  *
  * USAGE
  * -----
@@ -169,6 +174,35 @@ if (!Array.isArray(channels)) {
     fail("Discord returned a non-array channel payload.");
 }
 
+/**
+ * Whether the bot may read the guild audit log.
+ *
+ * Separate from `discordGet` because a 403 here is an EXPECTED, reportable
+ * state rather than a fatal error: without `VIEW_AUDIT_LOG` the Worker still
+ * serves the calendar, it just cannot tell a deleted event from a finished one,
+ * so deleted events linger as history. That is precisely the silent failure
+ * this script exists to surface, so it must not exit.
+ *
+ * `limit=1` keeps it to the smallest possible request; the body is discarded.
+ */
+async function canViewAuditLog() {
+    let res;
+    try {
+        res = await fetch(`${DISCORD_API}/guilds/${guildId}/audit-logs?limit=1`, {
+            headers: {
+                Authorization: `Bot ${token}`,
+                "User-Agent": "autoboat-website-worker/1.0 (channel-audit)",
+                Accept: "application/json",
+            },
+        });
+    } catch (err) {
+        return { ok: false, reason: `request failed (${err.message})` };
+    }
+    if (res.ok) return { ok: true };
+    if (res.status === 403) return { ok: false, reason: "403 -- View Audit Log not granted" };
+    return { ok: false, reason: `${res.status} ${res.statusText}` };
+}
+
 // --- Report ---------------------------------------------------------------
 
 const categories = channels.filter((c) => c.type === GUILD_CATEGORY);
@@ -259,6 +293,23 @@ process.stdout.write("     Every other channel is public -- no other configurati
 process.stdout.write("  3. Deploy: npx wrangler deploy\n");
 process.stdout.write("  4. Verify: curl https://<worker-url>/audiences\n");
 process.stdout.write('     The officer channel must show "audience": "officer".\n\n');
+
+// --- Audit-log permission --------------------------------------------------
+
+const audit = await canViewAuditLog();
+process.stdout.write("Audit log (needed so a DELETED event leaves the calendar):\n");
+if (audit.ok) {
+    process.stdout.write("  OK -- the bot can read the audit log, so deletions are detected.\n\n");
+} else {
+    process.stdout.write(`  MISSING -- ${audit.reason}\n`);
+    process.stdout.write(
+        "  Consequence: the Worker still serves the calendar, but it cannot tell a deleted\n" +
+            "  event from a finished one, so DELETING AN EVENT WILL NOT REMOVE IT -- it stays\n" +
+            "  as history. Fix: Server Settings -> Roles -> the bot's auto-created role ->\n" +
+            "  enable 'View Audit Log'. See README.md for details; re-opening the invite URL\n" +
+            "  does NOT work once the bot is already in the server.\n\n",
+    );
+}
 
 if (configuredOfficersId && !configuredChannel) {
     process.stdout.write(

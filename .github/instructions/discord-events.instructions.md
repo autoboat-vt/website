@@ -1,6 +1,6 @@
 ---
-description: "Use when working on the calendar page, the Discord events client, the subscription affordance, the subteam filter, per-subteam event colors, officer-only event visibility, past-event retention, or the Cloudflare Worker that serves Discord guild scheduled events. Covers the no-webhook constraint, the Worker architecture, KV caching + the retention archive, VITE_EVENTS_URL, audience gating via Discord channels, the /calendar.ics feed, and rrule recurrence expansion."
-applyTo: "src/lib/discord.ts, src/lib/eventChannels.ts, src/pages/Calendar.tsx, src/pages/Officers.tsx, src/components/CalendarSubscribe.tsx, src/components/CalendarFilter.tsx, src/components/calendarDropdown.ts, src/app.css, src/test/lib/discord.test.ts, src/test/lib/eventChannels.test.ts, src/test/pages/Calendar.test.tsx, src/test/pages/Officers.test.tsx, src/test/components/CalendarSubscribe.test.tsx, src/test/components/CalendarFilter.test.tsx, src/test/worker/ics.test.ts, src/test/worker/recurrence.test.ts, src/test/worker/events.test.ts, src/test/worker/cancellations.test.ts, src/test/worker/audience.test.ts, src/test/worker/audience-filter.test.ts, src/test/worker/archive.test.ts, src/test/worker/channel-filter.test.ts, src/test/worker/routes.test.ts, worker/**"
+description: "Use when working on the calendar page, the Discord events client, the subscription affordance, the subteam filter, per-subteam event colors, officer-only event visibility, past-event retention, event deletion, or the Cloudflare Worker that serves Discord guild scheduled events. Covers the no-webhook constraint, the Worker architecture, KV caching + the retention archive, deletion via the guild audit log, VITE_EVENTS_URL, audience gating via Discord channels, the /calendar.ics feed, and rrule recurrence expansion."
+applyTo: "src/lib/discord.ts, src/lib/eventChannels.ts, src/pages/Calendar.tsx, src/pages/Officers.tsx, src/components/CalendarSubscribe.tsx, src/components/CalendarFilter.tsx, src/components/calendarDropdown.ts, src/app.css, src/test/lib/discord.test.ts, src/test/lib/eventChannels.test.ts, src/test/pages/Calendar.test.tsx, src/test/pages/Officers.test.tsx, src/test/components/CalendarSubscribe.test.tsx, src/test/components/CalendarFilter.test.tsx, src/test/worker/ics.test.ts, src/test/worker/recurrence.test.ts, src/test/worker/events.test.ts, src/test/worker/cancellations.test.ts, src/test/worker/audience.test.ts, src/test/worker/audience-filter.test.ts, src/test/worker/archive.test.ts, src/test/worker/audit.test.ts, src/test/worker/channel-filter.test.ts, src/test/worker/routes.test.ts, worker/**"
 ---
 
 # Discord events + calendar
@@ -20,8 +20,9 @@ worker/ (Cloudflare Worker)  --- one KV cache, shared by all routes ---
     |                           NO expiry by default (retention unbounded)
     |  stale -> GET .../guilds/<id>/scheduled-events?with_user_count=true
     |           Authorization: Bot ${DISCORD_BOT_TOKEN}
+    |           GET .../guilds/<id>/audit-logs?action_type=102   <- deleted event ids
     |  classify each event: channel_id === OFFICERS_CHANNEL_ID ? officer : public
-    |  MERGE fresh over stored -> write
+    |  MERGE fresh over stored, drop ids the audit log says were deleted -> write
     v
 Discord API
 
@@ -70,17 +71,28 @@ On each refresh the fresh events are merged OVER the stored ones:
 
 1. **Fresh wins** -- an event still in Discord's list is taken verbatim (name,
    description, and start time can all change).
-2. **Every event that fell out of the list is kept.** This is unconditional on
-   purpose: Discord drops an event for exactly two reasons (it completed, or it
-   was removed) and the API cannot tell them apart, so the archive keeps both.
+2. **An event the audit log says was deleted is dropped.** `worker/src/audit.ts`
+   parses `GET /guilds/{id}/audit-logs?action_type=102`
+   (`GUILD_SCHEDULED_EVENT_DELETE`) into the deleted event ids, and
+   `mergeArchive` removes exactly those -- so deleting an event in Discord takes
+   it off the calendar instead of leaving it behind as history. WARNING: This is
+   the ONE exception to keep-everything, and it is checked BEFORE the retention
+   rules. It only drops an id that is ABSENT from the fresh list, so a live
+   event can never be raced out. The audit read is best-effort and adds no KV
+   write: if it fails (or the bot lacks `VIEW_AUDIT_LOG`) the result is an empty
+   set, which is the pre-deletion-signal behavior.
+3. **Every other event that fell out of the list is kept.** This is
+   unconditional on purpose: Discord drops an event from the list for exactly
+   two reasons (it completed, or it was removed) and the LIST endpoint cannot
+   tell them apart, so the archive keeps both when there is no audit signal.
    - an event that had **ended** is marked `completed` so the calendar renders
      it as history (`asArchived`);
    - an event that had **not ended** keeps its status -- marking it `completed`
      would claim a meeting happened that never did;
    - an already-`canceled` status is preserved, since it is styled differently.
-3. **Malformed events are dropped** -- a record whose dates cannot be parsed can
+4. **Malformed events are dropped** -- a record whose dates cannot be parsed can
    neither be reasoned about nor aged out, so it can never be pruned.
-4. **Nothing is dropped for being old** unless `RETENTION_DAYS` is set. The
+5. **Nothing is dropped for being old** unless `RETENTION_DAYS` is set. The
    result is still held under `MAX_ARCHIVED_EVENTS`, which is a **safety
    ceiling, not a policy** -- it exists only so an unbounded history cannot
    exceed what a single KV value can hold (25 MiB, and the archive is
@@ -244,6 +256,15 @@ event.channel_id === OFFICERS_CHANNEL_ID ? "officer" : "public"
   without it, `GET /guilds/{id}/scheduled-events` returns officer events and the
   Worker publishes them. That is exactly what was happening before this change
   landed.
+- WARNING: **The bot also needs `VIEW_AUDIT_LOG`** (guild-level, no channel
+  scope) for deletion detection. Combined with `VIEW_CHANNEL` that is permission
+  value **1152** (1024 + 128) in an invite URL. The trap: an invite URL sets
+  permissions only on FIRST invite, so re-opening it for an already-present bot
+  silently does nothing. Update the bot's auto-created **role** in Server
+  Settings -> Roles instead. Without the permission the audit read 403s, the
+  error is swallowed on purpose (a failed audit read must never blank the
+  calendar), and the symptom is that deleting an event does NOT remove it.
+  `worker/scripts/channel-audit.mjs` probes for this and reports it.
 
 The website owns:
 

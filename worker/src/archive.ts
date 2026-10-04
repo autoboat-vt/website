@@ -13,10 +13,17 @@
  * and keeps the events that fell out, so past events stay on the calendar.
  *
  * Retention is UNBOUNDED BY DEFAULT -- every event the Worker has ever seen is
- * kept, because "Discord stopped reporting it" is the only signal available
- * and it is also what happens to every event that simply finishes. Age-based
- * pruning is available by setting `RETENTION_DAYS`, but it is opt-in: the team
- * asked to keep the whole history. See `KEEP_FOREVER_MS`.
+ * kept, because over this endpoint "Discord stopped reporting it" is the only
+ * signal available and it is also what happens to every event that simply
+ * finishes. Age-based pruning is available by setting `RETENTION_DAYS`, but it
+ * is opt-in: the team asked to keep the whole history. See `KEEP_FOREVER_MS`.
+ *
+ * DELETION is the one case the list endpoint cannot express but the audit log
+ * can: a guild audit entry of type 102 (`GUILD_SCHEDULED_EVENT_DELETE`) names
+ * the deleted event's id, so an event the team deleted can be dropped from the
+ * archive exactly instead of being kept as history. Those ids arrive as the
+ * `deletedIds` argument -- this module stays pure, and the caller owns both the
+ * audit-log fetch and the id extraction (see `audit.ts`).
  *
  * It is deliberately pure -- no bindings, no `fetch`, no KV -- so the merge
  * rules are unit-testable without Cloudflare's ambient types. `index.ts` owns
@@ -117,15 +124,22 @@ function asArchived(event: CalendarEvent, nowMs: number): CalendarEvent {
  * 1. **Fresh wins.** Any event still present in Discord's list is taken from
  *    `fresh` verbatim -- its name, description, status, and rolling start time
  *    may all have changed since it was cached.
- * 2. **Every event that fell out of the list is kept.** This is the retention
- *    case, and it is deliberately unconditional: Discord drops an event for
- *    exactly two reasons -- it completed, or it was removed -- and the API
- *    cannot tell them apart, so the archive keeps both. An event that had
- *    ended is marked `completed`; one that had not is left as-is (see
- *    `asArchived`).
- * 3. **Malformed events are dropped**, because an entry whose dates cannot be
+ * 2. **An event the team deleted is dropped.** `deletedIds` comes from the
+ *    guild audit log, which is the only place that distinguishes a deletion
+ *    from an event that merely finished. This is checked BEFORE the retention
+ *    rules, so a deleted event leaves the archive instead of being kept as
+ *    history. The fresh list is the source of truth for "still exists", so a
+ *    stale audit entry can never remove a live event (see the `deletedIds`
+ *    filter below).
+ * 3. **Every other event that fell out of the list is kept.** This is the
+ *    retention case, and it is deliberately unconditional: Discord drops an
+ *    event from the list for exactly two reasons -- it completed, or it was
+ *    removed -- and without an audit signal the API cannot tell them apart, so
+ *    the archive keeps both. An event that had ended is marked `completed`; one
+ *    that had not is left as-is (see `asArchived`).
+ * 4. **Malformed events are dropped**, because an entry whose dates cannot be
  *    parsed can never be reasoned about or aged out.
- * 4. **Nothing is dropped for being old** unless a finite `retentionMs` is
+ * 5. **Nothing is dropped for being old** unless a finite `retentionMs` is
  *    passed in, which is opt-in. The result is still held under
  *    `MAX_ARCHIVED_EVENTS`, a safety ceiling rather than a policy.
  *
@@ -137,15 +151,23 @@ export function mergeArchive(
     fresh: CalendarEvent[],
     now: Date,
     retentionMs: number = KEEP_FOREVER_MS,
+    deletedIds: ReadonlySet<string> = new Set<string>(),
 ): CalendarEvent[] {
     const nowMs = now.getTime();
     const freshIds = new Set(fresh.map((e) => e.id));
 
     const archived = stored
         .filter((e) => !freshIds.has(e.id))
-        // Rule 3: a record we cannot date is unusable rather than merely old.
+        // Rule 2: an event the audit log says was deleted is not history, so it
+        // is removed rather than falling through to the retention rules below.
+        // WARNING: Only ids that are ABSENT from `fresh` are dropped. An event the
+        // audit log claims was deleted but which Discord still lists is live,
+        // and dropping it would race a re-created (or merely re-fetched) event
+        // out of the calendar -- so the fresh list wins.
+        .filter((e) => !deletedIds.has(e.id))
+        // Rule 4: a record we cannot date is unusable rather than merely old.
         .filter((e) => !Number.isNaN(eventEndMs(e)))
-        // Rule 4: always true at the default KEEP_FOREVER_MS.
+        // Rule 5: always true at the default KEEP_FOREVER_MS.
         .filter((e) => withinRetention(e, nowMs, retentionMs))
         .map((e) => asArchived(e, nowMs));
 
