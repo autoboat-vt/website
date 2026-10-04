@@ -573,6 +573,33 @@ describe("deleting an event removes it from the calendar", () => {
         return { body: (await res.json()) as { id: string }[], kv };
     }
 
+    /**
+     * The same seed-and-refetch, against an `.ics` route.
+     *
+     * WARNING: Kept separate from `refetch` rather than switching on the path,
+     * because a Response body can only be consumed once -- reading both `.json()`
+     * and `.text()` off one response throws. The two helpers differ only in how
+     * they decode the body.
+     */
+    async function refetchIcs(opts: {
+        stored: Record<string, unknown>[];
+        auditLogEntries?: { action_type: number; target_id: string }[];
+        path: string;
+    }) {
+        const kv = makeKv({
+            "events:v2": { fetchedAt: Date.now() - 600_000, events: opts.stored },
+        });
+        stubDiscord({ auditLogEntries: opts.auditLogEntries });
+        const { ctx, promises } = makeCtx();
+        const res = await worker.fetch(
+            new Request(`https://worker.test${opts.path}`),
+            { ...ENV, EVENTS_KV: kv } as never,
+            ctx as never,
+        );
+        await Promise.all(promises);
+        return { text: await res.text(), kv };
+    }
+
     it("drops an event the audit log says was deleted", async () => {
         // The headline behavior. Without the audit read this event would be
         // archived as history and keep rendering.
@@ -665,6 +692,61 @@ describe("deleting an event removes it from the calendar", () => {
 
         const auditCall = calls.find((u) => u.includes("/audit-logs"));
         expect(auditCall).toContain("action_type=102");
+    });
+
+    // --- the .ics feed ------------------------------------------------------
+    //
+    // WARNING: The .ics routes are a separate code path from the JSON routes, and
+    // they had NO deletion coverage. Every test above requests /events, so
+    // nothing would have caught a change that fixed the JSON payload while
+    // leaving a deleted event in a subscriber's calendar -- and that is the
+    // more durable harm, since a calendar app keeps the event until its UID
+    // leaves the feed.
+    //
+    // This holds only because `handleGetIcs` and `handleGetEvents` share
+    // `loadEvents`, so the merge (and therefore the deletion) is applied once,
+    // before either has filtered. If that shared call is ever split -- e.g. an
+    // .ics-specific cache path -- these tests are what will fail.
+
+    it("removes a deleted event from the .ics feed", async () => {
+        const { text } = await refetchIcs({
+            stored: [storedEvent("deleted-1", -7)],
+            auditLogEntries: [{ action_type: DELETE, target_id: "deleted-1" }],
+            path: "/calendar.ics",
+        });
+
+        expect(text).toContain("BEGIN:VCALENDAR");
+        expect(text).not.toContain("UID:discord-deleted-1@");
+        // The stale stored event is gone, so the only VEVENT left is the one
+        // Discord still reports (the default fixture's public-1). Asserting the
+        // live event survives is what stops this passing on a feed that
+        // dropped everything.
+        expect(text).toContain("UID:discord-public-1@");
+    });
+
+    it("keeps a completed event in the .ics feed", async () => {
+        // The complement on the .ics side: archiving past events is what makes
+        // the feed a record of the season, so a plain completion must survive.
+        const { text } = await refetchIcs({
+            stored: [storedEvent("completed-1", -7)],
+            path: "/calendar.ics",
+        });
+
+        expect(text).toContain("UID:discord-completed-1@");
+    });
+
+    it("removes a deleted event from the officer .ics feed too", async () => {
+        // Both feeds go through the same merge, so deletion has to hold on the
+        // officer route as well -- it serves everything, including the event a
+        // public subscriber must never have seen.
+        const { text } = await refetchIcs({
+            stored: [storedEvent("deleted-1", -7)],
+            auditLogEntries: [{ action_type: DELETE, target_id: "deleted-1" }],
+            path: "/officers/calendar.ics",
+        });
+
+        expect(text).toContain("BEGIN:VCALENDAR");
+        expect(text).not.toContain("UID:discord-deleted-1@");
     });
 });
 

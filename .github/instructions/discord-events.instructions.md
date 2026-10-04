@@ -81,6 +81,14 @@ On each refresh the fresh events are merged OVER the stored ones:
    event can never be raced out. The audit read is best-effort and adds no KV
    write: if it fails (or the bot lacks `VIEW_AUDIT_LOG`) the result is an empty
    set, which is the pre-deletion-signal behavior.
+   WARNING: **The `/calendar.ics` feeds are covered by this too, and only
+   because `handleGetIcs` and `handleGetEvents` share `loadEvents`.** The merge
+   runs once, before either route filters, so `.ics` consumers get the same
+   deletion -- `routes.test.ts` asserts it on both the public and officer feeds.
+   Do not give `.ics` a cache path of its own: a deletion that reached the JSON
+   payload but not the feed would leave the event in every subscriber's calendar
+   indefinitely, since a calendar app keeps an event until its UID leaves the
+   feed.
 3. **Every other event that fell out of the list is kept.** This is
    unconditional on purpose: Discord drops an event from the list for exactly
    two reasons (it completed, or it was removed) and the LIST endpoint cannot

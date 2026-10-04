@@ -428,6 +428,9 @@ are merged over the stored ones:
    that is absent from Discord's fresh list. It is best-effort: a failed audit
    read (or a bot without `VIEW_AUDIT_LOG`) yields an empty set, which restores
    the default keep-everything behavior.
+   This covers the `.ics` feeds as well as the JSON routes, because all four
+   call the same `loadEvents`; the merge happens once, before either route
+   filters.
 3. **Every other event that fell out of the list is kept** -- this is unbounded
    by default. It is deliberately unconditional, because the list endpoint drops
    an event for two reasons (it completed, or it was removed) and cannot tell
