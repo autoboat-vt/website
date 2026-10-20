@@ -344,10 +344,6 @@ export default function EventCreator({ onCreated }: EventCreatorProps) {
                         </>
                     ) : (
                         <form className="calendar-add__form" onSubmit={handleSubmit}>
-                            <p className="calendar-add__hint">
-                                Fields marked <span className="calendar-add__required-star">*</span> are required.
-                            </p>
-
                             <label className="calendar-add__field">
                                 <FieldLabel required>Event name</FieldLabel>
                                 <input
