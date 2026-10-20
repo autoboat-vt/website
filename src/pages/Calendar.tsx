@@ -575,7 +575,17 @@ export default function Calendar({ variant = "public" }: CalendarProps) {
                 </Card>
             )}
 
-            <EventModal occurrence={selectedOccurrence} onClose={() => setSelectedOccurrence(null)} />
+            <EventModal
+                occurrence={selectedOccurrence}
+                onClose={() => setSelectedOccurrence(null)}
+                onDeleted={() => {
+                    // Close immediately and refetch: the Worker drops the event
+                    // from its archive, so the next poll may not even need to
+                    // reach Discord.
+                    setSelectedOccurrence(null);
+                    poll();
+                }}
+            />
         </section>
     );
 }

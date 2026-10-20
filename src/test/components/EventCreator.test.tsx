@@ -178,6 +178,47 @@ describe("signed in", () => {
         expect(screen.getByText(/needs a location and an end time/i)).toBeInTheDocument();
     });
 
+    it("marks required fields and labels the optional ones", () => {
+        seedSession();
+        render(<EventCreator />);
+        fireEvent.click(screen.getByRole("button", { name: /add event/i }));
+
+        expect(screen.getByText(/fields marked/i)).toBeInTheDocument();
+
+        // The asterisk is a CSS pseudo-element, so the marker is verified two
+        // ways: the DOM class that draws it, and the native `required`
+        // attribute that carries the meaning for assistive technology.
+        const name = screen.getByLabelText(/event name/i);
+        expect(name).toBeRequired();
+        expect(name.closest("label")?.querySelector(".calendar-add__label--required")).not.toBeNull();
+
+        expect(screen.getByLabelText(/^starts$/i)).toBeRequired();
+
+        // Genuinely optional fields say so in the label text.
+        expect(screen.getByLabelText(/description \(optional\)/i)).not.toBeRequired();
+        expect(screen.getByLabelText(/ends \(optional\)/i)).not.toBeRequired();
+        expect(screen.getByLabelText(/location \(optional\)/i)).not.toBeRequired();
+        // A select with a default value is never a blank the user must fill.
+        expect(screen.getByLabelText(/^repeats$/i)).not.toBeRequired();
+    });
+
+    it("makes the end time required once the event has no channel", () => {
+        seedSession();
+        render(<EventCreator />);
+        fireEvent.click(screen.getByRole("button", { name: /add event/i }));
+
+        // Optional while a channel is picked, because Discord derives the end
+        // time from the channel; required for an off-channel event.
+        expect(screen.getByLabelText(/ends \(optional\)/i)).not.toBeRequired();
+
+        fireEvent.click(screen.getByLabelText(/not in a discord voice channel/i));
+
+        const ends = screen.getByLabelText(/^ends$/i);
+        expect(ends).toBeRequired();
+        expect(ends.closest("label")?.querySelector(".calendar-add__label--required")).not.toBeNull();
+        expect(screen.getByLabelText(/^location$/i)).toBeRequired();
+    });
+
     it("reports an expired session as a sign-in prompt", async () => {
         seedSession();
         // 401 means the token is dead: the UI must drop it rather than retry.
@@ -195,10 +236,20 @@ describe("signed in", () => {
         expect(localStorage.getItem(SESSION_KEY)).toBeNull();
     });
 
-    it("explains a missing role differently from a missing membership", async () => {
+    it("explains a missing membership with the account and server that were refused", async () => {
         seedSession();
         global.fetch = jest.fn(async () =>
-            jsonResponse({ error: "You are not a member.", member: false }, 403),
+            jsonResponse(
+                {
+                    error: "You are not a member of the team's Discord server.",
+                    reason: "not-a-member",
+                    member: false,
+                    canCreateEvents: false,
+                    account: "ada.personal",
+                    guildName: "AutoBoat",
+                },
+                403,
+            ),
         ) as unknown as typeof fetch;
 
         render(<EventCreator />);
@@ -207,7 +258,44 @@ describe("signed in", () => {
         fireEvent.change(screen.getByLabelText(/^starts$/i), { target: { value: "2026-11-05T19:00" } });
         fireEvent.click(screen.getByRole("button", { name: /create event/i }));
 
-        expect(await screen.findByRole("alert")).toHaveTextContent(/not in the team's discord server/i);
+        const alert = await screen.findByRole("alert");
+        // Names the refused account and the expected server, and points at the
+        // usual cause (a second Discord account).
+        expect(alert).toHaveTextContent(/not on the team server/i);
+        expect(alert).toHaveTextContent(/"ada.personal"/);
+        expect(alert).toHaveTextContent(/the AutoBoat server/i);
+        expect(alert).toHaveTextContent(/second Discord account/i);
+        // The generic intro and its sign-in button would be a second,
+        // contradictory call to action.
+        expect(screen.queryByText(/only officers can create events/i)).not.toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /sign in with a different account/i })).toBeInTheDocument();
+    });
+
+    it("explains a missing officer role as a role problem, not a membership one", async () => {
+        seedSession();
+        global.fetch = jest.fn(async () =>
+            jsonResponse(
+                {
+                    error: "Only officers can add events.",
+                    reason: "missing-role",
+                    member: true,
+                    canCreateEvents: false,
+                    account: "ada",
+                    guildName: "AutoBoat",
+                },
+                403,
+            ),
+        ) as unknown as typeof fetch;
+
+        render(<EventCreator />);
+        fireEvent.click(screen.getByRole("button", { name: /add event/i }));
+        fireEvent.change(screen.getByLabelText(/event name/i), { target: { value: "Meeting" } });
+        fireEvent.change(screen.getByLabelText(/^starts$/i), { target: { value: "2026-11-05T19:00" } });
+        fireEvent.click(screen.getByRole("button", { name: /create event/i }));
+
+        const alert = await screen.findByRole("alert");
+        expect(alert).toHaveTextContent(/not an officer/i);
+        expect(alert).toHaveTextContent(/give your Discord account the officer role/i);
     });
 
     it("surfaces Discord's field error verbatim", async () => {

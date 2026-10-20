@@ -1693,6 +1693,53 @@
         font-weight: 700;
     }
 
+    /* --- Event modal: officer delete ---
+       Sits below the description, separated by a rule so it reads as an
+       administrative action rather than part of the event's content. */
+    .event-modal__manage {
+        display: grid;
+        gap: 0.5rem;
+        justify-items: start;
+        padding-top: 1rem;
+        border-top: 1px solid var(--color-cardborder);
+    }
+    .event-modal__delete {
+        color: var(--color-cancelled);
+    }
+    /* Destructive confirmation. Impact Orange is the brand's sanctioned
+       digital-text orange and clears WCAG AA on both theme surfaces, which a
+       pure red would not on the warm dark background. */
+    .event-modal__confirm {
+        display: grid;
+        gap: 0.5rem;
+        width: 100%;
+        padding: 0.625rem 0.75rem;
+        border: 1px solid var(--color-cancelled);
+        border-radius: 0.5rem;
+        background-color: var(--color-card);
+    }
+    .event-modal__confirm-text {
+        margin: 0;
+        font-size: 0.8125rem;
+        line-height: 1.45;
+        color: var(--color-fontcolor);
+    }
+    .event-modal__confirm-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .event-modal__danger {
+        color: var(--color-cancelled);
+        border-color: var(--color-cancelled);
+    }
+    .event-modal__delete-error {
+        margin: 0;
+        font-size: 0.8125rem;
+        line-height: 1.45;
+        color: var(--color-cancelled);
+    }
+
     /* --- Event modal location map --- */
     .event-map {
         margin-bottom: 1rem;
@@ -2695,6 +2742,24 @@
         color: var(--color-hovercolor);
     }
 
+    /* Required-field marker. Drawn as a pseudo-element rather than a DOM node so
+       the field's accessible name stays exactly its label text ("Starts", not
+       "Starts *") -- the input's native `required` attribute is what assistive
+       technology announces. `--color-cancelled` is the brand's sanctioned
+       digital-text orange (Impact Orange, >= 4.5:1 on both theme backgrounds);
+       the maroon accent is too dark to read in dark mode. */
+    .calendar-add__label--required::after {
+        content: " *";
+        color: var(--color-cancelled);
+        font-weight: 700;
+    }
+
+    /* Inline `*` inside the legend sentence, where the marker IS content. */
+    .calendar-add__required-star {
+        color: var(--color-cancelled);
+        font-weight: 700;
+    }
+
     .calendar-add__checkbox {
         display: flex;
         align-items: flex-start;
@@ -2774,5 +2839,40 @@
     .calendar-add__panel .calendar-add__notice svg {
         flex: 0 0 auto;
         margin-top: 0.1rem;
+    }
+
+    /* Permission refusal. Distinct from `.calendar-add__error` because it is
+       not a validation slip -- it explains which account was refused and what
+       to do, so it reads as a small panel (title, body, action) rather than a
+       line of red text. */
+    .calendar-add__denied {
+        display: grid;
+        gap: 0.5rem;
+        justify-items: start;
+        padding: 0.75rem 0.875rem;
+        border: 1px solid var(--color-cardborder);
+        border-radius: 0.625rem;
+        background-color: var(--color-card);
+    }
+    .calendar-add__panel .calendar-add__denied-title,
+    .calendar-add__panel .calendar-add__denied-body {
+        margin: 0;
+        font-size: 0.8125rem;
+        line-height: 1.45;
+    }
+    .calendar-add__panel .calendar-add__denied-title {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.375rem;
+        font-weight: 700;
+        color: var(--color-fontcolor);
+    }
+    .calendar-add__panel .calendar-add__denied-title svg {
+        flex: 0 0 auto;
+        margin-top: 0.1rem;
+        color: var(--color-cancelled);
+    }
+    .calendar-add__panel .calendar-add__denied-body {
+        color: var(--color-hovercolor);
     }
 }

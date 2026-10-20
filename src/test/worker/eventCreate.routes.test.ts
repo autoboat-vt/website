@@ -89,6 +89,13 @@ function stubDiscord(routes: { match: string; reply: DiscordReply | (() => Disco
         for (const route of byLongestMatch) {
             if (url.includes(route.match)) {
                 const reply = typeof route.reply === "function" ? route.reply() : route.reply;
+                // WARNING: `new Response(body, { status: 204 })` THROWS -- a null-body
+                // status cannot carry a body, and the constructor rejects rather
+                // than ignoring it. Discord answers a successful DELETE with 204,
+                // so this branch is what lets the delete tests exercise it.
+                if (reply.status === 204 || reply.status === 205 || reply.status === 304) {
+                    return new Response(null, { status: reply.status });
+                }
                 return new Response(JSON.stringify(reply.body), {
                     status: reply.status,
                     headers: { "Content-Type": "application/json" },
@@ -705,5 +712,211 @@ describe("POST /manage/events -- creation", () => {
         const { res } = await call("/manage/events", "POST", { body: validBody, token, kv });
         // The event exists in Discord; the next poll picks it up.
         expect(res.status).toBe(201);
+    });
+});
+
+/**
+ * Event deletion.
+ *
+ * WARNING: The authorization tests here are the point of the suite, exactly as
+ * for creation. The DELETE is sent with the BOT's token, so Discord checks the
+ * BOT's permissions -- and the bot holds `MANAGE_EVENTS`. If the session gate
+ * fails open, any visitor can wipe the team calendar.
+ */
+describe("DELETE /manage/events/{id} -- authorization", () => {
+    const EVENT_ID = "1340000000000000001";
+
+    it("401s without a token and never calls Discord", async () => {
+        const calls = stubDiscord([{ match: "/scheduled-events", reply: { status: 204, body: null } }]);
+        const { res } = await call(`/manage/events/${EVENT_ID}`, "DELETE");
+        expect(res.status).toBe(401);
+        expect(calls).toHaveLength(0);
+    });
+
+    it("401s an expired token", async () => {
+        const token = await officerToken(new Date(Date.now() - 3 * 60 * 60 * 1000));
+        const calls = stubDiscord([{ match: "/scheduled-events", reply: { status: 204, body: null } }]);
+        expect((await call(`/manage/events/${EVENT_ID}`, "DELETE", { token })).res.status).toBe(401);
+        expect(calls).toHaveLength(0);
+    });
+
+    it("401s a forged token", async () => {
+        const { token } = await createSession("wrong-secret", { id: "1", name: "Imposter", canCreateEvents: true });
+        const calls = stubDiscord([{ match: "/scheduled-events", reply: { status: 204, body: null } }]);
+        expect((await call(`/manage/events/${EVENT_ID}`, "DELETE", { token })).res.status).toBe(401);
+        expect(calls).toHaveLength(0);
+    });
+
+    it("403s a valid token that lacks the officer claim", async () => {
+        // Authentication is not authorization: this token is genuine but was
+        // minted for an ordinary member.
+        const token = await nonOfficerToken();
+        const calls = stubDiscord([{ match: "/scheduled-events", reply: { status: 204, body: null } }]);
+        const { res } = await call(`/manage/events/${EVENT_ID}`, "DELETE", { token });
+        expect(res.status).toBe(403);
+        expect(calls).toHaveLength(0);
+    });
+
+    it("405s a GET on the delete path", async () => {
+        // A GET must never reach the handler: deletion is not a safe method, and
+        // a permissive check is how it becomes reachable from a link or an img.
+        const token = await officerToken();
+        const calls = stubDiscord([{ match: "/scheduled-events", reply: { status: 204, body: null } }]);
+        expect((await call(`/manage/events/${EVENT_ID}`, "GET", { token })).res.status).toBe(405);
+        expect(calls).toHaveLength(0);
+    });
+
+    it("404s a non-numeric id instead of treating the path as real", async () => {
+        // `/manage/events/admin` is a typo, not a delete of an event called
+        // "admin". Answering 405 would imply the path exists.
+        const token = await officerToken();
+        const calls = stubDiscord([{ match: "/scheduled-events", reply: { status: 204, body: null } }]);
+        expect((await call("/manage/events/admin", "DELETE", { token })).res.status).toBe(404);
+        expect(calls).toHaveLength(0);
+    });
+
+    it("404s an id with an extra path segment", async () => {
+        // Guards against a crafted id adding segments to the upstream URL.
+        const token = await officerToken();
+        const calls = stubDiscord([{ match: "/scheduled-events", reply: { status: 204, body: null } }]);
+        const { res } = await call(`/manage/events/${EVENT_ID}/../../guilds`, "DELETE", { token });
+        expect(res.status).toBe(404);
+        expect(calls).toHaveLength(0);
+    });
+
+    it("advertises DELETE in the preflight for the delete path", async () => {
+        const { res } = await call(`/manage/events/${EVENT_ID}`, "OPTIONS", { origin: PROD_ORIGIN });
+        expect(res.status).toBe(204);
+        expect(res.headers.get("Access-Control-Allow-Methods")).toContain("DELETE");
+        expect(res.headers.get("Access-Control-Allow-Origin")).toBe(PROD_ORIGIN);
+    });
+});
+
+describe("DELETE /manage/events/{id} -- deletion", () => {
+    const EVENT_ID = "1340000000000000001";
+
+    /** An archived event, in the shape the read path stores. */
+    function archived(id: string) {
+        return {
+            id,
+            name: `Event ${id}`,
+            start: "2026-11-05T19:00:00.000Z",
+            end: null,
+            status: "scheduled",
+            description: null,
+            location: null,
+            userCount: null,
+            isRecurring: false,
+            image: null,
+            recurrenceRule: null,
+            cancelledDates: [],
+            channelId: PUBLIC_CHANNEL,
+            audience: "public",
+        };
+    }
+
+    it("deletes with the bot token and returns the id", async () => {
+        const token = await officerToken();
+        const calls = stubDiscord([{ match: "/scheduled-events", reply: { status: 204, body: null } }]);
+        const { res } = await call(`/manage/events/${EVENT_ID}`, "DELETE", { token });
+
+        expect(res.status).toBe(200);
+        expect((await res.json()) as { deleted: string }).toEqual({ deleted: EVENT_ID });
+
+        const del = calls.find((c) => c.method === "DELETE");
+        expect(del?.url).toContain(`/guilds/${GUILD}/scheduled-events/${EVENT_ID}`);
+        // The BOT token, not the user's -- the user's token is only good for
+        // profile reads and must never be sent to a write endpoint.
+        expect(del?.headers.get("Authorization")).toBe("Bot bot-token");
+        // Recorded in the guild audit log, which is how a deletion done here
+        // stays legible to the next officer looking at Discord.
+        expect(del?.headers.get("X-Audit-Log-Reason")).toBeTruthy();
+    });
+
+    it("drops the event from the archive so the calendar stops showing it", async () => {
+        const token = await officerToken();
+        stubDiscord([{ match: "/scheduled-events", reply: { status: 204, body: null } }]);
+        const kv = makeKv({
+            "events:v2": { fetchedAt: Date.now(), events: [archived(EVENT_ID), archived("1340000000000000002")] },
+        });
+        await call(`/manage/events/${EVENT_ID}`, "DELETE", { token, kv });
+
+        const stored = kv.writes["events:v2"] as { events: { id: string }[] };
+        expect(stored.events.map((e) => e.id)).toEqual(["1340000000000000002"]);
+    });
+
+    it("keeps the archive's fetchedAt so freshness is not silently extended", async () => {
+        // Deleting a row does not make the rest of the archive newer; bumping
+        // the timestamp would delay the refresh that would reveal any OTHER
+        // change made in Discord.
+        const token = await officerToken();
+        stubDiscord([{ match: "/scheduled-events", reply: { status: 204, body: null } }]);
+        const fetchedAt = Date.now() - 60_000;
+        const kv = makeKv({ "events:v2": { fetchedAt, events: [archived(EVENT_ID)] } });
+        await call(`/manage/events/${EVENT_ID}`, "DELETE", { token, kv });
+
+        expect((kv.writes["events:v2"] as { fetchedAt: number }).fetchedAt).toBe(fetchedAt);
+    });
+
+    it("leaves a COLD cache untouched", async () => {
+        // Nothing archived means nothing to correct, and writing an empty
+        // archive would mark it fresh and hide every other event for a TTL.
+        const token = await officerToken();
+        stubDiscord([{ match: "/scheduled-events", reply: { status: 204, body: null } }]);
+        const kv = makeKv();
+        const { res } = await call(`/manage/events/${EVENT_ID}`, "DELETE", { token, kv });
+
+        expect(res.status).toBe(200);
+        expect(kv.writes["events:v2"]).toBeUndefined();
+    });
+
+    it("skips the write when the id is not in the archive", async () => {
+        // An event deleted in the Discord client, or one the archive never saw.
+        const token = await officerToken();
+        stubDiscord([{ match: "/scheduled-events", reply: { status: 204, body: null } }]);
+        const kv = makeKv({ "events:v2": { fetchedAt: Date.now(), events: [archived("1340000000000000002")] } });
+        await call(`/manage/events/${EVENT_ID}`, "DELETE", { token, kv });
+
+        expect(kv.writes["events:v2"]).toBeUndefined();
+    });
+
+    it("404s when Discord says the event is already gone", async () => {
+        const token = await officerToken();
+        stubDiscord([
+            {
+                match: "/scheduled-events",
+                reply: { status: 404, body: { message: "Unknown Guild Scheduled Event", code: 10070 } },
+            },
+        ]);
+        const { res } = await call(`/manage/events/${EVENT_ID}`, "DELETE", { token });
+        expect(res.status).toBe(404);
+        expect(((await res.json()) as { error: string }).error).toContain("Unknown Guild Scheduled Event");
+    });
+
+    it("429s when Discord rate limits", async () => {
+        const token = await officerToken();
+        stubDiscord([
+            { match: "/scheduled-events", reply: { status: 429, body: { message: "You are being rate limited." } } },
+        ]);
+        expect((await call(`/manage/events/${EVENT_ID}`, "DELETE", { token })).res.status).toBe(429);
+    });
+
+    it("502s when Discord is unreachable", async () => {
+        const token = await officerToken();
+        global.fetch = (async () => {
+            throw new Error("network down");
+        }) as unknown as typeof fetch;
+        expect((await call(`/manage/events/${EVENT_ID}`, "DELETE", { token })).res.status).toBe(502);
+    });
+
+    it("does not fail the request when the archive write fails", async () => {
+        const token = await officerToken();
+        stubDiscord([{ match: "/scheduled-events", reply: { status: 204, body: null } }]);
+        const kv = makeKv({ "events:v2": { fetchedAt: Date.now(), events: [archived(EVENT_ID)] } });
+        kv.put = async () => {
+            throw new Error("KV write rejected");
+        };
+        // The event IS deleted in Discord; the next refresh reconciles.
+        expect((await call(`/manage/events/${EVENT_ID}`, "DELETE", { token, kv })).res.status).toBe(200);
     });
 });

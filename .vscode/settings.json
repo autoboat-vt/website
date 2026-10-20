@@ -4,5 +4,36 @@
         "coverage": true,
         "dist": true,
         "**/.wrangler": true
+    },
+    // Auto-approve this project's local toolchain so the agent can iterate
+    // (test, lint, typecheck, build) without prompting on every run.
+    //
+    // WARNING: This is a security boundary, not just a convenience. Auto-approve
+    // matches each segment of a compound command independently -- `a && b`, `a ; b`,
+    // and `a | b` are split -- so approving `npx tsc` also approves anything else
+    // reachable through that prefix. Review this list if the commands change shape.
+    //
+    // WARNING: `node` and `python3` are arbitrary code execution, not "read-only
+    // inspection"; they are here only because agent probes use `node -e` to check
+    // JSON and re-run matchers. Remove them first if this list is ever audited.
+    //
+    // Keys are either a LITERAL command ("grep") or a delimited regex ("/^foo/"),
+    // and a bare string like "npx *" matches nothing -- it is a literal, not a
+    // glob. The user-level allowlist already covers `git` and `bun`.
+    "chat.tools.terminal.autoApprove": {
+        // jest, in every form this repo runs it.
+        "/^npx jest(\\s|$)/": true,
+        "/^bun run test(:watch|:coverage)?(\\s|$)/": true,
+        // Typecheck, lint, format, build, dev server.
+        "/^npx tsc(\\s|$)/": true,
+        "/^bun run (check|check:write|lint|format|build|dev)(\\s|$)/": true,
+        // Output inspection, so writing a log to /tmp and reading it back does
+        // not prompt (long output exceeds this terminal's scrollback).
+        "grep": true,
+        "sed": true,
+        "tail": true,
+        "head": true,
+        "node": true,
+        "python3": true
     }
 }

@@ -1,4 +1,4 @@
-import { AlertCircle, CalendarPlus, Check, Loader2 } from "lucide-react";
+import { AlertCircle, Check, Loader2, UserKey } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { SUBTEAM_CHANNELS } from "../lib/eventChannels";
 import {
@@ -50,6 +50,23 @@ const CHANNEL_OPTIONS: { id: string; label: string }[] = [
     { id: MEMBER_EVENTS_CHANNEL_ID, label: "General members" },
     { id: OFFICER_EVENTS_CHANNEL_ID, label: "Officers only" },
 ];
+
+/**
+ * Field label text, with a marker when the field is required.
+ *
+ * The asterisk is drawn by CSS (`.calendar-add__label--required::after`) rather
+ * than rendered as a DOM node. That is deliberate: the marker is decorative --
+ * the input's native `required` attribute is what assistive technology
+ * announces -- and keeping it out of the DOM means each field's accessible name
+ * stays exactly its label text instead of becoming "Starts *".
+ */
+function FieldLabel({ children, required = false }: { children: React.ReactNode; required?: boolean }) {
+    return (
+        <span className={required ? "calendar-add__label calendar-add__label--required" : "calendar-add__label"}>
+            {children}
+        </span>
+    );
+}
 
 /** Recurrence choices, limited to what Discord's API accepts. */
 type RepeatChoice = "none" | "weekly" | "biweekly" | "monthly" | "daily";
@@ -127,8 +144,16 @@ export default function EventCreator({ onCreated }: EventCreatorProps) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
+    /**
+     * A refusal from the Worker ("not a member" or "no officer role").
+     *
+     * Held separately from `error` because it renders as an explained block
+     * with a remedy and a "try another account" button, not a one-line
+     * message -- the person hitting it is usually signed in to the wrong
+     * Discord account and needs to be told that.
+     */
+    const [denied, setDenied] = useState<ManageError | null>(null);
     const panelId = useId();
-
     const close = useCallback(() => setOpen(false), []);
     useCloseOnOtherDropdownOpen("calendar-add-event", close);
 
@@ -168,16 +193,27 @@ export default function EventCreator({ onCreated }: EventCreatorProps) {
         completeLogin(code, state)
             .then((next) => {
                 setSession(next);
+                setDenied(null);
                 setOpen(true);
             })
             .catch((err: unknown) => {
-                setError(err instanceof ManageError ? err.message : "Login failed. Please try again.");
+                // A permission refusal is a explained state (wrong account, or
+                // no officer role) rather than a terse error line.
+                if (err instanceof ManageError && err.remedy !== null) {
+                    setDenied(err);
+                    setOpen(true);
+                    setError(null);
+                } else {
+                    setError(err instanceof ManageError ? err.message : "Login failed. Please try again.");
+                    setOpen(true);
+                }
             })
             .finally(() => setBusy(false));
     }, []);
 
     const handleLogin = async () => {
         setError(null);
+        setDenied(null);
         setBusy(true);
         try {
             // Navigates away on success, so there is nothing to do afterwards.
@@ -194,6 +230,7 @@ export default function EventCreator({ onCreated }: EventCreatorProps) {
         setOpen(false);
         setNotice(null);
         setError(null);
+        setDenied(null);
     };
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -202,6 +239,7 @@ export default function EventCreator({ onCreated }: EventCreatorProps) {
 
         setError(null);
         setNotice(null);
+        setDenied(null);
 
         const start = localInputToIso(startLocal);
         if (!start) {
@@ -241,11 +279,14 @@ export default function EventCreator({ onCreated }: EventCreatorProps) {
                     clearSession();
                     setSession(null);
                 }
-                setError(
-                    err.notAMember
-                        ? "You are not in the team's Discord server, so you cannot add events."
-                        : err.message,
-                );
+                if (err.remedy !== null) {
+                    // Lost the officer role since signing in -- explain it
+                    // rather than showing a bare "Only officers" string.
+                    setDenied(err);
+                    setError(null);
+                } else {
+                    setError(err.message);
+                }
             } else {
                 setError("Could not create the event. Please try again.");
             }
@@ -275,7 +316,7 @@ export default function EventCreator({ onCreated }: EventCreatorProps) {
                 onClick={toggle}
                 disabled={busy && !session}
             >
-                <CalendarPlus size={16} aria-hidden="true" />
+                <UserKey size={16} aria-hidden="true" />
                 {session ? "Add event" : "Officer sign-in"}
             </button>
 
@@ -285,19 +326,30 @@ export default function EventCreator({ onCreated }: EventCreatorProps) {
 
                     {!session ? (
                         <>
-                            <p className="calendar-add__intro">
-                                Adding events to the calendar requires signing in with Discord. Only officers can create
-                                events.
-                            </p>
-                            <button type="button" className="btn" onClick={handleLogin} disabled={busy}>
-                                {busy ? <Loader2 className="animate-spin" size={16} aria-hidden="true" /> : null}
-                                {busy ? "Opening Discord..." : "Sign in with Discord"}
-                            </button>
+                            {/* A refusal already explains what to do and offers
+                                its own sign-in button, so the generic intro
+                                would be a second, contradictory call to action. */}
+                            {!denied && (
+                                <p className="calendar-add__intro">
+                                    Adding events to the calendar requires signing in with Discord. Only officers can
+                                    create events.
+                                </p>
+                            )}
+                            {!denied && (
+                                <button type="button" className="btn" onClick={handleLogin} disabled={busy}>
+                                    {busy ? <Loader2 className="animate-spin" size={16} aria-hidden="true" /> : null}
+                                    {busy ? "Opening Discord..." : "Sign in with Discord"}
+                                </button>
+                            )}
                         </>
                     ) : (
                         <form className="calendar-add__form" onSubmit={handleSubmit}>
+                            <p className="calendar-add__hint">
+                                Fields marked <span className="calendar-add__required-star">*</span> are required.
+                            </p>
+
                             <label className="calendar-add__field">
-                                <span>Event name</span>
+                                <FieldLabel required>Event name</FieldLabel>
                                 <input
                                     type="text"
                                     value={name}
@@ -309,7 +361,7 @@ export default function EventCreator({ onCreated }: EventCreatorProps) {
                             </label>
 
                             <label className="calendar-add__field">
-                                <span>Description</span>
+                                <FieldLabel>Description (optional)</FieldLabel>
                                 <textarea
                                     value={description}
                                     onChange={(e) => setDescription(e.target.value)}
@@ -319,7 +371,7 @@ export default function EventCreator({ onCreated }: EventCreatorProps) {
                             </label>
 
                             <label className="calendar-add__field">
-                                <span>Starts</span>
+                                <FieldLabel required>Starts</FieldLabel>
                                 <input
                                     type="datetime-local"
                                     value={startLocal}
@@ -328,17 +380,23 @@ export default function EventCreator({ onCreated }: EventCreatorProps) {
                                 />
                             </label>
 
+                            {/* An event with no Discord channel needs an end time,
+                                so the same field flips between optional and
+                                required. The marker, the native attribute, and
+                                the visible "(optional)" wording all follow the
+                                one `isExternal` decision. */}
                             <label className="calendar-add__field">
-                                <span>Ends (optional)</span>
+                                <FieldLabel required={isExternal}>Ends{isExternal ? "" : " (optional)"}</FieldLabel>
                                 <input
                                     type="datetime-local"
                                     value={endLocal}
                                     onChange={(e) => setEndLocal(e.target.value)}
+                                    required={isExternal}
                                 />
                             </label>
 
                             <label className="calendar-add__field">
-                                <span>Repeats</span>
+                                <FieldLabel>Repeats</FieldLabel>
                                 <select value={repeat} onChange={(e) => setRepeat(e.target.value as RepeatChoice)}>
                                     {(Object.keys(REPEAT_LABELS) as RepeatChoice[]).map((choice) => (
                                         <option key={choice} value={choice}>
@@ -359,7 +417,7 @@ export default function EventCreator({ onCreated }: EventCreatorProps) {
 
                             {isExternal ? (
                                 <label className="calendar-add__field">
-                                    <span>Location</span>
+                                    <FieldLabel required>Location</FieldLabel>
                                     <input
                                         type="text"
                                         value={location}
@@ -372,7 +430,7 @@ export default function EventCreator({ onCreated }: EventCreatorProps) {
                             ) : (
                                 <>
                                     <label className="calendar-add__field">
-                                        <span>Discord channel</span>
+                                        <FieldLabel>Discord channel</FieldLabel>
                                         <select value={channelId} onChange={(e) => setChannelId(e.target.value)}>
                                             {CHANNEL_OPTIONS.map((option) => (
                                                 <option key={option.id} value={option.id}>
@@ -382,7 +440,7 @@ export default function EventCreator({ onCreated }: EventCreatorProps) {
                                         </select>
                                     </label>
                                     <label className="calendar-add__field">
-                                        <span>Location (optional)</span>
+                                        <FieldLabel>Location (optional)</FieldLabel>
                                         <input
                                             type="text"
                                             value={location}
@@ -416,6 +474,31 @@ export default function EventCreator({ onCreated }: EventCreatorProps) {
                                 </button>
                             </div>
                         </form>
+                    )}
+
+                    {/* A permission refusal. Rendered instead of the form when
+                        there is no usable session, so the person is not left
+                        staring at a form whose submit will only fail again. */}
+                    {denied && (
+                        <div className="calendar-add__denied" role="alert">
+                            <p className="calendar-add__denied-title">
+                                <AlertCircle size={16} aria-hidden="true" />
+                                {denied.reason === "not-a-member"
+                                    ? "That Discord account is not on the team server"
+                                    : "That Discord account is not an officer"}
+                            </p>
+                            <p className="calendar-add__denied-body">{denied.remedy}</p>
+                            {/* Switching accounts only helps when the wrong
+                                account was used. A missing role is fixed in
+                                Discord, so offering a re-login there would send
+                                the user round a loop that cannot succeed. */}
+                            {denied.reason === "not-a-member" && (
+                                <button type="button" className="btn btn--sm" onClick={handleLogin} disabled={busy}>
+                                    {busy ? <Loader2 className="animate-spin" size={16} aria-hidden="true" /> : null}
+                                    {busy ? "Opening Discord..." : "Sign in with a different account"}
+                                </button>
+                            )}
+                        </div>
                     )}
 
                     {error && (

@@ -41,6 +41,19 @@ export interface ManageSession {
     expiresAt: number;
 }
 
+/**
+ * Why a login was refused, as reported by the Worker.
+ *
+ * - `not-a-member`: signed into a Discord account that is not in the team
+ *   server (very often the WRONG account -- people have a personal and a
+ *   school account).
+ * - `missing-role`: in the server, but without `MANAGE_EVENTS`.
+ *
+ * Kept as codes rather than matching on the message text: the wording is a
+ * presentation detail and must be free to change without breaking the branch.
+ */
+export type ManageDenialReason = "not-a-member" | "missing-role";
+
 /** Why a login or create attempt failed, with enough detail to word the UI. */
 export class ManageError extends Error {
     readonly status: number;
@@ -52,13 +65,60 @@ export class ManageError extends Error {
     readonly needsRole: boolean;
     /** `true` when the user is not a member of the team guild at all. */
     readonly notAMember: boolean;
+    /** The structured reason, when the Worker supplied one. */
+    readonly reason: ManageDenialReason | null;
+    /** The Discord display name the refusal applied to, when known. */
+    readonly account: string | null;
+    /** The team server's name, when the Worker resolved it. */
+    readonly guildName: string | null;
 
-    constructor(message: string, status: number, flags: { needsRole?: boolean; notAMember?: boolean } = {}) {
+    constructor(
+        message: string,
+        status: number,
+        flags: {
+            needsRole?: boolean;
+            notAMember?: boolean;
+            reason?: ManageDenialReason | null;
+            account?: string | null;
+            guildName?: string | null;
+        } = {},
+    ) {
         super(message);
         this.name = "ManageError";
         this.status = status;
         this.needsRole = flags.needsRole ?? false;
         this.notAMember = flags.notAMember ?? false;
+        this.reason = flags.reason ?? null;
+        this.account = flags.account ?? null;
+        this.guildName = flags.guildName ?? null;
+    }
+
+    /**
+     * A sentence for a refusal that explains what to do next, or null when this
+     * is not a permission refusal.
+     *
+     * WHY THIS EXISTS: the Worker's `error` field is written for whoever reads
+     * the logs. The person who needs it is the officer who just signed in with
+     * the wrong account, and they need three things the raw message omits --
+     * which account was refused, which server was expected, and how to fix it.
+     */
+    get remedy(): string | null {
+        if (this.reason === "not-a-member") {
+            const account = this.account ? `"${this.account}"` : "that Discord account";
+            const server = this.guildName ? `the ${this.guildName} server` : "the team's Discord server";
+            return (
+                `You are signed in to Discord as ${account}, which is not a member of ${server}. ` +
+                "If you have a second Discord account, sign in with that one."
+            );
+        }
+        if (this.reason === "missing-role") {
+            const server = this.guildName ? `the ${this.guildName} server` : "the team's server";
+            return (
+                `You are in ${server}, but only officers can add events. ` +
+                "Ask an officer to give your Discord account the officer role, then sign in again."
+            );
+        }
+        return null;
     }
 }
 
@@ -129,11 +189,28 @@ async function errorFromResponse(res: Response): Promise<ManageError> {
         // Fall through to the status-based message.
     }
     const message = typeof body.error === "string" && body.error ? body.error : `Request failed (${res.status}).`;
+
+    // Prefer the Worker's explicit `reason` code. The `member` flag is a
+    // fallback for any response that predates it, so an older deployed Worker
+    // still produces the right wording rather than a bare message.
+    const rawReason = body.reason;
+    const reason: ManageDenialReason | null =
+        rawReason === "not-a-member" || rawReason === "missing-role"
+            ? rawReason
+            : body.member === false
+              ? "not-a-member"
+              : res.status === 403
+                ? "missing-role"
+                : null;
+
     return new ManageError(message, res.status, {
+        reason,
         // `member: false` is the Worker's explicit "not in the server" signal.
-        notAMember: body.member === false,
+        notAMember: reason === "not-a-member",
         // `member: true` plus a 403 means "in the server, lacks the role".
-        needsRole: res.status === 403 && body.member === true,
+        needsRole: reason === "missing-role",
+        account: typeof body.account === "string" ? body.account : null,
+        guildName: typeof body.guildName === "string" ? body.guildName : null,
     });
 }
 
@@ -247,4 +324,29 @@ export async function createEvent(session: ManageSession, input: CreateEventInpu
     });
     if (!res.ok) throw await errorFromResponse(res);
     return (await res.json()) as CreateEventResult;
+}
+
+/**
+ * Delete a guild scheduled event.
+ *
+ * Throws `ManageError` on failure: 401 (session expired -- sign in again), 403
+ * (lost the officer role), 404 (already deleted, e.g. in the Discord client),
+ * or 429 (Discord rate limited).
+ *
+ * WARNING: Deleting in Discord removes it from the calendar because the Worker drops
+ * it from its archive; this path does the same thing directly so the event
+ * disappears immediately rather than waiting for the next cache refresh.
+ */
+export async function deleteEvent(session: ManageSession, eventId: string): Promise<void> {
+    if (!/^\d{15,20}$/.test(eventId)) {
+        // Refuse locally: a malformed id would otherwise become a 400 whose
+        // message is about the id, which is more confusing than this.
+        throw new ManageError("That event cannot be deleted because its id is invalid.", 400);
+    }
+    const res = await fetch(`${MANAGE_URL}/events/${eventId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.token}` },
+        cache: "no-store",
+    });
+    if (!res.ok) throw await errorFromResponse(res);
 }

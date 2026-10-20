@@ -1,11 +1,14 @@
-import { Ban, CalendarDays, ExternalLink, MapPin, Repeat, X } from "lucide-react";
+import { Ban, CalendarDays, ExternalLink, Loader2, MapPin, Repeat, Trash2, X } from "lucide-react";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { describeRecurrence, type ExpandedOccurrence, isLocationUrl } from "../lib/discord";
+import { deleteEvent, loadSession, ManageError, type ManageSession } from "../lib/eventManage";
 import EventMap from "./EventMap";
 
 interface EventModalProps {
     occurrence: ExpandedOccurrence | null;
     onClose: () => void;
+    /** Called after a successful delete so the page can refresh its events. */
+    onDeleted?: () => void;
 }
 
 function formatLongDate(d: Date): string {
@@ -34,11 +37,35 @@ function renderDiscordMarkdown(text: string): React.ReactNode[] {
     return out;
 }
 
-export default function EventModal({ occurrence, onClose }: EventModalProps) {
+export default function EventModal({ occurrence, onClose, onDeleted }: EventModalProps) {
     const closeBtnRef = useRef<HTMLButtonElement>(null);
     const lastActiveRef = useRef<HTMLElement | null>(null);
     const [isOpen, setIsOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
+
+    /**
+     * The signed-in officer, or null.
+     *
+     * Read once on mount rather than threaded down from the page: the session
+     * is only needed by this control, and a page-level prop would make every
+     * calendar render depend on the management module.
+     */
+    const [session] = useState<ManageSession | null>(() => loadSession());
+    /** The confirmation step. Deleting is irreversible, so it takes two clicks. */
+    const [confirming, setConfirming] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+
+    // Opening a different event must not inherit the previous one's pending
+    // confirmation -- otherwise a second click could delete the wrong event.
+    // Keyed on the event id alone: the handlers are stable and must not retrigger
+    // this reset.
+    const currentEventId = occurrence?.event.id;
+    useEffect(() => {
+        setConfirming(false);
+        setDeleting(false);
+        setDeleteError(null);
+    }, [currentEventId]);
 
     // Mirror ImageModal's two-phase mount so enter/exit transitions play.
     useEffect(() => {
@@ -84,6 +111,25 @@ export default function EventModal({ occurrence, onClose }: EventModalProps) {
 
     const handleBackdropClick = (e: MouseEvent<HTMLDivElement>) => {
         if (e.target === e.currentTarget) onClose();
+    };
+
+    const handleDelete = async () => {
+        if (!session) return;
+        setDeleting(true);
+        setDeleteError(null);
+        try {
+            await deleteEvent(session, event.id);
+            onDeleted?.();
+            onClose();
+        } catch (err) {
+            setDeleting(false);
+            setConfirming(false);
+            setDeleteError(
+                err instanceof ManageError
+                    ? (err.remedy ?? err.message)
+                    : "Could not delete the event. Please try again.",
+            );
+        }
     };
 
     return (
@@ -157,6 +203,63 @@ export default function EventModal({ occurrence, onClose }: EventModalProps) {
 
                     {event.description && (
                         <p className="event-modal__description">{renderDiscordMarkdown(event.description)}</p>
+                    )}
+
+                    {/* Officer-only. Rendered only for a signed-in session, so a
+                        visitor never sees a control that can only fail; the
+                        Worker is still the gate (see worker/src/permissions.ts). */}
+                    {session && (
+                        <div className="event-modal__manage">
+                            {deleteError && (
+                                <p className="event-modal__delete-error" role="alert">
+                                    {deleteError}
+                                </p>
+                            )}
+                            {confirming ? (
+                                <div className="event-modal__confirm">
+                                    <p className="event-modal__confirm-text">
+                                        {/* A recurring record is ONE Discord event, so this
+                                            removes the whole series, not just the
+                                            occurrence that was clicked. */}
+                                        {recurrence
+                                            ? "Delete this event and every occurrence of it? This cannot be undone."
+                                            : "Delete this event? This cannot be undone."}
+                                    </p>
+                                    <div className="event-modal__confirm-actions">
+                                        <button
+                                            type="button"
+                                            className="btn btn--sm event-modal__danger"
+                                            onClick={handleDelete}
+                                            disabled={deleting}
+                                        >
+                                            {deleting ? (
+                                                <Loader2 className="animate-spin" size={14} aria-hidden="true" />
+                                            ) : (
+                                                <Trash2 size={14} aria-hidden="true" />
+                                            )}
+                                            {deleting ? "Deleting..." : "Yes, delete"}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn btn--sm"
+                                            onClick={() => setConfirming(false)}
+                                            disabled={deleting}
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    className="btn btn--sm event-modal__delete"
+                                    onClick={() => setConfirming(true)}
+                                >
+                                    <Trash2 size={14} aria-hidden="true" />
+                                    Delete event
+                                </button>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>

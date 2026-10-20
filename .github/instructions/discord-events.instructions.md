@@ -1,6 +1,6 @@
 ---
 description: "Use when working on the calendar page, the Discord events client, the subscription affordance, the subteam filter, per-subteam event colors, officer-only event visibility, past-event retention, event deletion, officer event creation from the website (Discord OAuth login), or the Cloudflare Worker that serves Discord guild scheduled events. Covers the no-webhook constraint, the Worker architecture, KV caching + the retention archive, deletion via the guild audit log, VITE_EVENTS_URL, audience gating via Discord channels, the /calendar.ics feed, and rrule recurrence expansion."
-applyTo: "src/lib/discord.ts, src/lib/eventChannels.ts, src/lib/eventManage.ts, src/pages/Calendar.tsx, src/pages/Officers.tsx, src/components/CalendarSubscribe.tsx, src/components/CalendarFilter.tsx, src/components/EventCreator.tsx, src/components/calendarDropdown.ts, src/app.css, src/test/lib/discord.test.ts, src/test/lib/eventChannels.test.ts, src/test/pages/Calendar.test.tsx, src/test/pages/Officers.test.tsx, src/test/components/CalendarSubscribe.test.tsx, src/test/components/CalendarFilter.test.tsx, src/test/components/EventCreator.test.tsx, src/test/worker/session.test.ts, src/test/worker/permissions.test.ts, src/test/worker/eventCreate.test.ts, src/test/worker/eventCreate.routes.test.ts, src/test/worker/ics.test.ts, src/test/worker/recurrence.test.ts, src/test/worker/events.test.ts, src/test/worker/cancellations.test.ts, src/test/worker/audience.test.ts, src/test/worker/audience-filter.test.ts, src/test/worker/archive.test.ts, src/test/worker/audit.test.ts, src/test/worker/channel-filter.test.ts, src/test/worker/routes.test.ts, worker/**"
+applyTo: "src/lib/discord.ts, src/lib/eventChannels.ts, src/lib/eventManage.ts, src/pages/Calendar.tsx, src/pages/Officers.tsx, src/components/CalendarSubscribe.tsx, src/components/CalendarFilter.tsx, src/components/EventCreator.tsx, src/components/EventModal.tsx, src/components/calendarDropdown.ts, src/app.css, src/test/lib/discord.test.ts, src/test/lib/eventChannels.test.ts, src/test/pages/Calendar.test.tsx, src/test/pages/Officers.test.tsx, src/test/components/CalendarSubscribe.test.tsx, src/test/components/CalendarFilter.test.tsx, src/test/components/EventCreator.test.tsx, src/test/components/EventModal.test.tsx, src/test/worker/session.test.ts, src/test/worker/permissions.test.ts, src/test/worker/eventCreate.test.ts, src/test/worker/eventCreate.routes.test.ts, src/test/worker/ics.test.ts, src/test/worker/recurrence.test.ts, src/test/worker/events.test.ts, src/test/worker/cancellations.test.ts, src/test/worker/audience.test.ts, src/test/worker/audience-filter.test.ts, src/test/worker/archive.test.ts, src/test/worker/audit.test.ts, src/test/worker/channel-filter.test.ts, src/test/worker/routes.test.ts, worker/**"
 ---
 
 # Discord events + calendar
@@ -399,12 +399,37 @@ POST /manage/events        -> { event, officerOnly }      (bearer token)
 - A physical location is written into the description as a `Location:` line,
   because that is the only form `extractLocationFromDescription` accepts.
   Without it a created event would show no venue on the site.
-- Editing and deleting stay in Discord. The read path's deletion detection
-  already depends on the audit log, so there is one place where an event's life
-  ends rather than two.
+- **Deleting is allowed from the site too**, through
+  `DELETE /manage/events/{id}` (`worker/src/index.ts` `handleDeleteEvent`). WARNING:
+  It reuses the session's `canCreateEvents` claim rather than adding a separate
+  `canDeleteEvents` flag -- "may manage the calendar" is one decision, and two
+  flags would drift. The DELETE goes through `discordDeleteAsBot`, so as with
+  creation the session claim is the ONLY gate: the bot holds `MANAGE_EVENTS` and
+  Discord will not refuse it.
+- WARNING: **The delete path removes the id from the KV archive directly** instead
+  of waiting for audit-log detection. The audit path is best-effort and may 403
+  (no `VIEW_AUDIT_LOG`) or lag, and a delete the user just performed must take
+  effect immediately. The audit path remains the backstop for deletions made in
+  the Discord client. The archive write keeps the stored `fetchedAt`, so a delete
+  does not extend the cache's freshness; a cold cache is left cold.
+- WARNING: **The event id is matched by `resolveRoute`, not by the exact-match
+  `ROUTES` table**, and only a 15-20 digit snowflake resolves. That keeps
+  `/manage/events/admin` a 404 (not a 405, which would imply the path is real) and
+  stops a crafted suffix from adding segments to the upstream Discord URL.
+- WARNING: **A slug-keyed `RouteEntry` kind must be added to BOTH the union and the
+  dispatch `switch`.** The switch's `default` is `handleCreateEvent`, so a new kind
+  that is absent from the switch silently becomes a create request.
+- Editing stays in Discord (Discord's `PATCH` has no UI here yet). Deletion is the
+  one write that now has two legitimate entry points, and both converge on the
+  same archive, so the calendar cannot disagree with itself.
+- The modal's delete affordance (`src/components/EventModal.tsx`) renders only
+  when a session exists and requires a confirmation click. A recurring record is
+  ONE Discord event, so the prompt says the whole series goes -- deleting does
+  not remove a single occurrence (Discord has no per-occurrence delete).
 - Tests: `src/test/worker/session.test.ts`, `permissions.test.ts`,
-  `eventCreate.test.ts`, `eventCreate.routes.test.ts`, and
-  `src/test/components/EventCreator.test.tsx`. The route suite asserts that an
+  `eventCreate.test.ts`, `eventCreate.routes.test.ts` (includes the `DELETE`
+  authorization and archive suites), `src/test/components/EventCreator.test.tsx`,
+  and `src/test/components/EventModal.test.tsx`. The route suites assert that an
   unauthenticated or non-officer request never reaches Discord.
 
 ## No-webhook constraint

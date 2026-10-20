@@ -53,6 +53,7 @@ keeps everything, exactly as before.
 | `POST /manage/auth/callback` | Exchanges an authorization code for a session token. |
 | `GET /manage/session` | Confirms a bearer token is still valid. |
 | `POST /manage/events` | Creates a guild scheduled event. **Officers only.** |
+| `DELETE /manage/events/{id}` | Deletes a guild scheduled event. **Officers only.** |
 
 ## Creating events from the website
 
@@ -76,6 +77,9 @@ browser                      Worker                        Discord
   | POST /manage/events          |                              |
   |   Authorization: Bearer      |-- POST /guilds/../scheduled-events -->
   |<--- { event, officerOnly } --|                              |
+  | DELETE /manage/events/{id}   |                              |
+  |   Authorization: Bearer      |-- DELETE /guilds/../scheduled-events/{id} -->
+  |<--- { deleted } -------------|                              |
 ```
 
 ### Why only officers
@@ -92,16 +96,48 @@ into the officer channel.
 
 ### Configuring it
 
-1. **Discord developer portal -> your application -> OAuth2.**
+1. **Register the redirect URI in the Discord developer portal.**
 
-   - Copy the **Client ID** into `wrangler.jsonc` as `DISCORD_CLIENT_ID`
-     (public -- it appears in the authorize URL).
-   - Add a **Redirect** entry matching `OAUTH_REDIRECT_URI` in
-     `wrangler.jsonc` **exactly**, including the trailing slash:
-     `https://autoboat.aoe.vt.edu/calendar/`.
-     A mismatch shows Discord's error page rather than a usable message.
+   This is the step people get stuck on, because the setting is in a different
+   tab from the client id and Discord's failure message is terse.
 
-2. **Store the secrets.**
+   - Go to https://discord.com/developers/applications
+   - Click your application (the same one the bot lives in).
+   - Left sidebar -> **OAuth2**. (NOT "OAuth2 -> General" in some layouts; the
+     redirect field is on the main OAuth2 page.)
+   - Find the **Redirects** section.
+   - Click **Add Redirect**, paste the exact URL, then click **Save Changes**
+     at the bottom of the page.
+
+   The value MUST match `OAUTH_REDIRECT_URI` in `wrangler.jsonc`
+   char-for-char, including the trailing slash:
+
+   ```
+   https://autoboat.aoe.vt.edu/calendar/
+   ```
+
+   WARNING: Forgetting **Save Changes** is the classic failure: the field looks filled in,
+   but Discord never stored it.
+
+   WARNING: If Discord shows **"Invalid OAuth2 redirect_uri"**, the URL the Worker sent is
+   not on that list. Compare them exactly -- a missing trailing slash
+   (`/calendar` vs `/calendar/`), an `http://` vs `https://`, or the `www.` host
+   are all distinct strings to Discord, and all of them fail this way.
+
+   NOTE: Local development still sends the PRODUCTION redirect URI, because that is
+   what `OAUTH_REDIRECT_URI` holds. So testing "sign in" from
+   `localhost` logs in and then lands you on the production site. To keep the
+   flow local, add a second redirect entry such as
+   `http://localhost:3000/calendar/` and point `OAUTH_REDIRECT_URI` at it in
+   `worker/.dev.vars` instead.
+
+2. **Copy the client id into `wrangler.jsonc`.**
+
+   - Same **OAuth2** page -> **Client ID**.
+   - Put it in `wrangler.jsonc` as `DISCORD_CLIENT_ID` (public -- it appears in
+     the authorize URL the browser visits).
+
+3. **Store the secrets.**
 
    ```bash
    npx wrangler secret put DISCORD_CLIENT_SECRET
@@ -152,12 +188,44 @@ into the officer channel.
    auto-created **role** in Server Settings -> Roles and enable
    **Manage Events**.
 
-4. **Redeploy** and confirm `GET <worker-url>/manage/auth/url` returns 200.
+4. **Deploy the Worker.**
+
+   ```bash
+   npx wrangler deploy
+   ```
 
    WARNING: `wrangler secret put` does not redeploy on its own, but a `vars` change
-   (like `DISCORD_CLIENT_ID`) only reaches the running Worker after
-   `npx wrangler deploy`. If you just edited `wrangler.jsonc` and the error
-   persists, deploy.
+   (like `DISCORD_CLIENT_ID` or `OAUTH_REDIRECT_URI`) only reaches the running
+   Worker after a deploy. If you just edited `wrangler.jsonc` and the error
+   persists, this is why.
+
+5. **Verify** that `GET <worker-url>/manage/auth/url` returns 200, then try the
+   **Add event** button on the calendar.
+
+### Deleting events
+
+A signed-in officer can remove an event without leaving the site: open the event
+on the calendar and use **Delete event**, then confirm. Nothing extra needs to be
+configured beyond the sign-in above -- the same session and the same
+`MANAGE_EVENTS` check apply.
+
+What a delete does:
+
+- Calls `DELETE /guilds/{guild}/scheduled-events/{id}` with the **bot's** token,
+  tagging the request with an `X-Audit-Log-Reason` so the deletion is legible in
+  the server's audit log.
+- Drops the event from the KV archive immediately, so the calendar (and the
+  `.ics` feed) stop serving it on the next request rather than after a refresh.
+- Leaves the archive's `fetchedAt` alone. Removing one row does not make the rest
+  newer, and bumping it would delay the refresh that would reveal other changes.
+
+WARNING: A **recurring** event is a single Discord record, so deleting it removes
+every occurrence. Discord has no per-occurrence delete; to skip one week, use the
+description's `Cancelled:` convention instead (see the calendar instruction file).
+
+A delete made in the Discord client still works and still removes the event from
+the calendar, via the audit-log detection on the next refresh (see "Event
+retention"). The two paths do not conflict.
 
 ### Troubleshooting "Event creation is not configured"
 
@@ -188,6 +256,40 @@ curl -s https://<worker-url>/manage/auth/url | jq .
 # 503 + {"error": "Event creation is not configured. Missing: ..."} -> read the list
 ```
 
+That only proves the Worker has all four values. To see exactly which
+`redirect_uri` it will send Discord, print it out:
+
+```bash
+curl -s https://<worker-url>/manage/auth/url \
+  | jq -r '.url' \
+  | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(new URL(s.trim()).searchParams.get('redirect_uri')))"
+```
+
+Whatever that prints must appear verbatim in the portal's **Redirects** list.
+
+### Troubleshooting "Invalid OAuth2 redirect_uri"
+
+This error comes from **Discord**, not the Worker -- the authorize page rejects
+the `redirect_uri` because it is not registered on the application. The Worker
+is fine; the portal entry is missing or does not match.
+
+Fix it at https://discord.com/developers/applications -> your application ->
+**OAuth2** -> **Redirects** -> **Add Redirect** -> paste -> **Save Changes**.
+
+Common mismatches, all of which Discord treats as different strings:
+
+| Wrong | Right | Why |
+| --- | --- | --- |
+| `https://autoboat.aoe.vt.edu/calendar` | `https://autoboat.aoe.vt.edu/calendar/` | missing trailing slash |
+| `http://autoboat.aoe.vt.edu/calendar/` | `https://autoboat.aoe.vt.edu/calendar/` | http vs https |
+| `https://www.autoboat.aoe.vt.edu/calendar/` | `https://autoboat.aoe.vt.edu/calendar/` | `www.` is a different host |
+| `https://autoboat.aoe.vt.edu` | `https://autoboat.aoe.vt.edu/calendar/` | missing path |
+
+Also check that you clicked **Save Changes** -- a typed-but-unsaved redirect
+looks correct on screen and is not stored. And confirm you are editing the same
+application whose **Client ID** is in `wrangler.jsonc`; a redirect registered on
+a different app fails identically.
+
 ### Security notes
 
 - The session is a **bearer token**, not a cookie. The site and the Worker are
@@ -200,9 +302,14 @@ curl -s https://<worker-url>/manage/auth/url | jq .
   so demoting someone takes effect within the token's 2-hour lifetime.
 - Session tokens are **stateless** -- login costs zero KV writes, which matters
   against the free tier's 1,000 writes/day. A successful event create costs one
-  write (the archive merge) so the new event is visible immediately.
-- Editing and deleting events stay in Discord, where the audit-log signal the
-  calendar's retention logic depends on already exists.
+  write (the archive merge) so the new event is visible immediately; a delete
+  costs one write to drop the id from the archive, for the same reason.
+- Editing events stays in Discord. Deletion is available from both places: the
+  website's `DELETE /manage/events/{id}` and the Discord client. Both converge
+  on the same archive, so the calendar cannot disagree with itself. A delete
+  made from the website removes the id from the archive directly instead of
+  waiting for the audit-log read, which is best-effort and may be unavailable
+  when the bot lacks `VIEW_AUDIT_LOG`.
 
 ### Filtering by subteam (`?channels=`)
 

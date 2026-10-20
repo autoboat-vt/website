@@ -809,7 +809,7 @@ function handlePreflight(env: Env): Response {
  */
 function managementCorsHeaders(env: Env): HeadersInit {
     const headers: Record<string, string> = {
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
         "Access-Control-Max-Age": "86400",
         Vary: "Origin",
@@ -1026,9 +1026,23 @@ async function handleAuthCallback(env: Env, request: Request): Promise<Response>
     if (!user) return managementError(env, 401, "Discord returned an unusable profile.");
 
     const membership = evaluateMembership(guilds, env.DISCORD_GUILD_ID);
+
+    // Both refusals carry `reason` (a stable code the UI branches on) AND
+    // `error` (a sentence for anything that only logs), plus the account name
+    // and the server name so the message can be specific about WHICH account
+    // was refused. A user signed into the wrong Discord account is the
+    // commonest cause of both, and the generic wording never revealed it.
     if (!membership.member) {
         return managementJson(
-            { error: "You are not a member of the team's Discord server.", member: false },
+            {
+                reason: "not-a-member",
+                error: `You are not a member of ${membership.guildName ?? "the team's Discord server"}.`,
+                member: false,
+                canCreateEvents: false,
+                // Echo the account so the UI can say "signed in as X".
+                account: user.name,
+                guildName: membership.guildName,
+            },
             { status: 403 },
             env,
         );
@@ -1036,9 +1050,12 @@ async function handleAuthCallback(env: Env, request: Request): Promise<Response>
     if (!membership.canCreateEvents) {
         return managementJson(
             {
+                reason: "missing-role",
                 error: "Only officers can add events. Ask an officer to grant you the role.",
                 member: true,
                 canCreateEvents: false,
+                account: user.name,
+                guildName: membership.guildName,
             },
             { status: 403 },
             env,
@@ -1217,6 +1234,111 @@ async function handleCreateEvent(env: Env, ctx: ExecutionContext, request: Reque
 }
 
 /**
+ * DELETE a Discord path with the bot token.
+ *
+ * Discord returns `204 No Content` on success, so there is no body to parse.
+ * Errors are reported the same way as create: the status plus Discord's
+ * `message`, which explains which field or permission was at fault and contains
+ * no credentials.
+ */
+async function discordDeleteAsBot(
+    env: Env,
+    path: string,
+): Promise<{ ok: true } | { ok: false; status: number; detail: string }> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), DISCORD_UPSTREAM_TIMEOUT_MS);
+    try {
+        const res = await fetch(`${DISCORD_API_BASE}${path}`, {
+            method: "DELETE",
+            headers: {
+                Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+                "User-Agent": WORKER_USER_AGENT,
+                Accept: "application/json",
+                // Recorded in the guild audit log alongside the bot's delete.
+                "X-Audit-Log-Reason": "Deleted from the AutoBoat website",
+            },
+            signal: controller.signal,
+        });
+        if (!res.ok) {
+            let detail =
+                res.status === 404 ? "That event no longer exists in Discord." : `Discord returned ${res.status}.`;
+            try {
+                const parsed = (await res.json()) as { message?: unknown };
+                if (typeof parsed.message === "string" && parsed.message) detail = parsed.message;
+            } catch {
+                // Keep the status-based message.
+            }
+            return { ok: false, status: res.status, detail };
+        }
+        // 204: nothing to read.
+        return { ok: true };
+    } catch {
+        return { ok: false, status: 502, detail: "Could not reach Discord." };
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/**
+ * `DELETE /manage/events/{id}` -- delete a guild scheduled event.
+ *
+ * WARNING: Same reasoning as create: the DELETE is sent with the BOT's token, so
+ * Discord enforces the BOT's permissions and will delete anything. The session's
+ * `canCreateEvents` claim is the only gate. It is reused rather than a separate
+ * `canDeleteEvents` flag because "may manage the calendar" is one decision --
+ * splitting it would let the two drift apart for no product benefit.
+ *
+ * WARNING: The archive is updated by REMOVING the id, rather than relying on the
+ * audit log. The audit-log path (`fetchDeletedEventIds`) is best-effort and can
+ * lag or 403 -- and a delete the user just performed must take effect
+ * immediately, not "within a refresh, if the bot has VIEW_AUDIT_LOG". The audit
+ * path stays as the backstop for deletions done in the Discord client.
+ */
+async function handleDeleteEvent(
+    env: Env,
+    ctx: ExecutionContext,
+    request: Request,
+    eventId: string,
+): Promise<Response> {
+    const auth = await verifySession(env.SESSION_SECRET, bearerToken(request.headers.get("Authorization")));
+    if (!auth.ok) return managementError(env, 401, auth.reason);
+    if (!auth.payload.canCreateEvents) {
+        return managementError(env, 403, "Only officers can remove events.");
+    }
+    // `resolveRoute` only produces this handler for a validated snowflake, so a
+    // non-numeric id was already answered with a 404 before reaching here.
+
+    const deleted = await discordDeleteAsBot(env, `/guilds/${env.DISCORD_GUILD_ID}/scheduled-events/${eventId}`);
+    if (!deleted.ok) {
+        const status = deleted.status === 502 ? 502 : deleted.status === 429 ? 429 : deleted.status === 404 ? 404 : 400;
+        return managementError(env, status, deleted.detail);
+    }
+
+    // Drop it from the archive so the calendar stops showing it immediately.
+    // One write, on an operator-initiated path -- the read path's
+    // one-write-per-miss invariant is untouched (see handleCreateEvent).
+    ctx.waitUntil(
+        (async () => {
+            const cached = await env.EVENTS_KV.get(EVENTS_KV_KEY, { type: "json" });
+            const entry = parseCacheEntry(cached);
+            // Cold cache: nothing stored to correct, and the next read refetches
+            // from Discord without the deleted event anyway. Writing an empty
+            // archive here would mark it fresh and hide everything else.
+            if (entry === null) return;
+            const remaining = entry.events.filter((e) => e.id !== eventId);
+            // Nothing changed means the event was not in the archive (already
+            // gone, or never fetched). Skip the write rather than burn budget.
+            if (remaining.length === entry.events.length) return;
+            await env.EVENTS_KV.put(EVENTS_KV_KEY, JSON.stringify({ fetchedAt: entry.fetchedAt, events: remaining }));
+        })().catch(() => {
+            // The delete itself succeeded; the next refresh reconciles.
+        }),
+    );
+
+    return managementJson({ deleted: eventId }, { status: 200 }, env);
+}
+
+/**
  * Route table. Each entry maps a normalized pathname to what it serves.
  * `/officers/*` is not a secret: it is an unguessable URL, and anyone who has
  * it can read it.
@@ -1230,7 +1352,8 @@ type RouteEntry =
     | { kind: "json" | "ics"; audience: Audience }
     | { kind: "audiences" }
     | { kind: "auth-url" }
-    | { kind: "auth-callback" | "session" | "create-event"; methods: string[] };
+    | { kind: "auth-callback" | "session" | "create-event"; methods: string[] }
+    | { kind: "delete-event"; methods: string[] };
 
 const ROUTES: Record<string, RouteEntry> = {
     "/events": { kind: "json", audience: "public" },
@@ -1246,6 +1369,39 @@ const ROUTES: Record<string, RouteEntry> = {
     "/manage/events": { kind: "create-event", methods: ["POST"] },
 };
 
+/**
+ * Path prefix for a single event. Deletion addresses one event by id, which the
+ * exact-match `ROUTES` table above cannot express, so it is matched separately
+ * rather than turned into a regex entry -- keeping the table exact-match means a
+ * typo'd path can never accidentally route to a handler.
+ *
+ * WARNING: The id is validated HERE, as part of matching, and not only inside the
+ * handler. Two reasons: an unknown path must stay a 404 (a `/manage/events/admin`
+ * typo should not answer 405 "method not allowed", which implies the path is
+ * real), and this is the single place the value is checked before it is
+ * interpolated into a Discord URL, so a crafted suffix cannot add path segments.
+ */
+const MANAGE_EVENT_PREFIX = "/manage/events/";
+
+/** Discord snowflake: 15-20 decimal digits. */
+const SNOWFLAKE = /^\d{15,20}$/;
+
+/** Resolve a request path to a route, including the parameterized delete path. */
+function resolveRoute(pathname: string): { entry: RouteEntry; eventId?: string } | null {
+    const exact = ROUTES[pathname];
+    if (exact) return { entry: exact };
+
+    if (pathname.startsWith(MANAGE_EVENT_PREFIX)) {
+        const eventId = pathname.slice(MANAGE_EVENT_PREFIX.length);
+        // Exactly one snowflake segment, so `/manage/events/1/2` and
+        // `/manage/events/not-an-id` are both simply unknown paths.
+        if (SNOWFLAKE.test(eventId)) {
+            return { entry: { kind: "delete-event", methods: ["DELETE"] }, eventId };
+        }
+    }
+    return null;
+}
+
 export default {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
         const url = new URL(request.url);
@@ -1259,14 +1415,15 @@ export default {
         // decision. See `Env.origin`.
         env.origin = resolveAllowedOrigin(env.ALLOWED_ORIGIN, request.headers.get("Origin")) ?? undefined;
 
-        const route = ROUTES[pathname];
-        if (!route) {
+        const resolved = resolveRoute(pathname);
+        if (!resolved) {
             return jsonResponse({ error: "not found" }, { status: 404 }, env);
         }
+        const { entry: route, eventId } = resolved;
 
         // Management routes carry the write-side CORS headers (which allow
-        // POST + Authorization) and must never be cached. The read routes keep
-        // their own header set -- widening theirs would advertise a POST
+        // POST/DELETE + Authorization) and must never be cached. The read routes
+        // keep their own header set -- widening theirs would advertise a write
         // surface on endpoints that have none.
         const isManagement = route.kind !== "json" && route.kind !== "ics" && route.kind !== "audiences";
 
@@ -1285,6 +1442,8 @@ export default {
                     return handleAuthCallback(env, request);
                 case "session":
                     return handleGetSession(env, request);
+                case "delete-event":
+                    return handleDeleteEvent(env, ctx, request, eventId ?? "");
                 default:
                     return handleCreateEvent(env, ctx, request);
             }

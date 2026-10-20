@@ -102,18 +102,27 @@ describe("guildGrantsEventCreation", () => {
 describe("evaluateMembership", () => {
     it("reports a non-member as member:false", () => {
         const guilds = [{ id: "someone-else", name: "Other", permissions: permissionsOf(PERMISSION.MANAGE_EVENTS) }];
-        expect(evaluateMembership(guilds, GUILD)).toEqual({ member: false, canCreateEvents: false });
+        // `guildName` is null for a non-member: there is no matching guild to
+        // name, so the UI falls back to "the team's Discord server".
+        expect(evaluateMembership(guilds, GUILD)).toEqual({ member: false, canCreateEvents: false, guildName: null });
     });
 
     it("distinguishes 'in the server but not an officer' from 'not in the server'", () => {
         // Different UI messages: "ask for the role" vs "join the server".
         const guilds = [{ id: GUILD, name: "Team", permissions: "0" }];
-        expect(evaluateMembership(guilds, GUILD)).toEqual({ member: true, canCreateEvents: false });
+        expect(evaluateMembership(guilds, GUILD)).toEqual({ member: true, canCreateEvents: false, guildName: "Team" });
     });
 
     it("allows an officer", () => {
         const guilds = [{ id: GUILD, name: "Team", permissions: permissionsOf(PERMISSION.MANAGE_EVENTS) }];
-        expect(evaluateMembership(guilds, GUILD)).toEqual({ member: true, canCreateEvents: true });
+        expect(evaluateMembership(guilds, GUILD)).toEqual({ member: true, canCreateEvents: true, guildName: "Team" });
+    });
+
+    it("names the guild so a refusal can say which server is expected", () => {
+        // The person is usually signed into the wrong Discord account, so the
+        // message has to name the server they should be a member of.
+        const guilds = [{ id: GUILD, name: "AutoBoat @ VT", permissions: "0" }];
+        expect(evaluateMembership(guilds, GUILD).guildName).toBe("AutoBoat @ VT");
     });
 
     it("finds the team guild among many", () => {
@@ -127,6 +136,6 @@ describe("evaluateMembership", () => {
 
     it("ignores a same-named guild with a different id", () => {
         const guilds = [{ id: "999", name: "Team", permissions: permissionsOf(PERMISSION.MANAGE_EVENTS) }];
-        expect(evaluateMembership(guilds, GUILD)).toEqual({ member: false, canCreateEvents: false });
+        expect(evaluateMembership(guilds, GUILD)).toEqual({ member: false, canCreateEvents: false, guildName: null });
     });
 });

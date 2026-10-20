@@ -113,17 +113,33 @@ export function guildGrantsEventCreation(guild: DiscordUserGuild): boolean {
 }
 
 /**
+ * Why a login was refused. A machine-readable code so the UI can pick wording
+ * without parsing a message, and so the two refusals stay distinguishable
+ * (they need different advice).
+ */
+export type DenialReason = "not-a-member" | "missing-role";
+
+/**
  * Find the team guild in the user's guild list and report what it grants.
  *
  * A missing guild is reported as `member: false` rather than as a permission
  * failure, because the two need different messages: "you are not in the
  * server" is actionable, "you lack permission" is a role request.
+ *
+ * `guildName` is carried through so the refusal can name the server. A user who
+ * is signed into the WRONG Discord account sees "the AutoBoat server" and
+ * immediately understands the problem; "the team's server" does not tell them
+ * which account is at fault.
  */
 export function evaluateMembership(
     guilds: readonly DiscordUserGuild[],
     guildId: string,
-): { member: boolean; canCreateEvents: boolean } {
+): { member: boolean; canCreateEvents: boolean; guildName: string | null } {
     const guild = guilds.find((g) => g.id === guildId);
-    if (!guild) return { member: false, canCreateEvents: false };
-    return { member: true, canCreateEvents: guildGrantsEventCreation(guild) };
+    if (!guild) return { member: false, canCreateEvents: false, guildName: null };
+    return {
+        member: true,
+        canCreateEvents: guildGrantsEventCreation(guild),
+        guildName: typeof guild.name === "string" && guild.name ? guild.name : null,
+    };
 }
