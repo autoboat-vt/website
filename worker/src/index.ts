@@ -835,9 +835,57 @@ function managementError(env: Env, status: number, error: string): Response {
     return managementJson({ error }, { status }, env);
 }
 
-/** Whether the OAuth configuration is present enough to attempt a login. */
-function oauthConfigured(env: Env): boolean {
-    return Boolean(env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET && env.SESSION_SECRET && env.OAUTH_REDIRECT_URI);
+/**
+ * Configuration required for the OAuth login, in the order a new operator
+ * should set them. `secret: true` marks values that live in `wrangler secret
+ * put` rather than `vars` -- the distinction matters because putting a secret
+ * in `wrangler.jsonc` would commit it.
+ */
+const OAUTH_REQUIRED_CONFIG = [
+    { name: "DISCORD_CLIENT_ID", secret: false },
+    { name: "DISCORD_CLIENT_SECRET", secret: true },
+    { name: "OAUTH_REDIRECT_URI", secret: false },
+    { name: "SESSION_SECRET", secret: true },
+] as const;
+
+/**
+ * Which required values are ABSENT or blank.
+ *
+ * WARNING: Reports the NAMES only -- never the values. `DISCORD_CLIENT_SECRET` and
+ * `SESSION_SECRET` pass through here, and this string reaches an HTTP response
+ * and the client UI, so returning values (or even a length/prefix) would leak
+ * them.
+ *
+ * This exists because the previous version returned a single boolean and the
+ * caller printed one fixed sentence naming all four variables. An operator who
+ * had just set one of them would set it, see the identical message, and have no
+ * way to tell whether their change landed -- which is exactly the report this
+ * replaced. Naming only the missing entries makes the next step unambiguous.
+ */
+export function missingOAuthConfig(env: Partial<Env>): string[] {
+    return OAUTH_REQUIRED_CONFIG.filter(({ name }) => {
+        const value = env[name];
+        // A var present but set to "" counts as missing: wrangler.jsonc ships
+        // `"DISCORD_CLIENT_ID": ""` as a placeholder, and an empty client id
+        // produces a Discord authorize URL that fails with no explanation.
+        return typeof value !== "string" || value.trim() === "";
+    }).map(({ name }) => name);
+}
+
+/** The `wrangler` command that sets one of these, chosen by where it lives. */
+function howToSet(name: string): string {
+    const entry = OAUTH_REQUIRED_CONFIG.find((c) => c.name === name);
+    return entry?.secret ? `wrangler secret put ${name}` : `"${name}" in wrangler.jsonc vars`;
+}
+
+/**
+ * A 503 whose message names the specific missing configuration, plus how to
+ * set each one.
+ */
+function oauthNotConfigured(env: Env): Response {
+    const missing = missingOAuthConfig(env);
+    const remedy = missing.map((name) => `${name} (${howToSet(name)})`).join(", ");
+    return managementError(env, 503, `Event creation is not configured. Missing: ${remedy}.`);
 }
 
 /**
@@ -848,19 +896,17 @@ function oauthConfigured(env: Env): boolean {
  * short-lived nonce that the callback verifies (see oauth.ts).
  *
  * Returns 503 when OAuth is not configured. That is deliberate: the read-only
- * calendar keeps working, and the failure is a clear configuration message
+ * calendar keeps working, and the failure names the specific missing value
  * rather than a broken redirect.
  */
 async function handleAuthUrl(env: Env): Promise<Response> {
-    const secret = env.SESSION_SECRET;
-    if (!oauthConfigured(env) || !secret) {
-        return managementError(
-            env,
-            503,
-            "Event creation is not configured. Set DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, " +
-                "OAUTH_REDIRECT_URI, and the SESSION_SECRET secret.",
-        );
-    }
+    const missing = missingOAuthConfig(env);
+    // `missing` already includes SESSION_SECRET, so no separate check here --
+    // two checks would let the message disagree with the gate.
+    if (missing.length > 0) return oauthNotConfigured(env);
+    // Narrowed by the check above; `createOAuthState` needs a real string.
+    const secret = env.SESSION_SECRET as string;
+
     const state = await createOAuthState(secret);
     return managementJson(
         {
@@ -909,10 +955,10 @@ async function discordGetAsUser(path: string, accessToken: string): Promise<unkn
  * "you are not in the server".
  */
 async function handleAuthCallback(env: Env, request: Request): Promise<Response> {
-    const secret = env.SESSION_SECRET;
-    if (!oauthConfigured(env) || !secret) {
-        return managementError(env, 503, "Event creation is not configured.");
-    }
+    // Same diagnostic as /manage/auth/url, so the two routes can never name
+    // different missing values for the same broken configuration.
+    if (missingOAuthConfig(env).length > 0) return oauthNotConfigured(env);
+    const secret = env.SESSION_SECRET as string;
 
     let body: { code?: unknown; state?: unknown };
     try {

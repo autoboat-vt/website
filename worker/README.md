@@ -105,12 +105,45 @@ into the officer channel.
 
    ```bash
    npx wrangler secret put DISCORD_CLIENT_SECRET
-   npx wrangler secret put SESSION_SECRET   # any long random string
+   npx wrangler secret put SESSION_SECRET
    ```
 
-   `SESSION_SECRET` signs the session tokens. Generate one with
-   `openssl rand -base64 32`. Rotating it signs out every officer immediately,
-   which is the intended "revoke all sessions" mechanism.
+   `DISCORD_CLIENT_SECRET` comes **from Discord** (developer portal -> your
+   application -> OAuth2 -> **Reset Secret**).
+
+   `SESSION_SECRET` comes from **nowhere** -- there is no portal that issues it.
+   It is an HMAC key this Worker uses to sign its own session tokens, so you
+   invent it. Any long random string works; the only requirements are that it
+   is unguessable and that it never leaves Cloudflare:
+
+   ```bash
+   # macOS / Linux: generate 32 random bytes, base64-encoded
+   openssl rand -base64 32
+
+   # No openssl? Node/Bun can do it:
+   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+   ```
+
+   Paste the ONE line it prints into the `wrangler secret put SESSION_SECRET`
+   prompt. Do NOT commit it, put it in `wrangler.jsonc`, or reuse the bot token
+   or client secret for it -- those are all different credentials, and keeping
+   them separate means rotating one does not break the other.
+
+   WARNING: Rotating `SESSION_SECRET` invalidates every outstanding session immediately.
+   That is the intended "sign everyone out" mechanism, and it costs nothing else
+   -- officers just log in again.
+
+   NOTE: `wrangler secret put` writes to the DEPLOYED Worker. For `wrangler dev`,
+   also add both values to `worker/.dev.vars` (gitignored):
+
+   ```
+   DISCORD_CLIENT_SECRET=<from Discord>
+   SESSION_SECRET=<the line you just generated>
+   ```
+
+   `DISCORD_CLIENT_ID` and `OAUTH_REDIRECT_URI` are NOT secrets -- they stay in
+   `wrangler.jsonc` under `vars`. Putting them in `.dev.vars` is harmless but
+   unnecessary.
 
 3. **Grant the bot `MANAGE_EVENTS`.**
 
@@ -120,6 +153,40 @@ into the officer channel.
    **Manage Events**.
 
 4. **Redeploy** and confirm `GET <worker-url>/manage/auth/url` returns 200.
+
+   WARNING: `wrangler secret put` does not redeploy on its own, but a `vars` change
+   (like `DISCORD_CLIENT_ID`) only reaches the running Worker after
+   `npx wrangler deploy`. If you just edited `wrangler.jsonc` and the error
+   persists, deploy.
+
+### Troubleshooting "Event creation is not configured"
+
+The 503 names each value that is still missing, and where it belongs:
+
+```
+Event creation is not configured. Missing: DISCORD_CLIENT_SECRET
+(wrangler secret put DISCORD_CLIENT_SECRET), OAUTH_REDIRECT_URI
+("OAUTH_REDIRECT_URI" in wrangler.jsonc vars).
+```
+
+Read that list literally -- only the values it names are absent, so a value you
+just set correctly will not appear. If a value you DID set still appears, check
+that you set it in the right place:
+
+| Value | Lives in | Set with |
+| --- | --- | --- |
+| `DISCORD_CLIENT_ID` | `wrangler.jsonc` `vars` | edit the file, then `deploy` |
+| `OAUTH_REDIRECT_URI` | `wrangler.jsonc` `vars` | edit the file, then `deploy` |
+| `DISCORD_CLIENT_SECRET` | Cloudflare secret | `wrangler secret put` (no deploy needed) |
+| `SESSION_SECRET` | Cloudflare secret | `wrangler secret put` (no deploy needed) |
+
+Verify from outside without a browser:
+
+```bash
+curl -s https://<worker-url>/manage/auth/url | jq .
+# 200 + {"url": "https://discord.com/oauth2/authorize?..."}  -> configured
+# 503 + {"error": "Event creation is not configured. Missing: ..."} -> read the list
+```
 
 ### Security notes
 

@@ -240,6 +240,62 @@ describe("GET /manage/auth/url", () => {
         const { res } = await call("/manage/auth/url", "GET", { env: { SESSION_SECRET: "" } });
         expect(res.status).toBe(503);
     });
+
+    it("names ONLY the missing values, so a fixed one stops being reported", async () => {
+        // The regression this guards: the message used to list all four
+        // variables unconditionally, so an operator who had just set the client
+        // id saw the identical text and could not tell whether it landed.
+        const { res } = await call("/manage/auth/url", "GET", { env: { DISCORD_CLIENT_SECRET: "" } });
+        const body = (await res.json()) as { error: string };
+
+        expect(body.error).toContain("DISCORD_CLIENT_SECRET");
+        // The three that ARE set must not be named as missing. Checking the
+        // "Missing:" list specifically (rather than the whole string) keeps
+        // these assertions readable -- SESSION_SECRET legitimately appears
+        // later as the remedy for its own absence in other cases.
+        const missingList = body.error.slice(body.error.indexOf("Missing:"), body.error.indexOf(")"));
+        expect(missingList).not.toContain("DISCORD_CLIENT_ID");
+        expect(missingList).not.toContain("OAUTH_REDIRECT_URI");
+        expect(missingList).not.toContain("SESSION_SECRET");
+    });
+
+    it("tells the operator where each missing value belongs (vars vs secret put)", async () => {
+        const { res } = await call("/manage/auth/url", "GET", {
+            env: { DISCORD_CLIENT_ID: "", DISCORD_CLIENT_SECRET: "", OAUTH_REDIRECT_URI: "", SESSION_SECRET: "" },
+        });
+        const body = (await res.json()) as { error: string };
+
+        // A public value belongs in wrangler.jsonc; a secret must not be
+        // committed there.
+        expect(body.error).toContain('"DISCORD_CLIENT_ID" in wrangler.jsonc vars');
+        expect(body.error).toContain('"OAUTH_REDIRECT_URI" in wrangler.jsonc vars');
+        expect(body.error).toContain("wrangler secret put DISCORD_CLIENT_SECRET");
+        expect(body.error).toContain("wrangler secret put SESSION_SECRET");
+    });
+
+    it("treats a whitespace-only value as missing", async () => {
+        const { res } = await call("/manage/auth/url", "GET", { env: { DISCORD_CLIENT_ID: "   " } });
+        expect((await res.json()) as { error: string }).toEqual({
+            error: expect.stringContaining("DISCORD_CLIENT_ID"),
+        });
+    });
+
+    it("NEVER echoes a secret value in the diagnostic", async () => {
+        // The message reaches an HTTP response and the browser UI. Reported
+        // names are safe; values or prefixes are not.
+        const { res } = await call("/manage/auth/url", "GET", {
+            env: { SESSION_SECRET: "", DISCORD_CLIENT_SECRET: "" },
+        });
+        const text = await res.text();
+        expect(text).not.toContain("client-secret"); // the ENV fixture's real value
+    });
+
+    it("issues a URL once every value is present", async () => {
+        // Positive control for the diagnostic: with a full config the route
+        // must NOT take the 503 branch.
+        const { res } = await call("/manage/auth/url", "GET");
+        expect(res.status).toBe(200);
+    });
 });
 
 describe("POST /manage/auth/callback", () => {

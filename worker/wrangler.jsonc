@@ -103,7 +103,7 @@
         // Discord application OAuth2 client id, for the "add event" login.
         // PUBLIC -- it appears in the authorize URL the browser visits. Find it
         // in the Discord developer portal -> your application -> OAuth2.
-        "DISCORD_CLIENT_ID": "",
+        "DISCORD_CLIENT_ID": "1550968963121283112",
         // The exact URL Discord redirects back to after login. Must match an
         // entry in the portal's "Redirects" list CHAR-FOR-CHAR, including the
         // trailing slash -- Discord shows an error page on a mismatch instead
