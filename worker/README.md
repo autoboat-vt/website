@@ -49,6 +49,93 @@ keeps everything, exactly as before.
 | `GET /officers/events` | **All** events, including officer-only, as JSON. |
 | `GET /officers/calendar.ics` | All events as an iCalendar feed. |
 | `GET /audiences` | Diagnostics: the configured officer channel, plus every category and channel the Worker sees with its resolved audience. |
+| `GET /manage/auth/url` | The Discord OAuth authorize URL to send a browser to. |
+| `POST /manage/auth/callback` | Exchanges an authorization code for a session token. |
+| `GET /manage/session` | Confirms a bearer token is still valid. |
+| `POST /manage/events` | Creates a guild scheduled event. **Officers only.** |
+
+## Creating events from the website
+
+Officers can add events to the calendar without opening Discord. The flow is a
+standard OAuth2 authorization-code grant, with the code exchanged here because
+the exchange requires the client secret.
+
+```
+browser                      Worker                        Discord
+  | GET /manage/auth/url         |                              |
+  |<--- authorize URL -----------|                              |
+  |------ navigate ------------------------------------------>  |
+  |<----- 302 <site>/calendar/?code=..&state=.. --------------  |
+  | POST /manage/auth/callback   |                              |
+  |   { code, state } ---------->|-- POST /oauth2/token ------>|
+  |                              |<--- user access token ------|
+  |                              |-- GET /users/@me ---------->|
+  |                              |-- GET /users/@me/guilds --->|
+  |                              |   evaluate MANAGE_EVENTS     |
+  |<--- { token, name, expires }-|                              |
+  | POST /manage/events          |                              |
+  |   Authorization: Bearer      |-- POST /guilds/../scheduled-events -->
+  |<--- { event, officerOnly } --|                              |
+```
+
+### Why only officers
+
+Events are created with the **bot's** token, so Discord enforces the bot's
+permissions -- and the bot holds `MANAGE_EVENTS`. Discord will create an event
+for any caller who reaches the endpoint. The permission check in
+`worker/src/permissions.ts` is therefore the only gate, and it requires
+`MANAGE_EVENTS` (or `ADMINISTRATOR`, or guild ownership) in the team guild.
+
+WARNING: `CREATE_EVENTS` is deliberately NOT enough. Ordinary members hold it, so
+accepting that bit would let anyone in the server publish events, including
+into the officer channel.
+
+### Configuring it
+
+1. **Discord developer portal -> your application -> OAuth2.**
+
+   - Copy the **Client ID** into `wrangler.jsonc` as `DISCORD_CLIENT_ID`
+     (public -- it appears in the authorize URL).
+   - Add a **Redirect** entry matching `OAUTH_REDIRECT_URI` in
+     `wrangler.jsonc` **exactly**, including the trailing slash:
+     `https://autoboat.aoe.vt.edu/calendar/`.
+     A mismatch shows Discord's error page rather than a usable message.
+
+2. **Store the secrets.**
+
+   ```bash
+   npx wrangler secret put DISCORD_CLIENT_SECRET
+   npx wrangler secret put SESSION_SECRET   # any long random string
+   ```
+
+   `SESSION_SECRET` signs the session tokens. Generate one with
+   `openssl rand -base64 32`. Rotating it signs out every officer immediately,
+   which is the intended "revoke all sessions" mechanism.
+
+3. **Grant the bot `MANAGE_EVENTS`.**
+
+   WARNING: The invite URL only sets permissions on FIRST invite, so re-opening it
+   for a bot that is already in the server does nothing. Edit the bot's
+   auto-created **role** in Server Settings -> Roles and enable
+   **Manage Events**.
+
+4. **Redeploy** and confirm `GET <worker-url>/manage/auth/url` returns 200.
+
+### Security notes
+
+- The session is a **bearer token**, not a cookie. The site and the Worker are
+  different origins, so a cookie set by the Worker is third-party and blocked
+  by Safari. The token lives in `localStorage` and is sent as
+  `Authorization: Bearer`. It expires after **2 hours**.
+- The Discord **user** access token is used for exactly two reads and then
+  discarded. It is never stored, logged, or returned to the browser.
+- The permission decision is carried in the signed token (`canCreateEvents`),
+  so demoting someone takes effect within the token's 2-hour lifetime.
+- Session tokens are **stateless** -- login costs zero KV writes, which matters
+  against the free tier's 1,000 writes/day. A successful event create costs one
+  write (the archive merge) so the new event is visible immediately.
+- Editing and deleting events stay in Discord, where the audit-log signal the
+  calendar's retention logic depends on already exists.
 
 ### Filtering by subteam (`?channels=`)
 

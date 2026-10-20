@@ -99,7 +99,19 @@
         // NOTHING rather than guess (fail-closed). Omit the var entirely to use
         // DEFAULT_OFFICERS_CHANNEL_ID in worker/src/audience.ts.
         // Verify with `curl <worker-url>/audiences`.
-        "OFFICERS_CHANNEL_ID": "1550594891766308997"
+        "OFFICERS_CHANNEL_ID": "1550594891766308997",
+        // Discord application OAuth2 client id, for the "add event" login.
+        // PUBLIC -- it appears in the authorize URL the browser visits. Find it
+        // in the Discord developer portal -> your application -> OAuth2.
+        "DISCORD_CLIENT_ID": "",
+        // The exact URL Discord redirects back to after login. Must match an
+        // entry in the portal's "Redirects" list CHAR-FOR-CHAR, including the
+        // trailing slash -- Discord shows an error page on a mismatch instead
+        // of a usable message.
+        //
+        // The page reads ?code= and POSTs it to /manage/auth/callback, so this
+        // points at the SITE, not the Worker.
+        "OAUTH_REDIRECT_URI": "https://autoboat.aoe.vt.edu/calendar/"
     },
     // Smart placement is recommended for Workers that are latency-sensitive and
     // need to be close to users. This is the case for our Discord events API.

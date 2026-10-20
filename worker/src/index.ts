@@ -107,8 +107,20 @@ import {
     listChannels,
 } from "./audience";
 import { GUILD_SCHEDULED_EVENT_DELETE, parseDeletedEventIds } from "./audit";
+import { validateCreateEvent } from "./eventCreate";
 import { type CalendarEvent, type DiscordGuildScheduledEvent, normalizeEvents, publicEvents } from "./events";
 import { buildCalendar } from "./ics";
+import {
+    buildAuthorizeUrl,
+    createOAuthState,
+    DISCORD_TOKEN_URL,
+    type OAuthUser,
+    parseTokenResponse,
+    parseUser,
+    verifyOAuthState,
+} from "./oauth";
+import { type DiscordUserGuild, evaluateMembership } from "./permissions";
+import { bearerToken, createSession, SESSION_TTL_SECONDS, verifySession } from "./session";
 
 interface Env {
     DISCORD_BOT_TOKEN: string;
@@ -154,6 +166,36 @@ interface Env {
      */
     OFFICERS_CHANNEL_ID?: string;
     EVENTS_KV: KVNamespace;
+    /**
+     * Discord application OAuth2 client id. Public (it appears in the
+     * authorize URL the browser visits).
+     */
+    DISCORD_CLIENT_ID?: string;
+    /**
+     * Discord application client secret. A SECRET -- set with
+     * `wrangler secret put DISCORD_CLIENT_SECRET`, never in wrangler.jsonc.
+     * Used only by the authorization-code exchange, which must happen
+     * server-side; the browser never sees it.
+     */
+    DISCORD_CLIENT_SECRET?: string;
+    /**
+     * HMAC key for session tokens and OAuth `state` values. A SECRET, and
+     * deliberately NOT the bot token or the client secret: rotating one must
+     * not force a bot re-deploy or an OAuth app reset, and sharing a key
+     * across two purposes makes the blast radius of a leak unclear.
+     *
+     * WARNING: When this is unset, every management route fails closed (401), which
+     * disables event creation but leaves the read-only calendar working. Do
+     * not fall back to an empty-string key -- that would let anyone mint a
+     * valid token.
+     */
+    SESSION_SECRET?: string;
+    /**
+     * The exact URL Discord redirects the browser back to after authorization.
+     * Must match an entry in the Discord developer portal EXACTLY, including
+     * the trailing slash.
+     */
+    OAUTH_REDIRECT_URI?: string;
 }
 
 /**
@@ -753,16 +795,409 @@ function handlePreflight(env: Env): Response {
 }
 
 /**
- * Route table. Each entry maps a normalized pathname to the audience whose
- * events it serves. `/officers/*` is not a secret: it is an unguessable URL,
- * and anyone who has it can read it.
+ * CORS headers for the management routes.
+ *
+ * WARNING: These must advertise `Authorization` and `POST`, which the read-only
+ * routes do not. A preflight for `POST` with an `Authorization` header fails if
+ * the response omits either, and the browser reports it as a network error with
+ * no useful detail -- so the management routes build their own header set
+ * rather than reusing `corsHeaders`.
+ *
+ * `Access-Control-Allow-Credentials` is deliberately NOT set. The session is a
+ * bearer token, not a cookie, so credentials mode is unnecessary; enabling it
+ * would only widen what a mis-scoped allowlist exposes.
  */
-const ROUTES: Record<string, { kind: "json" | "ics" | "audiences"; audience: Audience }> = {
+function managementCorsHeaders(env: Env): HeadersInit {
+    const headers: Record<string, string> = {
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Max-Age": "86400",
+        Vary: "Origin",
+        // The response varies by token, so a shared cache must not reuse one
+        // user's body for another.
+        "Cache-Control": "no-store",
+    };
+    if (env.origin) headers["Access-Control-Allow-Origin"] = env.origin;
+    return headers;
+}
+
+/** JSON response with the management CORS headers. */
+function managementJson(body: unknown, init: ResponseInit, env: Env): Response {
+    const headers = new Headers(managementCorsHeaders(env));
+    if (init.headers) {
+        for (const [k, v] of new Headers(init.headers)) headers.set(k, v);
+    }
+    headers.set("Content-Type", "application/json; charset=utf-8");
+    return new Response(JSON.stringify(body), { ...init, headers });
+}
+
+function managementError(env: Env, status: number, error: string): Response {
+    return managementJson({ error }, { status }, env);
+}
+
+/** Whether the OAuth configuration is present enough to attempt a login. */
+function oauthConfigured(env: Env): boolean {
+    return Boolean(env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET && env.SESSION_SECRET && env.OAUTH_REDIRECT_URI);
+}
+
+/**
+ * `GET /manage/auth/url` -- where the browser should send the user to log in.
+ *
+ * Built server-side so the client id and redirect URI come from configuration
+ * and cannot be tampered with by a crafted link. The `state` is a signed,
+ * short-lived nonce that the callback verifies (see oauth.ts).
+ *
+ * Returns 503 when OAuth is not configured. That is deliberate: the read-only
+ * calendar keeps working, and the failure is a clear configuration message
+ * rather than a broken redirect.
+ */
+async function handleAuthUrl(env: Env): Promise<Response> {
+    const secret = env.SESSION_SECRET;
+    if (!oauthConfigured(env) || !secret) {
+        return managementError(
+            env,
+            503,
+            "Event creation is not configured. Set DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, " +
+                "OAUTH_REDIRECT_URI, and the SESSION_SECRET secret.",
+        );
+    }
+    const state = await createOAuthState(secret);
+    return managementJson(
+        {
+            url: buildAuthorizeUrl({
+                clientId: env.DISCORD_CLIENT_ID as string,
+                redirectUri: env.OAUTH_REDIRECT_URI as string,
+                state,
+            }),
+        },
+        { status: 200 },
+        env,
+    );
+}
+
+/** GET a Discord endpoint with a USER bearer token. Never logs the token. */
+async function discordGetAsUser(path: string, accessToken: string): Promise<unknown> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), DISCORD_UPSTREAM_TIMEOUT_MS);
+    try {
+        const res = await fetch(`${DISCORD_API_BASE}${path}`, {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "User-Agent": WORKER_USER_AGENT,
+                Accept: "application/json",
+            },
+            signal: controller.signal,
+        });
+        if (!res.ok) throw new Error(`discord upstream returned ${res.status}`);
+        return await res.json();
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/**
+ * `POST /manage/auth/callback` -- exchange an authorization code for a session.
+ *
+ * The code is exchanged here, not in the browser, because the exchange requires
+ * the client secret. The user's access token is used for exactly two reads
+ * (`/users/@me` and `/users/@me/guilds`) and then discarded -- it is never
+ * logged, returned, or stored.
+ *
+ * A user who is in the guild but lacks `MANAGE_EVENTS` gets a 403 with
+ * `member: true`, so the UI can say "ask an officer for the role" instead of
+ * "you are not in the server".
+ */
+async function handleAuthCallback(env: Env, request: Request): Promise<Response> {
+    const secret = env.SESSION_SECRET;
+    if (!oauthConfigured(env) || !secret) {
+        return managementError(env, 503, "Event creation is not configured.");
+    }
+
+    let body: { code?: unknown; state?: unknown };
+    try {
+        body = (await request.json()) as typeof body;
+    } catch {
+        return managementError(env, 400, "Expected a JSON body.");
+    }
+
+    const code = typeof body.code === "string" ? body.code : "";
+    const state = typeof body.state === "string" ? body.state : "";
+    if (!code) return managementError(env, 400, "Missing authorization code.");
+
+    // Verify BEFORE spending a token exchange on the code.
+    if (!(await verifyOAuthState(secret, state))) {
+        return managementError(env, 400, "Invalid or expired login attempt. Please try again.");
+    }
+
+    // Discord requires form encoding and rejects JSON with an error that does
+    // not explain itself.
+    const form = new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: env.OAUTH_REDIRECT_URI as string,
+    });
+
+    let tokenData: unknown;
+    try {
+        const res = await fetch(DISCORD_TOKEN_URL, {
+            method: "POST",
+            headers: {
+                // HTTP Basic with the app's credentials. `btoa` is fine here:
+                // both values are ASCII.
+                Authorization: `Basic ${btoa(`${env.DISCORD_CLIENT_ID}:${env.DISCORD_CLIENT_SECRET}`)}`,
+                "Content-Type": "application/x-www-form-urlencoded",
+                "User-Agent": WORKER_USER_AGENT,
+                Accept: "application/json",
+            },
+            body: form.toString(),
+        });
+        if (!res.ok) return managementError(env, 401, "Discord rejected the login. Please try again.");
+        tokenData = await res.json();
+    } catch {
+        return managementError(env, 502, "Could not reach Discord. Please try again.");
+    }
+
+    const token = parseTokenResponse(tokenData);
+    if (!token) return managementError(env, 401, "Discord returned an unusable login response.");
+
+    // Both reads are needed: identity for the session, guilds for the gate.
+    let user: OAuthUser | null;
+    let guilds: DiscordUserGuild[];
+    try {
+        const [userData, guildData] = await Promise.all([
+            discordGetAsUser("/users/@me", token.accessToken),
+            discordGetAsUser("/users/@me/guilds", token.accessToken),
+        ]);
+        user = parseUser(userData);
+        guilds = Array.isArray(guildData) ? (guildData as DiscordUserGuild[]) : [];
+    } catch {
+        // The user token is never echoed, so a failure here is indistinguishable
+        // from any other upstream problem to the caller.
+        return managementError(env, 502, "Could not read your Discord profile. Please try again.");
+    }
+
+    if (!user) return managementError(env, 401, "Discord returned an unusable profile.");
+
+    const membership = evaluateMembership(guilds, env.DISCORD_GUILD_ID);
+    if (!membership.member) {
+        return managementJson(
+            { error: "You are not a member of the team's Discord server.", member: false },
+            { status: 403 },
+            env,
+        );
+    }
+    if (!membership.canCreateEvents) {
+        return managementJson(
+            {
+                error: "Only officers can add events. Ask an officer to grant you the role.",
+                member: true,
+                canCreateEvents: false,
+            },
+            { status: 403 },
+            env,
+        );
+    }
+
+    const session = await createSession(secret, {
+        id: user.id,
+        name: user.name,
+        canCreateEvents: membership.canCreateEvents,
+    });
+
+    return managementJson(
+        {
+            token: session.token,
+            name: session.payload.name,
+            // Seconds, so the client can schedule its own expiry handling.
+            expiresIn: SESSION_TTL_SECONDS,
+        },
+        { status: 200 },
+        env,
+    );
+}
+
+/**
+ * `GET /manage/session` -- who the bearer token belongs to.
+ *
+ * Exists so the page can restore a login across a reload without re-running
+ * OAuth. It re-verifies the signature and expiry on every call; a token that
+ * fails is reported as 401 and the client starts a fresh login.
+ */
+async function handleGetSession(env: Env, request: Request): Promise<Response> {
+    const result = await verifySession(env.SESSION_SECRET, bearerToken(request.headers.get("Authorization")));
+    if (!result.ok) return managementError(env, 401, result.reason);
+    return managementJson(
+        { name: result.payload.name, canCreateEvents: result.payload.canCreateEvents },
+        { status: 200 },
+        env,
+    );
+}
+
+/** POST a JSON body to Discord with the bot token, returning the parsed JSON. */
+async function discordPostAsBot(
+    env: Env,
+    path: string,
+    body: unknown,
+): Promise<{ ok: true; data: unknown } | { ok: false; status: number; detail: string }> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), DISCORD_UPSTREAM_TIMEOUT_MS);
+    try {
+        const res = await fetch(`${DISCORD_API_BASE}${path}`, {
+            method: "POST",
+            headers: {
+                Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+                "Content-Type": "application/json",
+                "User-Agent": WORKER_USER_AGENT,
+                Accept: "application/json",
+                // Shows up in the guild audit log, so a bot-created event is
+                // attributable to the person who actually asked for it.
+                "X-Audit-Log-Reason": "Created from the AutoBoat website",
+            },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+        });
+        if (!res.ok) {
+            // Discord's error body explains WHICH field was wrong (e.g.
+            // "scheduled_start_time: Value must be in the future"). That is
+            // safe to surface -- it contains no credentials -- and it is the
+            // difference between a fixable form and "something went wrong".
+            let detail = `Discord returned ${res.status}.`;
+            try {
+                const parsed = (await res.json()) as { message?: unknown; errors?: unknown };
+                if (typeof parsed.message === "string" && parsed.message) {
+                    detail = parsed.message;
+                } else if (parsed.errors) {
+                    detail = "Discord rejected the event details.";
+                }
+            } catch {
+                // Keep the status-only message.
+            }
+            return { ok: false, status: res.status, detail };
+        }
+        return { ok: true, data: await res.json() };
+    } catch {
+        return { ok: false, status: 502, detail: "Could not reach Discord." };
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/**
+ * `POST /manage/events` -- create a guild scheduled event.
+ *
+ * WARNING: THE PERMISSION CHECK IS NOT OPTIONAL. The event is created with the
+ * BOT's token, so Discord enforces the BOT's permissions -- and the bot holds
+ * `MANAGE_EVENTS`. Discord will happily create an event for any caller. The
+ * `canCreateEvents` claim in the session token is therefore the only thing
+ * gating writes; see permissions.ts.
+ *
+ * WARNING: A successful create writes the event into the KV archive immediately
+ * (one write, on a write path that is rare by nature). Without it the new event
+ * would be invisible for up to `CACHE_TTL_SECONDS`, which reads as "the form is
+ * broken". This does not affect the read path's one-write-per-miss invariant --
+ * it is a separate, operator-initiated write, not a cache miss.
+ */
+async function handleCreateEvent(env: Env, ctx: ExecutionContext, request: Request): Promise<Response> {
+    const auth = await verifySession(env.SESSION_SECRET, bearerToken(request.headers.get("Authorization")));
+    if (!auth.ok) return managementError(env, 401, auth.reason);
+    if (!auth.payload.canCreateEvents) {
+        return managementError(env, 403, "Only officers can add events.");
+    }
+
+    let payload: unknown;
+    try {
+        payload = await request.json();
+    } catch {
+        return managementError(env, 400, "Expected a JSON body.");
+    }
+
+    const config = audienceConfigFromEnv(env);
+    // 5-minute past grace is inside validateCreateEvent; `now` is injectable
+    // there so the rule is testable without freezing the clock.
+    const validated = validateCreateEvent(payload, config.officersChannelId);
+    if (!validated.ok) return managementError(env, 400, validated.error);
+
+    const created = await discordPostAsBot(
+        env,
+        `/guilds/${env.DISCORD_GUILD_ID}/scheduled-events`,
+        validated.value.body,
+    );
+    if (!created.ok) {
+        // Discord 4xx are the caller's fault (bad field values); 5xx/502 are
+        // ours to report as an upstream failure.
+        const status = created.status === 502 ? 502 : created.status === 429 ? 429 : 400;
+        return managementError(env, status, created.detail);
+    }
+
+    // Turn the Discord response into the same shape the read routes serve, so
+    // the website can merge it into its grid without a second fetch.
+    const normalized = normalizeEvents([created.data as DiscordGuildScheduledEvent], { audienceConfig: config })[0];
+
+    if (normalized) {
+        // Merge into the archive so the new event is visible immediately.
+        // Read-modify-write, deliberately NOT inside loadEvents: this must not
+        // change the read path's miss logic.
+        ctx.waitUntil(
+            (async () => {
+                const cached = await env.EVENTS_KV.get(EVENTS_KV_KEY, { type: "json" });
+                const entry = parseCacheEntry(cached);
+                // WARNING: Nothing stored means the archive has never been populated, so
+                // there is no history to merge into. Writing `[created]` here would
+                // mark a one-event archive FRESH for a whole TTL, and the calendar
+                // would show only the event just created until it expired. Leave the
+                // cache cold instead -- the next read fetches the full set from
+                // Discord, which includes this event.
+                if (entry === null) return;
+                const now = new Date();
+                const events = mergeArchive(entry.events, [normalized], now, parseRetentionMs(env));
+                await env.EVENTS_KV.put(EVENTS_KV_KEY, JSON.stringify({ fetchedAt: now.getTime(), events }));
+            })().catch(() => {
+                // A failed warm write is not worth failing the request over --
+                // the event exists in Discord and the next poll will pick it
+                // up within one cache TTL.
+            }),
+        );
+    }
+
+    return managementJson(
+        {
+            event: normalized ?? null,
+            officerOnly: validated.value.officerOnly,
+        },
+        { status: 201 },
+        env,
+    );
+}
+
+/**
+ * Route table. Each entry maps a normalized pathname to what it serves.
+ * `/officers/*` is not a secret: it is an unguessable URL, and anyone who has
+ * it can read it.
+ *
+ * The `manage:*` kinds are the write side. They are listed here rather than in
+ * a separate router so a new path cannot be added to one table and forgotten
+ * in the other, which is exactly how an unauthenticated write endpoint would
+ * end up published.
+ */
+type RouteEntry =
+    | { kind: "json" | "ics"; audience: Audience }
+    | { kind: "audiences" }
+    | { kind: "auth-url" }
+    | { kind: "auth-callback" | "session" | "create-event"; methods: string[] };
+
+const ROUTES: Record<string, RouteEntry> = {
     "/events": { kind: "json", audience: "public" },
     "/calendar.ics": { kind: "ics", audience: "public" },
     "/officers/events": { kind: "json", audience: "officer" },
     "/officers/calendar.ics": { kind: "ics", audience: "officer" },
-    "/audiences": { kind: "audiences", audience: "public" },
+    "/audiences": { kind: "audiences" },
+    // Event creation. `/manage/auth/url` is a GET so the browser can fetch it
+    // like any other resource; the rest are POST because they carry a body.
+    "/manage/auth/url": { kind: "auth-url" },
+    "/manage/auth/callback": { kind: "auth-callback", methods: ["POST"] },
+    "/manage/session": { kind: "session", methods: ["GET"] },
+    "/manage/events": { kind: "create-event", methods: ["POST"] },
 };
 
 export default {
@@ -781,6 +1216,32 @@ export default {
         const route = ROUTES[pathname];
         if (!route) {
             return jsonResponse({ error: "not found" }, { status: 404 }, env);
+        }
+
+        // Management routes carry the write-side CORS headers (which allow
+        // POST + Authorization) and must never be cached. The read routes keep
+        // their own header set -- widening theirs would advertise a POST
+        // surface on endpoints that have none.
+        const isManagement = route.kind !== "json" && route.kind !== "ics" && route.kind !== "audiences";
+
+        if (isManagement) {
+            if (method === "OPTIONS") {
+                return new Response(null, { status: 204, headers: managementCorsHeaders(env) });
+            }
+            const allowed = "methods" in route ? route.methods : ["GET"];
+            if (!allowed.includes(method)) {
+                return managementError(env, 405, "method not allowed");
+            }
+            switch (route.kind) {
+                case "auth-url":
+                    return handleAuthUrl(env);
+                case "auth-callback":
+                    return handleAuthCallback(env, request);
+                case "session":
+                    return handleGetSession(env, request);
+                default:
+                    return handleCreateEvent(env, ctx, request);
+            }
         }
 
         if (method === "OPTIONS") {

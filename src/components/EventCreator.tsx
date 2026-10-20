@@ -1,0 +1,437 @@
+import { AlertCircle, CalendarPlus, Check, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { SUBTEAM_CHANNELS } from "../lib/eventChannels";
+import {
+    beginLogin,
+    clearSession,
+    completeLogin,
+    createEvent,
+    loadSession,
+    ManageError,
+    type ManageSession,
+} from "../lib/eventManage";
+import { announceDropdownOpen, useCloseOnOtherDropdownOpen } from "./calendarDropdown";
+
+/**
+ * "Add event" control for the calendar page, plus the login it depends on.
+ *
+ * Only officers may create events, and the Worker enforces that -- this
+ * component's job is to make the flow legible, not to be the security boundary.
+ * It therefore renders the sign-in affordance for everyone and surfaces the
+ * Worker's 403 as "only officers can add events" rather than pre-hiding the
+ * control (hiding it would leave a visitor who DOES have the role with no way
+ * to discover the feature, and the browser cannot evaluate Discord roles).
+ *
+ * WHY THERE IS NO GENERIC "DELETE" HERE: creating is the requested feature.
+ * Events are edited and deleted in Discord, where the audit-log signal the
+ * read path depends on already exists.
+ */
+
+/** General-member channel: public, for the whole team. */
+const MEMBER_EVENTS_CHANNEL_ID = "1550594275580837921";
+
+/**
+ * The officer voice channel, spelled out rather than looked up.
+ *
+ * It also lives in `ALWAYS_VISIBLE_CHANNEL_IDS` (the filter must never hide
+ * it) and as `DEFAULT_OFFICERS_CHANNEL_ID` in the Worker. This form needs it
+ * for a different question -- "will this event be hidden from the public
+ * calendar" -- so the id is stated once here with the reason it is known.
+ *
+ * WARNING: Keep in sync with `OFFICERS_CHANNEL_ID` in worker/wrangler.jsonc.
+ * A stale value only mislabels the warning hint; the Worker still classifies
+ * the event correctly from its own config.
+ */
+const OFFICER_EVENTS_CHANNEL_ID = "1550594891766308997";
+
+/** Channel options, in picker order: subteams first, then the whole-team ones. */
+const CHANNEL_OPTIONS: { id: string; label: string }[] = [
+    ...SUBTEAM_CHANNELS.map(({ id, label }) => ({ id, label })),
+    { id: MEMBER_EVENTS_CHANNEL_ID, label: "General members" },
+    { id: OFFICER_EVENTS_CHANNEL_ID, label: "Officers only" },
+];
+
+/** Recurrence choices, limited to what Discord's API accepts. */
+type RepeatChoice = "none" | "weekly" | "biweekly" | "monthly" | "daily";
+
+const REPEAT_LABELS: Record<RepeatChoice, string> = {
+    none: "Does not repeat",
+    weekly: "Every week",
+    biweekly: "Every other week",
+    monthly: "Every month (same weekday)",
+    daily: "Every weekday",
+};
+
+export interface EventCreatorProps {
+    /** Called after a successful create so the page can refresh its events. */
+    onCreated?: () => void;
+}
+
+/**
+ * Convert a `datetime-local` value to an ISO instant.
+ *
+ * `new Date("2026-11-05T19:00")` is parsed as LOCAL time by the spec, which is
+ * what the input means, and `toISOString()` converts it to UTC for Discord.
+ * Guarded because an empty or partial value yields an Invalid Date.
+ */
+function localInputToIso(value: string): string | null {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+/**
+ * Build the recurrence payload for the chosen option.
+ *
+ * The weekday comes from the event's own start date (`getDay()` is Sunday = 0
+ * while Discord counts Monday = 0), so "every week" means the day the user
+ * actually picked instead of forcing a second choice.
+ */
+function buildRecurrence(
+    choice: RepeatChoice,
+    startLocal: string,
+): {
+    frequency: "DAILY" | "WEEKLY" | "MONTHLY";
+    interval?: number;
+    byWeekday?: number[];
+    byNWeekday?: { n: number; day: number }[];
+} | null {
+    if (choice === "none") return null;
+    const date = new Date(startLocal);
+    if (Number.isNaN(date.getTime())) return null;
+    // JS: Sunday 0..Saturday 6. Discord: Monday 0..Sunday 6.
+    const discordWeekday = (date.getDay() + 6) % 7;
+
+    switch (choice) {
+        case "weekly":
+            return { frequency: "WEEKLY", interval: 1, byWeekday: [discordWeekday] };
+        case "biweekly":
+            return { frequency: "WEEKLY", interval: 2, byWeekday: [discordWeekday] };
+        case "daily":
+            // Discord only accepts certain weekday sets for DAILY; Mon-Fri is
+            // one of them.
+            return { frequency: "DAILY", interval: 1, byWeekday: [0, 1, 2, 3, 4] };
+        case "monthly": {
+            // Ordinal weekday within the month, e.g. "3rd Wednesday". Derived
+            // from the chosen date so the first occurrence matches what the
+            // user picked.
+            const n = Math.floor((date.getDate() - 1) / 7) + 1;
+            return { frequency: "MONTHLY", interval: 1, byNWeekday: [{ n, day: discordWeekday }] };
+        }
+    }
+}
+
+export default function EventCreator({ onCreated }: EventCreatorProps) {
+    const [session, setSession] = useState<ManageSession | null>(() => loadSession());
+    const [open, setOpen] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
+    const panelId = useId();
+
+    const close = useCallback(() => setOpen(false), []);
+    useCloseOnOtherDropdownOpen("calendar-add-event", close);
+
+    // Form fields. Kept as strings so the inputs stay uncontrolled-looking and
+    // an invalid intermediate value (a half-typed date) never crashes render.
+    const [name, setName] = useState("");
+    const [description, setDescription] = useState("");
+    const [startLocal, setStartLocal] = useState("");
+    const [endLocal, setEndLocal] = useState("");
+    const [channelId, setChannelId] = useState(CHANNEL_OPTIONS[0]?.id ?? "");
+    const [noChannel, setNoChannel] = useState(false);
+    const [location, setLocation] = useState("");
+    const [repeat, setRepeat] = useState<RepeatChoice>("none");
+
+    const isExternal = noChannel;
+
+    /**
+     * Finish a login if Discord just redirected back with `?code=`.
+     *
+     * The code is single-use and short-lived, so the query string is cleared
+     * immediately -- leaving it in the address bar invites a refresh to replay
+     * a spent code, which fails confusingly.
+     */
+    useEffect(() => {
+        const params = new URLSearchParams(globalThis.location.search);
+        const code = params.get("code");
+        const state = params.get("state");
+        if (!code || !state) return;
+
+        params.delete("code");
+        params.delete("state");
+        params.delete("iss");
+        const cleanUrl = `${globalThis.location.pathname}${params.toString() ? `?${params}` : ""}${globalThis.location.hash}`;
+        globalThis.history.replaceState({}, "", cleanUrl);
+
+        setBusy(true);
+        completeLogin(code, state)
+            .then((next) => {
+                setSession(next);
+                setOpen(true);
+            })
+            .catch((err: unknown) => {
+                setError(err instanceof ManageError ? err.message : "Login failed. Please try again.");
+            })
+            .finally(() => setBusy(false));
+    }, []);
+
+    const handleLogin = async () => {
+        setError(null);
+        setBusy(true);
+        try {
+            // Navigates away on success, so there is nothing to do afterwards.
+            await beginLogin();
+        } catch (err) {
+            setBusy(false);
+            setError(err instanceof ManageError ? err.message : "Could not start the Discord login.");
+        }
+    };
+
+    const handleLogOut = () => {
+        clearSession();
+        setSession(null);
+        setOpen(false);
+        setNotice(null);
+        setError(null);
+    };
+
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!session) return;
+
+        setError(null);
+        setNotice(null);
+
+        const start = localInputToIso(startLocal);
+        if (!start) {
+            setError("Pick a start date and time.");
+            return;
+        }
+        const end = localInputToIso(endLocal);
+
+        setBusy(true);
+        try {
+            const trimmedLocation = location.trim();
+            const result = await createEvent(session, {
+                name,
+                description: description.trim() || null,
+                start,
+                end,
+                channelId: isExternal ? null : channelId,
+                location: trimmedLocation || null,
+                recurrence: buildRecurrence(repeat, startLocal),
+            });
+
+            const where = result.officerOnly ? " (officers only)" : "";
+            setNotice(`Created "${result.event?.name ?? name}"${where}.`);
+            // Reset the fields that should not carry over to the next event.
+            setName("");
+            setDescription("");
+            setStartLocal("");
+            setEndLocal("");
+            setLocation("");
+            setRepeat("none");
+            onCreated?.();
+        } catch (err) {
+            if (err instanceof ManageError) {
+                if (err.status === 401) {
+                    // The token expired or was rejected: drop it so the UI
+                    // offers "sign in" rather than retrying a dead token.
+                    clearSession();
+                    setSession(null);
+                }
+                setError(
+                    err.notAMember
+                        ? "You are not in the team's Discord server, so you cannot add events."
+                        : err.message,
+                );
+            } else {
+                setError("Could not create the event. Please try again.");
+            }
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const toggle = () => {
+        setError(null);
+        setNotice(null);
+        setOpen((wasOpen) => {
+            if (!wasOpen) announceDropdownOpen("calendar-add-event");
+            return !wasOpen;
+        });
+    };
+
+    const panelTitle = useMemo(() => (session ? `Add an event as ${session.name}` : "Add an event"), [session]);
+
+    return (
+        <div className="calendar-add">
+            <button
+                type="button"
+                className="btn btn--sm calendar-add__toggle"
+                aria-expanded={open}
+                aria-controls={panelId}
+                onClick={toggle}
+                disabled={busy && !session}
+            >
+                <CalendarPlus size={16} aria-hidden="true" />
+                {session ? "Add event" : "Officer sign-in"}
+            </button>
+
+            {open && (
+                <div className="calendar-add__panel" id={panelId}>
+                    <h3 className="calendar-add__title">{panelTitle}</h3>
+
+                    {!session ? (
+                        <>
+                            <p className="calendar-add__intro">
+                                Adding events to the calendar requires signing in with Discord. Only officers can create
+                                events.
+                            </p>
+                            <button type="button" className="btn" onClick={handleLogin} disabled={busy}>
+                                {busy ? <Loader2 className="animate-spin" size={16} aria-hidden="true" /> : null}
+                                {busy ? "Opening Discord..." : "Sign in with Discord"}
+                            </button>
+                        </>
+                    ) : (
+                        <form className="calendar-add__form" onSubmit={handleSubmit}>
+                            <label className="calendar-add__field">
+                                <span>Event name</span>
+                                <input
+                                    type="text"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    maxLength={100}
+                                    required
+                                    autoComplete="off"
+                                />
+                            </label>
+
+                            <label className="calendar-add__field">
+                                <span>Description</span>
+                                <textarea
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    maxLength={1000}
+                                    rows={3}
+                                />
+                            </label>
+
+                            <label className="calendar-add__field">
+                                <span>Starts</span>
+                                <input
+                                    type="datetime-local"
+                                    value={startLocal}
+                                    onChange={(e) => setStartLocal(e.target.value)}
+                                    required
+                                />
+                            </label>
+
+                            <label className="calendar-add__field">
+                                <span>Ends (optional)</span>
+                                <input
+                                    type="datetime-local"
+                                    value={endLocal}
+                                    onChange={(e) => setEndLocal(e.target.value)}
+                                />
+                            </label>
+
+                            <label className="calendar-add__field">
+                                <span>Repeats</span>
+                                <select value={repeat} onChange={(e) => setRepeat(e.target.value as RepeatChoice)}>
+                                    {(Object.keys(REPEAT_LABELS) as RepeatChoice[]).map((choice) => (
+                                        <option key={choice} value={choice}>
+                                            {REPEAT_LABELS[choice]}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+
+                            <label className="calendar-add__checkbox">
+                                <input
+                                    type="checkbox"
+                                    checked={noChannel}
+                                    onChange={(e) => setNoChannel(e.target.checked)}
+                                />
+                                <span>This event is not in a Discord voice channel</span>
+                            </label>
+
+                            {isExternal ? (
+                                <label className="calendar-add__field">
+                                    <span>Location</span>
+                                    <input
+                                        type="text"
+                                        value={location}
+                                        onChange={(e) => setLocation(e.target.value)}
+                                        maxLength={100}
+                                        required
+                                        placeholder="Lavery Hall 335, or a link"
+                                    />
+                                </label>
+                            ) : (
+                                <>
+                                    <label className="calendar-add__field">
+                                        <span>Discord channel</span>
+                                        <select value={channelId} onChange={(e) => setChannelId(e.target.value)}>
+                                            {CHANNEL_OPTIONS.map((option) => (
+                                                <option key={option.id} value={option.id}>
+                                                    {option.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    <label className="calendar-add__field">
+                                        <span>Location (optional)</span>
+                                        <input
+                                            type="text"
+                                            value={location}
+                                            onChange={(e) => setLocation(e.target.value)}
+                                            maxLength={100}
+                                            placeholder="Shown on the calendar"
+                                        />
+                                    </label>
+                                </>
+                            )}
+
+                            {isExternal && (
+                                <p className="calendar-add__hint">
+                                    An event with no channel needs a location and an end time.
+                                </p>
+                            )}
+                            {!isExternal && channelId === OFFICER_EVENTS_CHANNEL_ID && (
+                                <p className="calendar-add__hint">
+                                    This event will be hidden from the public calendar and appear only on the officers
+                                    calendar.
+                                </p>
+                            )}
+
+                            <div className="calendar-add__actions">
+                                <button type="submit" className="btn btn--sm" disabled={busy}>
+                                    {busy ? <Loader2 className="animate-spin" size={16} aria-hidden="true" /> : null}
+                                    {busy ? "Creating..." : "Create event"}
+                                </button>
+                                <button type="button" className="btn btn--sm" onClick={handleLogOut} disabled={busy}>
+                                    Sign out
+                                </button>
+                            </div>
+                        </form>
+                    )}
+
+                    {error && (
+                        <p className="calendar-add__error" role="alert">
+                            <AlertCircle size={16} aria-hidden="true" />
+                            {error}
+                        </p>
+                    )}
+                    {notice && (
+                        <p className="calendar-add__notice" role="status">
+                            <Check size={16} aria-hidden="true" />
+                            {notice}
+                        </p>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}

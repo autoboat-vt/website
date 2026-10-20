@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CalendarFilter from "../components/CalendarFilter";
 import CalendarSubscribe from "../components/CalendarSubscribe";
 import Card from "../components/Card";
+import EventCreator from "../components/EventCreator";
 import EventModal from "../components/EventModal";
 import {
     type CalendarEvent,
@@ -440,6 +441,10 @@ export default function Calendar({ variant = "public" }: CalendarProps) {
                                 onChange={setSelectedChannels}
                             />
                             <CalendarSubscribe variant={variant} selectedChannels={selectedChannels} />
+                            {/* Officers add events here; everyone else sees the
+                                sign-in affordance, which explains the officer
+                                requirement when Discord declines. */}
+                            <EventCreator onCreated={poll} />
                         </div>
                     </div>
 

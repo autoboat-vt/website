@@ -1,6 +1,13 @@
 /** @type {import('jest').Config} */
 export default {
     testEnvironment: "jsdom",
+    // jsdom defaults to the opaque `about:blank` origin, where `localStorage`
+    // does not exist (accessing it throws a SecurityError). Any test that reads
+    // or seeds storage -- the officer session in `eventManage.ts`, for one --
+    // needs a real origin. A plain http URL gives jsdom one without a server.
+    testEnvironmentOptions: {
+        url: "http://localhost/",
+    },
     testMatch: ["<rootDir>/src/**/*.{test,spec}.{ts,tsx}"],
     transform: {
         "^.+\\.(t|j)sx?$": [

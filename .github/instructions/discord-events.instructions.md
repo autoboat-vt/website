@@ -1,6 +1,6 @@
 ---
-description: "Use when working on the calendar page, the Discord events client, the subscription affordance, the subteam filter, per-subteam event colors, officer-only event visibility, past-event retention, event deletion, or the Cloudflare Worker that serves Discord guild scheduled events. Covers the no-webhook constraint, the Worker architecture, KV caching + the retention archive, deletion via the guild audit log, VITE_EVENTS_URL, audience gating via Discord channels, the /calendar.ics feed, and rrule recurrence expansion."
-applyTo: "src/lib/discord.ts, src/lib/eventChannels.ts, src/pages/Calendar.tsx, src/pages/Officers.tsx, src/components/CalendarSubscribe.tsx, src/components/CalendarFilter.tsx, src/components/calendarDropdown.ts, src/app.css, src/test/lib/discord.test.ts, src/test/lib/eventChannels.test.ts, src/test/pages/Calendar.test.tsx, src/test/pages/Officers.test.tsx, src/test/components/CalendarSubscribe.test.tsx, src/test/components/CalendarFilter.test.tsx, src/test/worker/ics.test.ts, src/test/worker/recurrence.test.ts, src/test/worker/events.test.ts, src/test/worker/cancellations.test.ts, src/test/worker/audience.test.ts, src/test/worker/audience-filter.test.ts, src/test/worker/archive.test.ts, src/test/worker/audit.test.ts, src/test/worker/channel-filter.test.ts, src/test/worker/routes.test.ts, worker/**"
+description: "Use when working on the calendar page, the Discord events client, the subscription affordance, the subteam filter, per-subteam event colors, officer-only event visibility, past-event retention, event deletion, officer event creation from the website (Discord OAuth login), or the Cloudflare Worker that serves Discord guild scheduled events. Covers the no-webhook constraint, the Worker architecture, KV caching + the retention archive, deletion via the guild audit log, VITE_EVENTS_URL, audience gating via Discord channels, the /calendar.ics feed, and rrule recurrence expansion."
+applyTo: "src/lib/discord.ts, src/lib/eventChannels.ts, src/lib/eventManage.ts, src/pages/Calendar.tsx, src/pages/Officers.tsx, src/components/CalendarSubscribe.tsx, src/components/CalendarFilter.tsx, src/components/EventCreator.tsx, src/components/calendarDropdown.ts, src/app.css, src/test/lib/discord.test.ts, src/test/lib/eventChannels.test.ts, src/test/pages/Calendar.test.tsx, src/test/pages/Officers.test.tsx, src/test/components/CalendarSubscribe.test.tsx, src/test/components/CalendarFilter.test.tsx, src/test/components/EventCreator.test.tsx, src/test/worker/session.test.ts, src/test/worker/permissions.test.ts, src/test/worker/eventCreate.test.ts, src/test/worker/eventCreate.routes.test.ts, src/test/worker/ics.test.ts, src/test/worker/recurrence.test.ts, src/test/worker/events.test.ts, src/test/worker/cancellations.test.ts, src/test/worker/audience.test.ts, src/test/worker/audience-filter.test.ts, src/test/worker/archive.test.ts, src/test/worker/audit.test.ts, src/test/worker/channel-filter.test.ts, src/test/worker/routes.test.ts, worker/**"
 ---
 
 # Discord events + calendar
@@ -348,6 +348,64 @@ Because the nav group no longer shares a row with the controls, the `@media (max
 Regression guard: `Calendar.test.tsx` "keeps both month nav arrows in the same container as the month label" asserts both arrows are children of `.calendar-month-nav`, that the label sits between them, and that neither is inside `.calendar-header__controls`.
 
 WARNING: The shared button class is `.btn--sm` (double dash), NOT `.btn-sm`. There is no Tailwind `sm:` derivative here — `.btn`/`.btn--sm`/`.btn--primary`/`.btn--solid` are hand-written classes in `app.css`. The header's mobile sizing rule was written as `.calendar-header .btn-sm`, which matched **nothing**, so the intended trim silently did nothing until 2026-09-22. Use `.calendar-header .btn--sm` and keep it scoped to `.calendar-header` so LiveMap's three `.btn--sm` buttons (Recenter / Refresh now / Try again) keep the shared size. A `.calendar-today-btn` rule pair also sat unused in the calendar block and was deleted. WARNING: **Lesson: a CSS rule that matches nothing fails silently** — grep the selector against the actual JSX `className` strings before assuming a cascade/specificity problem.
+
+## Creating events from the website (officers only)
+
+Officers can add events without opening Discord. The `Add event` control
+(`src/components/EventCreator.tsx`) walks them through a Discord OAuth2
+authorization-code grant; the Worker exchanges the code and mints its own
+session token.
+
+```
+GET  /manage/auth/url      -> { url }   (Discord authorize URL + signed state)
+POST /manage/auth/callback -> { token, name, expiresIn }  (code + state)
+GET  /manage/session       -> { name, canCreateEvents }   (bearer token)
+POST /manage/events        -> { event, officerOnly }      (bearer token)
+```
+
+- WARNING: **The gate is `worker/src/permissions.ts` and it is the ONLY gate.** Events
+  are created with the BOT's token, which holds `MANAGE_EVENTS`, so Discord
+  enforces the *bot's* permissions and will create an event for any caller that
+  reaches `POST /manage/events`. The Worker therefore checks
+  `GET /users/@me/guilds` for `MANAGE_EVENTS` / `ADMINISTRATOR` / guild ownership
+  and puts the decision in a **signed** token (`canCreateEvents`).
+- WARNING: **`CREATE_EVENTS` is deliberately NOT accepted.** Ordinary members hold it,
+  so honoring that bit would let anyone in the server publish events, including
+  into the officer channel. This was an explicit product decision: only officers
+  add to the calendar.
+- WARNING: **Sessions are bearer tokens in `localStorage`, not cookies.** The site is
+  `autoboat.aoe.vt.edu` and the Worker is `*.workers.dev`, so a Worker-set cookie
+  is third-party and blocked by Safari. `localStorage` is a deliberate trade:
+  it is XSS-readable, but the token only grants "create events for 2 hours" --
+  it is not a Discord credential.
+- WARNING: **The Discord user access token is never returned or stored.** It is used
+  for exactly two reads (`/users/@me`, `/users/@me/guilds`) and discarded. The
+  client secret must never reach the browser, which is why the code exchange is
+  server-side rather than implicit/PKCE.
+- **Stateless tokens** keep login at zero KV writes. The permission claim is
+  point-in-time, so a demotion takes effect within `SESSION_TTL_SECONDS`
+  (2 hours). Do not lengthen it without deciding how much staleness is OK.
+- The `state` is a signed nonce with a `purpose: "oauth-state"` marker and a
+  10-minute TTL. The purpose check is load-bearing: without it a long-lived
+  session token could be replayed as a login state, since both share the key.
+- WARNING: **A successful create writes the KV archive directly.** Otherwise the new
+  event is invisible for up to `CACHE_TTL_SECONDS`, which reads as "the form is
+  broken". This is an operator-initiated write, not a cache miss, so the read
+  path's one-write-per-miss invariant is untouched.
+- `worker/src/eventCreate.ts` owns validation and the Discord payload shape,
+  including the `end`/`count` prohibition (Discord cannot accept them from an
+  application), the weekly "one weekday" rule, and the EXTERNAL branch (no
+  channel, needs `entity_metadata.location` AND `scheduled_end_time`).
+- A physical location is written into the description as a `Location:` line,
+  because that is the only form `extractLocationFromDescription` accepts.
+  Without it a created event would show no venue on the site.
+- Editing and deleting stay in Discord. The read path's deletion detection
+  already depends on the audit log, so there is one place where an event's life
+  ends rather than two.
+- Tests: `src/test/worker/session.test.ts`, `permissions.test.ts`,
+  `eventCreate.test.ts`, `eventCreate.routes.test.ts`, and
+  `src/test/components/EventCreator.test.tsx`. The route suite asserts that an
+  unauthenticated or non-officer request never reaches Discord.
 
 ## No-webhook constraint
 
