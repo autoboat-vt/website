@@ -183,11 +183,11 @@ describe("signed in", () => {
         render(<EventCreator />);
         fireEvent.click(screen.getByRole("button", { name: /add event/i }));
 
-        expect(screen.getByText(/fields marked/i)).toBeInTheDocument();
-
-        // The asterisk is a CSS pseudo-element, so the marker is verified two
-        // ways: the DOM class that draws it, and the native `required`
-        // attribute that carries the meaning for assistive technology.
+        // There is no "Fields marked * are required" legend -- it was removed
+        // deliberately, so the marker has to carry the meaning on its own. That
+        // makes both halves load-bearing: the visible asterisk (a CSS
+        // pseudo-element, so it is asserted through the class that draws it)
+        // and the native `required` attribute that assistive technology reads.
         const name = screen.getByLabelText(/event name/i);
         expect(name).toBeRequired();
         expect(name.closest("label")?.querySelector(".calendar-add__label--required")).not.toBeNull();

@@ -227,6 +227,8 @@ Tailwind v4's layer order is `theme, base, utilities`; `@layer components` in `s
 - `define` maps `globalThis.__VITE_TELEMETRY_URL__` from `process.env.VITE_TELEMETRY_URL` at build time. Source reads `globalThis`, not `import.meta.env`, so Jest can polyfill it — `import.meta` is syntax (can't be polyfilled in Jest's CJS runtime). `telemetry.ts` declares `global var __VITE_TELEMETRY_URL__: string | undefined`.
 - No `tsc` in the build — TypeScript is editor-only. Type errors won't fail `bun run build` (only `biome check` and the Vite build run).
 - `scripts/spa-fallback.mjs` runs as a post-build step (see `package.json` `build` script) to copy `dist/index.html` to each route path for S3 SPA routing.
+- **Routes are code-split** (`src/App.tsx`): every page except `Home` is `lazy()` + a single `<Suspense>` around `<Routes>`. WARNING: **Keep `Home` eager.** It is both the landing page and the `*` fallback, so splitting it adds a round trip before the first paint and the prerendered HTML already carries its content. Before the split the app shipped one 546 kB chunk (Leaflet + calendar + event UI on every page); first load is now ~324 kB raw / ~95 kB gzip. The largest remaining chunk is `index` (~248 kB, React + router) plus `TileLayer` (~153 kB, Leaflet, only pulled in by `/live`).
+- WARNING: **`src/test/lib/seo.test.ts` regex-parses route paths out of `src/App.tsx`** to check them against `src/lib/seoRoutes.json`. It cannot tell prose from JSX, so a literal path attribute in a comment becomes a phantom route and the sync test fails. Keep each `<Route>` on one line with `path` first, and never write an example route in a comment there.
 
 ### File naming & import conventions
 

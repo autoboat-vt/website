@@ -2754,12 +2754,6 @@
         font-weight: 700;
     }
 
-    /* Inline `*` inside the legend sentence, where the marker IS content. */
-    .calendar-add__required-star {
-        color: var(--color-cancelled);
-        font-weight: 700;
-    }
-
     .calendar-add__checkbox {
         display: flex;
         align-items: flex-start;
