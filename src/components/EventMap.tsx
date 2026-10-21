@@ -1,6 +1,12 @@
 import { ExternalLink } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { CircleMarker, MapContainer, TileLayer } from "react-leaflet";
+// WARNING: This must be imported here, not only in LiveMap.tsx. LiveMap is a
+// lazy route, so its CSS lands in that route's chunk; the calendar never loads
+// it and Leaflet's panes then render `position: static` (its sheets were
+// missing) -- the map showed scrambled or blank tiles inside the modal. Vite
+// dedupes the shared sheet, so importing it twice costs nothing extra.
+import "leaflet/dist/leaflet.css";
 
 /**
  * Small static map for a calendar event's physical location. The location is

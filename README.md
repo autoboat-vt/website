@@ -50,7 +50,7 @@ parameter, so a user can subscribe to just their subteam. Events are also
 **color-coded by subteam** -- on the grid chips, the mobile day dots, and the
 swatch beside each filter row -- so a subteam is recognizable at a glance. See
 "Channel filter" and "Subteam colors" in
-`.github/instructions/discord-events.instructions.md`.
+`.github/instructions/calendar.instructions.md`.
 
 ## Environment variables
 
