@@ -3013,6 +3013,51 @@
         flex: 0 0 auto;
     }
 
+    /* An officer-only hint above the grid ("Drag a photo to reorder"). Uses the
+       muted status color: it is guidance, not a warning. */
+    .gallery-status--hint {
+        color: var(--color-hovercolor);
+    }
+
+    /* --- Direct drag-to-reorder on the gallery grid -----------------------
+       Only applied to tiles that can actually be reordered (a signed-in
+       officer's DRIVE photos), so a visitor's grid is untouched. */
+    .gallery-tile--draggable {
+        cursor: grab;
+    }
+    .gallery-tile--draggable:active {
+        cursor: grabbing;
+    }
+
+    /* The tile being dragged. Dimmed rather than hidden, so the grid does not
+       reflow under the pointer mid-drag. */
+    .gallery-tile--dragging {
+        opacity: 0.4;
+    }
+
+    /* The tile the pointer is over. An OUTLINE rather than a border so showing
+       it cannot change the tile's box and shift the grid -- and it is drawn with
+       `outline-offset` so it reads as "you are aiming HERE". */
+    .gallery-tile--drop-target {
+        outline: 3px solid var(--color-accent);
+        outline-offset: -3px;
+        border-radius: 0.5rem;
+    }
+    /* The accent is maroon, which nearly disappears against a dark photo in
+       dark mode, so the drop target also gets a light ring in both themes. */
+    .gallery-tile--drop-target::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 0.5rem;
+        /* A translucent white wash makes the target obvious over any photo. */
+        background-color: rgb(255 255 255 / 0.18);
+        pointer-events: none;
+    }
+    .gallery-tile--drop-target {
+        position: relative;
+    }
+
     /* --- Removed photos (officer restore list) ----------------------------
        Sits at the bottom of the officer panel, under the upload controls. Empty
        when nothing is removed, so it costs no space on a normal visit. */

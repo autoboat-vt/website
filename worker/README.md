@@ -696,9 +696,11 @@ WARNING: **Drive is never contacted while rendering the page.** A public page vi
 
 ### Ordering the photos
 
-By default the gallery is newest-first. An officer can arrange it instead: open
-**Add photos** and use the **Photo order** list, dragging a row to reposition it
-(or using its move-earlier / move-later buttons). Every move saves immediately.
+By default the gallery is newest-first. A signed-in officer can change it by
+**dragging a photo on the gallery grid itself** -- the change saves immediately.
+The same order is editable from the **Photo order** list in the **Add photos**
+panel, which is the touch and keyboard path (native drag does not fire on touch
+devices).
 
 ```bash
 # Current order (visible photos only).

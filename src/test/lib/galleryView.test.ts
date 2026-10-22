@@ -1,4 +1,11 @@
-import { altFromFileName, buildGalleryTiles, galleryStatusNote } from "../../lib/galleryView";
+import {
+    altFromFileName,
+    applyTileOrder,
+    buildGalleryTiles,
+    driveIdsOf,
+    galleryStatusNote,
+    moveWithin,
+} from "../../lib/galleryView";
 
 /**
  * Tests for the gallery's presentation logic.
@@ -126,5 +133,104 @@ describe("galleryStatusNote", () => {
 
     it("prefers the pending count over a stale warning", () => {
         expect(galleryStatusNote(2, "Drive hiccup.")).toContain("2 more photos are");
+    });
+});
+
+describe("driveIdsOf", () => {
+    const imageUrl = (id: string) => `https://worker.example/gallery/image/${id}`;
+
+    it("lists only the Drive ids, in order", () => {
+        // Curated tiles have no id and cannot be reordered, so they are omitted
+        // from the sequence the reorder request sends.
+        const tiles = buildGalleryTiles(
+            [
+                { id: "a", name: "a.jpg", width: null, height: null, modifiedTime: null },
+                { id: "b", name: "b.jpg", width: null, height: null, modifiedTime: null },
+            ],
+            curated,
+            imageUrl,
+        );
+
+        expect(driveIdsOf(tiles)).toEqual(["a", "b"]);
+    });
+
+    it("returns an empty list when there are no Drive tiles", () => {
+        expect(driveIdsOf(buildGalleryTiles([], curated, imageUrl))).toEqual([]);
+    });
+});
+
+describe("applyTileOrder", () => {
+    const imageUrl = (id: string) => `https://worker.example/gallery/image/${id}`;
+    const threeDrive = () =>
+        buildGalleryTiles(
+            [
+                { id: "a", name: "a.jpg", width: null, height: null, modifiedTime: null },
+                { id: "b", name: "b.jpg", width: null, height: null, modifiedTime: null },
+                { id: "c", name: "c.jpg", width: null, height: null, modifiedTime: null },
+            ],
+            curated,
+            imageUrl,
+        );
+
+    it("reorders the Drive tiles", () => {
+        expect(driveIdsOf(applyTileOrder(threeDrive(), ["c", "a", "b"]))).toEqual(["c", "a", "b"]);
+    });
+
+    it("leaves the curated tiles at the end", () => {
+        // The server cannot reorder them, so a photo must never be moved into
+        // that section.
+        const result = applyTileOrder(threeDrive(), ["c", "a", "b"]);
+        const curatedPart = result.slice(3);
+        expect(curatedPart.every((t) => !t.driveId)).toBe(true);
+        expect(curatedPart).toHaveLength(curated.length);
+    });
+
+    it("appends Drive tiles the order does not name", () => {
+        // A photo uploaded after the drag happened is not in the list yet, so it
+        // must still appear rather than vanish.
+        expect(driveIdsOf(applyTileOrder(threeDrive(), ["c"]))).toEqual(["c", "a", "b"]);
+    });
+
+    it("ignores an id that is not in the list", () => {
+        expect(driveIdsOf(applyTileOrder(threeDrive(), ["gone", "b", "a", "c"]))).toEqual(["b", "a", "c"]);
+    });
+
+    it("returns the tiles unchanged for an empty order", () => {
+        expect(applyTileOrder(threeDrive(), [])).toEqual(threeDrive());
+    });
+
+    it("does not mutate the input", () => {
+        const tiles = threeDrive();
+        const before = driveIdsOf(tiles);
+        applyTileOrder(tiles, ["c", "b", "a"]);
+        expect(driveIdsOf(tiles)).toEqual(before);
+    });
+});
+
+describe("moveWithin", () => {
+    it("moves an item forward", () => {
+        expect(moveWithin(["a", "b", "c"], 0, 2)).toEqual(["b", "c", "a"]);
+    });
+
+    it("moves an item backward", () => {
+        expect(moveWithin(["a", "b", "c"], 2, 0)).toEqual(["c", "a", "b"]);
+    });
+
+    it("returns a copy for a same-index move", () => {
+        const items = ["a", "b"];
+        const next = moveWithin(items, 1, 1);
+        expect(next).toEqual(["a", "b"]);
+        expect(next).not.toBe(items);
+    });
+
+    it("ignores out-of-range indices", () => {
+        // The list can change between the render that produced the drag and the
+        // drop that carries it.
+        expect(moveWithin(["a", "b"], 5, 0)).toEqual(["a", "b"]);
+        expect(moveWithin(["a", "b"], 0, 9)).toEqual(["a", "b"]);
+    });
+
+    it("handles an empty list", () => {
+        expect(moveWithin([], 0, 1)).toEqual([]);
     });
 });

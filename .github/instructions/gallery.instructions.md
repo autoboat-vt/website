@@ -119,11 +119,23 @@ NOTE: The hide route costs two KV writes (the hidden set, then the manifest). Bo
 
 ## Reordering photos
 
-Officers arrange the display order from the **Photo order** list in the Add
-photos panel: drag a row to reposition it, or use the move-earlier / move-later
-buttons. Every move saves immediately.
+A signed-in officer drags photos **directly on the grid** -- no panel to open.
+The same order is also editable from the **Photo order** list in the Add photos
+panel, which remains the touch and keyboard path.
 
-WARNING: **The arrow buttons are NOT redundant with drag, and must not be removed as "duplicate UI".** Native HTML5 drag-and-drop does not fire on touch devices at all (`dragstart` never happens on a phone), and a `draggable` `<li>` is not focusable so it cannot be dragged from the keyboard. The buttons are the touch path AND the keyboard path. Drag is the convenience.
+WARNING: **The arrow buttons in the panel are NOT redundant with drag, and must not be removed as "duplicate UI".** Native HTML5 drag-and-drop does not fire on touch devices at all (`dragstart` never happens on a phone), and a `draggable` `<button>` is not draggable from the keyboard. Drag is the convenience; the buttons are the touch and keyboard path.
+
+WARNING: **A drag is usually followed by a `click`, which would pop the lightbox for the photo just moved.** `dragEnd` clears the drag state BEFORE that click runs, so an `if (dragKey) return` guard is dead code -- it passes in a test that fires `click` by hand but not in a real browser. The guard is a timestamp (`lastDragEndRef`, 250ms window). A ref, not state: it would otherwise re-render the grid on every drag for a value only the click handler reads. `Gallery.test.tsx` pins it.
+
+WARNING: **Only DRIVE tiles are draggable, and only when a session exists.** A curated photo is part of the site's design and has no server-side position, so marking it draggable would promise a move the save cannot honour -- `reorderTo` also refuses a drop onto one. A visitor's tiles get `draggable="false"`, because a tile that lifts on drag and snaps back reads as broken.
+
+NOTE: The drop is OPTIMISTIC. `pendingOrder` holds the reordered id list so the grid does not snap back while the refetch is in flight, and it is cleared whenever a fresh manifest arrives so the page converges on the server's answer. A failed save clears it and reports the error -- showing a saved-looking arrangement that was not stored is worse than a jump.
+
+The order itself lives on its own KV key (`gallery:order:v1`), exactly like the
+hidden set, and `syncGallery` must load it and pass it to `buildManifest`. The
+manifest is rebuilt from Drive on every cron run, so an order stored only there
+reverts to newest-first within five minutes. `galleryOrderSync.test.ts` pins
+that wiring.
 
 WARNING: **The order lives on its OWN KV key (`gallery:order:v1`)**, exactly like the hidden set, and `syncGallery` must load it and pass it to `buildManifest`. The manifest is rebuilt from Drive on every cron run, so an order stored only there reverts to newest-first within five minutes. `galleryOrderSync.test.ts` pins that wiring.
 

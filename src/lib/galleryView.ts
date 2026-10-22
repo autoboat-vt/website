@@ -96,6 +96,80 @@ export function buildGalleryTiles(
 }
 
 /**
+ * The Drive ids in a tile list, in display order.
+ *
+ * Curated tiles have no `driveId` (they are not in Drive and cannot be
+ * reordered), so they are filtered out. This is the sequence the reorder request
+ * sends.
+ */
+export function driveIdsOf(tiles: readonly GalleryTile[]): string[] {
+    const ids: string[] = [];
+    for (const tile of tiles) {
+        if (tile.driveId) ids.push(tile.driveId);
+    }
+    return ids;
+}
+
+/**
+ * Re-apply an officer's order to a tile list, for immediate feedback.
+ *
+ * Only the DRIVE tiles move. The curated ones stay at the end -- they are the
+ * site's editorial images, not part of the team's photo library, and dragging a
+ * photo into that section would have no meaning on the server.
+ *
+ * Ids in `order` that are not in the list are skipped (a photo may have left
+ * Drive), and drive tiles the order does not name keep their relative order
+ * after the named ones. That mirrors `sortEntriesByOrder` on the Worker, so the
+ * optimistic page and the server can never disagree about where something goes.
+ */
+export function applyTileOrder(tiles: readonly GalleryTile[], order: readonly string[]): GalleryTile[] {
+    if (order.length === 0) return [...tiles];
+
+    const driveTiles = tiles.filter((tile) => tile.driveId);
+    const curatedTiles = tiles.filter((tile) => !tile.driveId);
+
+    // Index the current tiles by id so an unknown id in the order is simply
+    // skipped rather than dropping the tile.
+    const byId = new Map<string, GalleryTile>();
+    for (const tile of driveTiles) {
+        if (tile.driveId) byId.set(tile.driveId, tile);
+    }
+
+    const placed = new Set<string>();
+    const ordered: GalleryTile[] = [];
+    for (const id of order) {
+        const tile = byId.get(id);
+        if (!tile || placed.has(id)) continue;
+        ordered.push(tile);
+        placed.add(id);
+    }
+    // Anything the order did not name follows, keeping its current position.
+    for (const tile of driveTiles) {
+        if (tile.driveId && !placed.has(tile.driveId)) ordered.push(tile);
+    }
+
+    return [...ordered, ...curatedTiles];
+}
+
+/**
+ * Move one item within a list, returning a NEW array.
+ *
+ * Out-of-range indices are ignored (the list can change between the render that
+ * produced the drag and the drop), and a same-index move returns a copy so a
+ * caller can compare by identity if it wants.
+ */
+export function moveWithin<T>(items: readonly T[], from: number, to: number): T[] {
+    if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) {
+        return [...items];
+    }
+    const next = [...items];
+    const [moved] = next.splice(from, 1);
+    if (moved === undefined) return [...items];
+    next.splice(to, 0, moved);
+    return next;
+}
+
+/**
  * The sentence under the heading when part of the folder is still copying.
  *
  * Returns null when there is nothing worth saying, so the page does not render
