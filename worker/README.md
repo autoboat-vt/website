@@ -54,6 +54,10 @@ keeps everything, exactly as before.
 | `GET /manage/session` | Confirms a bearer token is still valid. |
 | `POST /manage/events` | Creates a guild scheduled event. **Officers only.** |
 | `DELETE /manage/events/{id}` | Deletes a guild scheduled event. **Officers only.** |
+| `GET /gallery` | Public gallery manifest: every image in the Drive folder whose bytes are already mirrored to R2. |
+| `GET /gallery/image/{id}` | One mirrored image's bytes, streamed from R2. |
+| `POST /manage/gallery` | Uploads a photo to Drive and mirrors it. **Officers only.** |
+| `POST /manage/gallery/sync` | Forces a Drive sync. Token-gated, for CI or an operator. |
 
 ## Creating events from the website
 
@@ -637,10 +641,197 @@ Set via `vars` in `wrangler.jsonc` (public, non-secret):
   setting.** Omit it to use `DEFAULT_OFFICERS_CHANNEL_ID` in `src/audience.ts`;
   a **blank** value means "no officer channel", which makes the Worker serve
   **nothing** (fail-closed) rather than guess. Verify it with `/audiences`.
+- `DRIVE_GALLERY_FOLDER_ID` — id of the Drive folder whose images make up
+  `/gallery`. See "Gallery: images from Google Drive".
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL` — the service account's `client_email`. Not a
+  secret; it is the address the folder is shared with.
 
 Set via `wrangler secret put` (secret, never committed):
 
 - `DISCORD_BOT_TOKEN` — the Discord bot's token.
+- `GOOGLE_PRIVATE_KEY` — the service account's PEM private key. Either literal
+  newlines or `\n` escapes are accepted.
+- `GALLERY_SYNC_TOKEN` — optional. Enables `POST /manage/gallery/sync` for CI or
+  an operator. Unset disables the route (fail closed).
+
+## Gallery: images from Google Drive
+
+The `/gallery` page shows every image in one Google Drive folder. Drive is the
+source of truth: drop a photo into the folder and it appears on the site, with
+no code change and no redeploy.
+
+### How it works
+
+```
+Drive folder  --(cron, every 5 min)-->  manifest (KV)  -->  GET /gallery
+      |                                                          |
+      +--------> R2 mirror  <---- GET /gallery/image/{id} --------+
+```
+
+Drive cannot serve the images directly. Its download URLs are rate-limited and
+not meant for embedding, and its API quota is per-user, so a busy page would
+start failing for everyone. The Worker therefore copies each image into an R2
+bucket and serves it from there. Drive stays the archive; R2 is the delivery
+mirror.
+
+- A **cron trigger** (`triggers.crons` in `wrangler.jsonc`) lists the folder and
+  copies any new images into R2. It copies at most `MAX_MIRRORS_PER_SYNC` per
+  run, so a large initial import fills in over several runs instead of timing
+  out.
+- An **upload from the website** writes to Drive first, then mirrors
+  immediately, so the photo is on the page without waiting for the cron.
+- A **deleted** photo leaves the gallery and its bytes are swept from R2.
+- Only images that are already mirrored are advertised, so the page never shows
+  a broken tile.
+
+WARNING: **Drive is never contacted while rendering the page.** A public page view reads the manifest from KV and the bytes from R2 only. Blocking a visitor on a Drive call would make load time depend on Google and would burn the Drive quota on ordinary traffic.
+
+### Which Google account to use
+
+Use **`autoboat@vt.edu`**, the Workspace account. Do **not** use a personal
+`@gmail.com` address.
+
+The reason is storage quota. A service account is a robot identity with **no
+storage of its own**: it can read anything shared with it, but it cannot own a
+file. Google's documentation states that service accounts "don't have storage
+quota and can't own files. Instead they must upload files and folders into
+shared drives, or use OAuth 2.0 to upload items on behalf of a human user."
+
+Shared Drives require a Workspace edition, and Google states plainly that
+"Personal Google Accounts (`@gmail.com`) cannot create shared drives." So the
+folder must live in a Shared Drive owned by the VT domain, and the account that
+creates it must be the Workspace one.
+
+### Step 1: create the Shared Drive and folder
+
+1. Sign in to Drive as `autoboat@vt.edu`.
+2. In the left sidebar, choose **Shared drives**, then **New**.
+3. Name it something like `AutoBoat Media`.
+4. Inside it, create a folder for the gallery, for example `Gallery`.
+5. Open the folder and copy the id from the URL:
+   `https://drive.google.com/drive/folders/`**`THIS_PART`**
+   That value is `DRIVE_GALLERY_FOLDER_ID`.
+
+WARNING: **Subfolders are not traversed.** Only images directly inside this folder are published. That is deliberate: recursing would let an unrelated folder dragged into the tree publish itself by accident. If the team's photos are nested under subfolders, either flatten them or point the config at the folder that actually holds the images.
+
+NOTE: If Shared Drives are unavailable on the VT Workspace plan, the fallback is a **service account with domain-wide delegation**, which requires a VT Workspace super-administrator to authorize the service account's client id in the Admin console. That is an institutional request, not something you can do yourself, so it is worth confirming the Shared Drive path first.
+
+### Step 2: create the service account
+
+You need a Google Cloud project. This is separate from the Drive account, and
+any Google account can own it.
+
+1. Open the [Google Cloud console](https://console.cloud.google.com/) and
+   create a project (for example `autoboat-gallery`).
+2. Go to **APIs & Services > Library**, find **Google Drive API**, and click
+   **Enable**.
+3. Go to **IAM & Admin > Service Accounts** and click **Create service account**.
+4. Name it (for example `gallery-sync`) and click **Create and continue**.
+   No project-level IAM roles are needed - Drive access is granted by sharing
+   the folder, not by IAM.
+5. Click **Done**.
+6. Open the service account, go to the **Keys** tab, choose
+   **Add key > Create new key**, select **JSON**, and click **Create**.
+   A `.json` file downloads. It is the only copy of the private key.
+
+The JSON file contains the two values the Worker needs:
+
+- `client_email` -> `GOOGLE_SERVICE_ACCOUNT_EMAIL`
+- `private_key` -> `GOOGLE_PRIVATE_KEY`
+
+WARNING: **Never commit the JSON key file.** `GOOGLE_PRIVATE_KEY` is a secret and belongs in `wrangler secret put`. The downloaded file is a credential equivalent to a password for the service account.
+
+### Step 3: share the folder with the service account
+
+1. In Drive, open the gallery folder inside the Shared Drive.
+2. Click **Share**.
+3. Add the service account's `client_email`
+   (`gallery-sync@<project>.iam.gserviceaccount.com`).
+4. Give it **Content manager** (or **Contributor**).
+
+**Content manager** is the right level: it can add files and see everything,
+which is exactly what the Worker does. **Contributor** also works for uploads
+but cannot move files into the trash, which the delete sweep needs.
+
+WARNING: **External sharing must be allowed for the domain**, or the service account cannot be added to the Shared Drive. If the "Share" dialog refuses the address, a Workspace administrator has restricted sharing outside the organization. The same applies if the service account is added but reading returns 403.
+
+### Step 4: create the R2 bucket
+
+```bash
+cd worker
+npx wrangler r2 bucket create autoboat-gallery
+```
+
+The bucket name must match `bucket_name` under `r2_buckets` in
+`wrangler.jsonc`.
+
+### Step 5: set the configuration
+
+In `wrangler.jsonc` (`vars`, public values only):
+
+```jsonc
+"DRIVE_GALLERY_FOLDER_ID": "<the folder id from step 1>",
+"GOOGLE_SERVICE_ACCOUNT_EMAIL": "gallery-sync@<project>.iam.gserviceaccount.com"
+```
+
+Secrets:
+
+```bash
+cd worker
+npx wrangler secret put GOOGLE_PRIVATE_KEY
+# paste the private_key value, including the BEGIN/END lines
+```
+
+`GOOGLE_PRIVATE_KEY` accepts either literal newlines or `\n` escapes; both are
+normalized. If you paste from the JSON file, the value between the quotes
+already uses `\n` and can go in as-is.
+
+### Step 6: verify
+
+```bash
+# Force a sync and read the counts back.
+curl -X POST <worker-url>/manage/gallery/sync \
+  -H "Authorization: Bearer <GALLERY_SYNC_TOKEN>"
+
+# The public manifest (empty until the first sync finishes).
+curl <worker-url>/gallery
+```
+
+Then open `/gallery` on the site. The first sync copies images a batch at a
+time, so a large folder fills in over a few minutes.
+
+### Officer sign-in from the gallery page
+
+`/gallery/` is registered as its own Discord **redirect URI**, alongside
+`/calendar/`. Both are listed, comma-separated, in `OAUTH_REDIRECT_URI`:
+
+```
+https://autoboat.aoe.vt.edu/calendar/, https://autoboat.aoe.vt.edu/gallery/
+```
+
+The Worker picks the entry whose **path** matches the page that started the
+login, so an officer who clicks "Add photos" comes straight back to the gallery
+with the panel open. It falls back to the first entry when nothing matches.
+
+WARNING: **Every entry in `OAUTH_REDIRECT_URI` must also be registered in the Discord developer portal** (OAuth2 -> Redirects), char-for-char including the trailing slash. A URI listed in the Worker but missing from the portal makes Discord show an error page instead of redirecting, with no useful detail.
+
+WARNING: **The redirect URI is SELECTED from the configured list, never built from request input.** Constructing one from a page path would make any path a redirect target. The same helper (`redirectUriFor`) supplies the value to both the authorize request and the token exchange, because Discord rejects the exchange with `invalid_grant` when the two disagree.
+
+NOTE: The page to return to also travels inside the signed `state` (as `ret`), allowlisted to `/calendar/` and `/gallery/`. The redirect URI decides WHERE the browser lands; the state decides which page the Worker reports back, and the two are kept consistent so a tampered value cannot steer either.
+
+### Troubleshooting
+
+| Symptom | Cause |
+| ------- | ----- |
+| `503 gallery not configured` | One of the three Drive values is missing. The response names which. |
+| Sync says `Drive rejected the folder listing (404)` | The folder id is wrong, the folder is not in a Shared Drive, or the service account was not added to it. A Shared Drive folder returns 404 rather than 403 when access is missing. |
+| Upload fails with a quota error | The folder is in a personal My Drive. The service account cannot own files there - move it to a Shared Drive. |
+| Upload fails with `Invalid grant` or `invalid_scope` | `GOOGLE_PRIVATE_KEY` is malformed (a truncated paste, or missing BEGIN/END lines), or the Drive API is not enabled on the project. |
+| Gallery is empty but the folder has images | Check the images are directly in the folder (not in subfolders) and are JPEG, PNG, WebP, GIF, or AVIF. HEIC is rejected because no browser can render it. |
+| A photo is missing but the folder has it | The sync copies a bounded batch per run. Wait for the next cron tick, or force a sync. |
+| `401 Invalid sync token` | `GALLERY_SYNC_TOKEN` is unset (the route is disabled) or the header does not match. |
+| Discord shows an error page after clicking "Sign in" | The chosen entry in `OAUTH_REDIRECT_URI` is not registered in the developer portal. Add it under OAuth2 -> Redirects, exactly. |
+| Sign-in succeeds but lands on the calendar | `/gallery/` is not in `OAUTH_REDIRECT_URI`, so the Worker fell back to the first entry. It must also be registered in the portal. |
 
 ## Behavior notes
 

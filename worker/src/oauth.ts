@@ -125,12 +125,101 @@ export function parseUser(data: unknown): OAuthUser | null {
 }
 
 /**
+ * Page paths a login may return to.
+ *
+ * WHY THIS EXISTS. Discord requires `redirect_uri` to match a registered entry
+ * char-for-char, so it cannot vary per page. One registered URI therefore has
+ * to serve every page that offers a sign-in, and the page the officer actually
+ * came from is carried in the signed `state` instead.
+ *
+ * WARNING: This is an ALLOWLIST, not a free-form path. The value rides in the
+ * OAuth round trip and is used to build `window.location`, so an attacker who
+ * could inject an arbitrary path there would have an open redirect -- a
+ * phishing primitive ("sign in here, then land on evil.example"). An allowlist
+ * of known pages makes an injected value fail closed instead.
+ */
+export const RETURN_PATH_ALLOWLIST: readonly string[] = ["/calendar/", "/gallery/"];
+
+/** The allowlist entry used when a request does not name one. */
+export const DEFAULT_RETURN_PATH = "/calendar/";
+
+/**
+ * Reduce a caller-supplied path to a known page, or the default.
+ *
+ * Accepts the bare form too (`/gallery` -> `/gallery/`) so a trailing slash is
+ * not a source of silent mismatch between the page and the allowlist.
+ */
+export function resolveReturnPath(raw: unknown): string {
+    if (typeof raw !== "string") return DEFAULT_RETURN_PATH;
+    const trimmed = raw.trim();
+    // A protocol-relative value ("//evil.example") is a different origin, and
+    // anything not rooted is not a site path at all.
+    if (!trimmed.startsWith("/") || trimmed.startsWith("//")) return DEFAULT_RETURN_PATH;
+    const normalized = trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
+    return RETURN_PATH_ALLOWLIST.includes(normalized) ? normalized : DEFAULT_RETURN_PATH;
+}
+
+/**
+ * Parse the comma-separated list of REGISTERED redirect URIs.
+ *
+ * WARNING: These must match Discord's "Redirects" list char-for-char. A URI that is
+ * configured here but not registered there makes Discord show an error page
+ * instead of redirecting, with no explanation -- so this value and the portal
+ * entry are one setting in two places.
+ *
+ * Blank entries are dropped, so a trailing comma is harmless.
+ */
+export function parseRedirectUris(raw: string | undefined): string[] {
+    return (raw ?? "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean);
+}
+
+/**
+ * Pick the registered redirect URI that lands on `returnPath`.
+ *
+ * WHY THIS IS SELECTION AND NOT CONSTRUCTION. The URI is never built from
+ * request input -- it is chosen from a configured list by comparing the
+ * request's PATHNAME to the return path. Building one ("siteUrl + path") would
+ * make any unexpected path a redirect target, and the whole point of
+ * `RETURN_PATH_ALLOWLIST` is that nothing outside it can be reached.
+ *
+ * Both `handleAuthUrl` and the token exchange must send the SAME value, so both
+ * call this function with the return path recovered from the signed state.
+ * Passing a different redirect URI to the exchange than the one used to
+ * authorize is rejected by Discord with `invalid_grant`.
+ *
+ * Falls back to `fallback` (the primary configured URI) when no entry matches,
+ * which keeps a single-URI deployment working unchanged.
+ */
+export function redirectUriFor(returnPath: string, registeredUris: readonly string[], fallback: string): string {
+    const wanted = resolveReturnPath(returnPath);
+    for (const uri of registeredUris) {
+        try {
+            const path = new URL(uri).pathname;
+            const normalized = path.endsWith("/") ? path : `${path}/`;
+            if (normalized === wanted) return uri;
+        } catch {
+            // An unparseable entry is skipped rather than used; sending it would
+            // fail at Discord with a less useful message.
+        }
+    }
+    return fallback;
+}
+
+/**
  * Create a signed `state` value binding an OAuth attempt to a nonce.
  *
  * Without this, an attacker can feed a victim a callback URL carrying the
  * attacker's own authorization code ("login CSRF"), which would sign the victim
  * into the attacker's account. Verifying a signature we minted ourselves means
  * only a state this Worker issued can complete the flow.
+ *
+ * `returnPath` is the page to send the browser back to after the callback. It
+ * is carried HERE rather than in the redirect URI because Discord requires that
+ * URI to be a fixed registered value, and it is signed so a tampered value
+ * cannot be introduced on the way back.
  *
  * WARNING: The nonce is NOT persisted, so this does not make an attempt
  * single-use -- replaying the same callback URL inside the 10-minute window
@@ -140,34 +229,54 @@ export function parseUser(data: unknown): OAuthUser | null {
  * free tier's write budget cannot absorb comfortably. Do not lengthen
  * `OAUTH_STATE_TTL_SECONDS` without revisiting that trade.
  */
-export async function createOAuthState(secret: string, now: Date = new Date()): Promise<string> {
+export async function createOAuthState(
+    secret: string,
+    now: Date = new Date(),
+    returnPath: string = DEFAULT_RETURN_PATH,
+): Promise<string> {
     const nonce = crypto.randomUUID();
     const payload: SignedPayload = {
         n: nonce,
         exp: Math.floor(now.getTime() / 1000) + OAUTH_STATE_TTL_SECONDS,
         purpose: "oauth-state",
+        // Allowlisted, so a caller cannot smuggle an arbitrary destination.
+        ret: resolveReturnPath(returnPath),
     };
     return signPayload(secret, payload);
 }
 
 /**
- * Verify a returned `state` value.
+ * Verify a returned `state` value, reporting the return path it carried.
  *
  * Checks the signature, the purpose marker (so a SESSION token can never be
  * used as a state), and the expiry -- all three matter, and checking only the
  * signature would let a long-lived session token be replayed as a state.
+ *
+ * Returns the return path rather than a bare boolean so the caller does not
+ * have to verify the state twice to recover it. The value is re-allowlisted
+ * here: a token signed under an older, wider allowlist must not be able to
+ * redirect somewhere this version would refuse.
  */
+export async function verifyOAuthStatePayload(
+    secret: string | undefined,
+    state: string | null | undefined,
+    now: Date = new Date(),
+): Promise<{ ok: true; returnPath: string } | { ok: false }> {
+    const payload = await verifySignedPayload(secret ?? "", state ?? "");
+    if (!payload) return { ok: false };
+    if (payload.purpose !== "oauth-state") return { ok: false };
+    const exp = payload.exp;
+    if (typeof exp !== "number" || !Number.isFinite(exp)) return { ok: false };
+    if (exp * 1000 <= now.getTime()) return { ok: false };
+    return { ok: true, returnPath: resolveReturnPath(payload.ret) };
+}
+
+/** Whether a returned `state` value is valid. */
 export async function verifyOAuthState(
     secret: string | undefined,
     state: string | null | undefined,
     now: Date = new Date(),
 ): Promise<boolean> {
-    if (!secret) return false;
-    if (!state) return false;
-    const payload = await verifySignedPayload(secret, state);
-    if (!payload) return false;
-    if (payload.purpose !== "oauth-state") return false;
-    const exp = payload.exp;
-    if (typeof exp !== "number" || !Number.isFinite(exp)) return false;
-    return exp * 1000 > now.getTime();
+    const result = await verifyOAuthStatePayload(secret, state, now);
+    return result.ok;
 }

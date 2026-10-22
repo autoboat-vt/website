@@ -39,6 +39,14 @@ export interface ManageSession {
     name: string;
     /** Epoch ms after which the token must not be used. */
     expiresAt: number;
+    /**
+     * The page this login should return to, allowlisted by the Worker.
+     *
+     * Optional so a session persisted by an older build still loads; callers
+     * fall back to `/calendar/`. Only meaningful on the callback, since a
+     * restored session has already arrived.
+     */
+    returnPath?: string;
 }
 
 /**
@@ -126,6 +134,7 @@ interface StoredSession {
     token: string;
     name: string;
     expiresAt: number;
+    returnPath?: string;
 }
 
 function readStoredSession(): StoredSession | null {
@@ -137,7 +146,14 @@ function readStoredSession(): StoredSession | null {
         const candidate = parsed as Record<string, unknown>;
         if (typeof candidate.token !== "string" || typeof candidate.name !== "string") return null;
         if (typeof candidate.expiresAt !== "number" || !Number.isFinite(candidate.expiresAt)) return null;
-        return { token: candidate.token, name: candidate.name, expiresAt: candidate.expiresAt };
+        return {
+            token: candidate.token,
+            name: candidate.name,
+            expiresAt: candidate.expiresAt,
+            // Optional: a session stored before the return path existed simply
+            // has none, and callers default to the calendar.
+            ...(typeof candidate.returnPath === "string" ? { returnPath: candidate.returnPath } : {}),
+        };
     } catch {
         // Storage blocked (private mode), quota exceeded, or corrupt JSON.
         return null;
@@ -221,14 +237,24 @@ async function errorFromResponse(res: Response): Promise<ManageError> {
  * signed `state` come from server-side configuration rather than from
  * anything the page could be tricked into supplying.
  *
+ * `returnTo` is the page to land on after the callback. Discord requires the
+ * redirect URI itself to be one fixed registered value, so the destination
+ * rides in the signed state instead -- this is what lets the gallery page offer
+ * a sign-in without stranding the officer on the calendar. The Worker
+ * allowlists it; an unknown value falls back to `/calendar/`.
+ *
  * `navigate` is injectable because jsdom's `location` is non-configurable and
  * `location.assign` cannot be spied on -- the alternative is an untestable
  * hard-coded navigation. The default is the real one.
  */
 export async function beginLogin(
     navigate: (url: string) => void = (url) => globalThis.location.assign(url),
+    returnTo?: string,
 ): Promise<void> {
-    const res = await fetch(`${MANAGE_URL}/auth/url`, { cache: "no-store" });
+    const endpoint = returnTo
+        ? `${MANAGE_URL}/auth/url?return=${encodeURIComponent(returnTo)}`
+        : `${MANAGE_URL}/auth/url`;
+    const res = await fetch(endpoint, { cache: "no-store" });
     if (!res.ok) throw await errorFromResponse(res);
     const body = (await res.json()) as { url?: unknown };
     if (typeof body.url !== "string" || !body.url) {
@@ -253,7 +279,12 @@ export async function completeLogin(code: string, state: string): Promise<Manage
     });
     if (!res.ok) throw await errorFromResponse(res);
 
-    const body = (await res.json()) as { token?: unknown; name?: unknown; expiresIn?: unknown };
+    const body = (await res.json()) as {
+        token?: unknown;
+        name?: unknown;
+        expiresIn?: unknown;
+        returnPath?: unknown;
+    };
     if (typeof body.token !== "string" || typeof body.name !== "string" || typeof body.expiresIn !== "number") {
         throw new ManageError("Discord returned an unusable login response.", 502);
     }
@@ -263,6 +294,10 @@ export async function completeLogin(code: string, state: string): Promise<Manage
         // Derive the deadline from `expiresIn` rather than trusting a server
         // clock to agree with this machine's.
         expiresAt: Date.now() + body.expiresIn * 1000,
+        // Signed inside the state, so it cannot be steered by the query string.
+        // A Worker too old to send it falls back to the calendar, which is
+        // where every login used to land anyway.
+        returnPath: typeof body.returnPath === "string" && body.returnPath ? body.returnPath : "/calendar/",
     };
     saveSession(session);
     return session;

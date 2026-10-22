@@ -109,15 +109,22 @@ import {
 import { GUILD_SCHEDULED_EVENT_DELETE, parseDeletedEventIds } from "./audit";
 import { validateCreateEvent } from "./eventCreate";
 import { type CalendarEvent, type DiscordGuildScheduledEvent, normalizeEvents, publicEvents } from "./events";
+import { renderableEntries } from "./gallery";
+import { loadManifest, manifestIsStale, syncGallery, uploadGalleryImage } from "./gallerySync";
+import { checkImageBytes, validateGalleryUpload } from "./galleryUpload";
+import { missingDriveConfig } from "./googleAuth";
 import { buildCalendar } from "./ics";
 import {
     buildAuthorizeUrl,
     createOAuthState,
     DISCORD_TOKEN_URL,
     type OAuthUser,
+    parseRedirectUris,
     parseTokenResponse,
     parseUser,
-    verifyOAuthState,
+    redirectUriFor,
+    resolveReturnPath,
+    verifyOAuthStatePayload,
 } from "./oauth";
 import { type DiscordUserGuild, evaluateMembership } from "./permissions";
 import { bearerToken, createSession, SESSION_TTL_SECONDS, verifySession } from "./session";
@@ -191,11 +198,66 @@ interface Env {
      */
     SESSION_SECRET?: string;
     /**
-     * The exact URL Discord redirects the browser back to after authorization.
-     * Must match an entry in the Discord developer portal EXACTLY, including
-     * the trailing slash.
+     * Where Discord redirects the browser back to after authorization.
+     *
+     * COMMA-SEPARATED, and every entry must be registered in the Discord
+     * developer portal char-for-char (including the trailing slash). The entry
+     * whose path matches the page that started the login is the one used, so
+     * the sign-in completes on that page instead of bouncing through the
+     * calendar. The first entry is the fallback.
+     *
+     * WARNING: The redirect URI is never constructed from request input -- it is
+     * SELECTED from this list (see `redirectUriFor`). Building one from a path
+     * would make any path a redirect target.
      */
     OAUTH_REDIRECT_URI?: string;
+    /**
+     * R2 bucket holding the mirrored gallery images.
+     *
+     * WARNING: The gallery is served from R2, NOT from Drive. Drive is the archive
+     * and the upload target, but its API is quota-limited and its download URLs
+     * are not meant for embedding, so a public page view must never depend on
+     * it. See gallerySync.ts.
+     */
+    GALLERY_BUCKET: R2Bucket;
+    /**
+     * Id of the Drive folder whose images make up the gallery.
+     *
+     * Public, non-secret (a folder id is not a capability on its own -- the
+     * service account still has to be granted access). Everything directly
+     * inside this folder that is a displayable image appears on /gallery,
+     * because Drive is the source of truth.
+     */
+    DRIVE_GALLERY_FOLDER_ID?: string;
+    /**
+     * The service account's email (`client_email` from its JSON key).
+     *
+     * NOT a secret -- it is an address, and it is the thing an operator shares
+     * the Drive folder with. The private key is the secret.
+     */
+    GOOGLE_SERVICE_ACCOUNT_EMAIL?: string;
+    /**
+     * The service account's PEM private key (`private_key` from the JSON key).
+     *
+     * A SECRET -- set with `wrangler secret put GOOGLE_PRIVATE_KEY`. Accepts
+     * either literal newlines or `\n` escapes; see `pemToPkcs8`.
+     */
+    GOOGLE_PRIVATE_KEY?: string;
+    /**
+     * Optional Workspace user for domain-wide delegation.
+     *
+     * WARNING: Needed only when the gallery folder lives in a person's My Drive.
+     * A service account has no storage quota of its own, so uploading there
+     * fails with a quota error unless the service account is impersonating a
+     * real user. Leave unset when the folder is in a Shared Drive, which owns
+     * its own quota.
+     */
+    GOOGLE_IMPERSONATE_EMAIL?: string;
+    /**
+     * Optional shared secret that lets CI or a script force a gallery sync.
+     * A SECRET. Unset disables `POST /manage/gallery/sync`.
+     */
+    GALLERY_SYNC_TOKEN?: string;
 }
 
 /**
@@ -899,7 +961,7 @@ function oauthNotConfigured(env: Env): Response {
  * calendar keeps working, and the failure names the specific missing value
  * rather than a broken redirect.
  */
-async function handleAuthUrl(env: Env): Promise<Response> {
+async function handleAuthUrl(env: Env, url: URL): Promise<Response> {
     const missing = missingOAuthConfig(env);
     // `missing` already includes SESSION_SECRET, so no separate check here --
     // two checks would let the message disagree with the gate.
@@ -907,14 +969,26 @@ async function handleAuthUrl(env: Env): Promise<Response> {
     // Narrowed by the check above; `createOAuthState` needs a real string.
     const secret = env.SESSION_SECRET as string;
 
-    const state = await createOAuthState(secret);
+    // WARNING: The redirect URI is CHOSEN from the registered list, never built from
+    // request input. Discord rejects a redirect_uri that is not registered
+    // char-for-char, so the destination page has to correspond to a real
+    // registered entry -- which is also what keeps an unexpected path from
+    // becoming a redirect target. `return` is allowlisted in oauth.ts.
+    const returnPath = resolveReturnPath(url.searchParams.get("return") ?? undefined);
+    const redirectUri = redirectUriFor(
+        returnPath,
+        parseRedirectUris(env.OAUTH_REDIRECT_URI),
+        env.OAUTH_REDIRECT_URI as string,
+    );
+    const state = await createOAuthState(secret, new Date(), returnPath);
     return managementJson(
         {
             url: buildAuthorizeUrl({
                 clientId: env.DISCORD_CLIENT_ID as string,
-                redirectUri: env.OAUTH_REDIRECT_URI as string,
+                redirectUri,
                 state,
             }),
+            returnPath,
         },
         { status: 200 },
         env,
@@ -971,17 +1045,30 @@ async function handleAuthCallback(env: Env, request: Request): Promise<Response>
     const state = typeof body.state === "string" ? body.state : "";
     if (!code) return managementError(env, 400, "Missing authorization code.");
 
-    // Verify BEFORE spending a token exchange on the code.
-    if (!(await verifyOAuthState(secret, state))) {
+    // Verify BEFORE spending a token exchange on the code. The verification
+    // also recovers the page to return to, which the browser needs because the
+    // redirect URI is a single fixed URL shared by every sign-in.
+    const stateResult = await verifyOAuthStatePayload(secret, state);
+    if (!stateResult.ok) {
         return managementError(env, 400, "Invalid or expired login attempt. Please try again.");
     }
 
     // Discord requires form encoding and rejects JSON with an error that does
     // not explain itself.
+    //
+    // WARNING: The redirect URI must be the SAME value the authorize request used,
+    // or Discord rejects the exchange with `invalid_grant`. It is re-derived
+    // from the signed return path rather than passed through the browser, so a
+    // caller cannot substitute one.
+    const exchangeRedirectUri = redirectUriFor(
+        stateResult.returnPath,
+        parseRedirectUris(env.OAUTH_REDIRECT_URI),
+        env.OAUTH_REDIRECT_URI as string,
+    );
     const form = new URLSearchParams({
         grant_type: "authorization_code",
         code,
-        redirect_uri: env.OAUTH_REDIRECT_URI as string,
+        redirect_uri: exchangeRedirectUri,
     });
 
     let tokenData: unknown;
@@ -1074,6 +1161,9 @@ async function handleAuthCallback(env: Env, request: Request): Promise<Response>
             name: session.payload.name,
             // Seconds, so the client can schedule its own expiry handling.
             expiresIn: SESSION_TTL_SECONDS,
+            // Where the page should go now. Signed inside the state, so it
+            // cannot be steered by the callback's query string.
+            returnPath: stateResult.returnPath,
         },
         { status: 200 },
         env,
@@ -1339,6 +1429,215 @@ async function handleDeleteEvent(
 }
 
 /**
+ * `GET /gallery` -- the public gallery manifest.
+ *
+ * Serves the list of images whose bytes are already mirrored, plus a freshness
+ * stamp so the page knows whether to ask for a refresh. Never touches Drive: a
+ * public page view must not spend a Drive API call (see gallerySync.ts).
+ *
+ * A cold or stale manifest is refreshed in the BACKGROUND (`waitUntil`) and the
+ * caller gets whatever is stored right now. Blocking the first visitor on a
+ * full Drive listing would make the page's time-to-first-image depend on
+ * Google, and a Drive outage would render an error where a stale gallery would
+ * have been fine.
+ */
+async function handleGetGalleryManifest(env: Env, ctx: ExecutionContext, now: Date): Promise<Response> {
+    const missing = missingDriveConfig(env);
+    if (missing.length > 0) {
+        // Fail CLOSED but legibly: an unconfigured Worker must not pretend the
+        // gallery is empty, because that reads as "all the photos are gone".
+        // NAMES only -- never values, since this reaches a public response.
+        return jsonResponse(
+            {
+                error: `Gallery is not configured. Missing: ${missing.join(", ")}.`,
+                images: [],
+            },
+            { status: 503, headers: { "Cache-Control": "no-store" } },
+            env,
+        );
+    }
+
+    const manifest = await loadManifest(env);
+    const stale = manifestIsStale(manifest, now);
+    if (stale) {
+        // One refresh per stale read at most; the manifest's own `syncedAt`
+        // throttles it, so a burst of visitors results in a single Drive call.
+        ctx.waitUntil(syncGallery(env, now).catch(() => undefined));
+    }
+
+    return jsonResponse(
+        {
+            syncedAt: manifest?.syncedAt ?? null,
+            images: manifest ? renderableEntries(manifest) : [],
+            // Surfaced so the page can say "N more on the way" rather than
+            // silently showing a shorter gallery than exists in Drive.
+            pending: manifest?.pending.length ?? 0,
+            warning: manifest?.warning ?? null,
+        },
+        { status: 200, headers: { "Cache-Control": "public, max-age=60" } },
+        env,
+    );
+}
+
+/**
+ * `GET /gallery/image/:fileId` -- one mirrored image's bytes.
+ *
+ * Streams from R2 rather than buffering, so a large photo does not occupy the
+ * isolate's memory. The object's stored `contentType` and `cacheControl` are
+ * applied as-is, which is what lets the browser cache an image forever: the key
+ * is a Drive id and ids never change.
+ *
+ * Returns 404 for an id that has not been mirrored yet. That is deliberate --
+ * the manifest only advertises mirrored images, so a 404 here means a stale tab,
+ * not a normal state.
+ */
+async function handleGetGalleryImage(env: Env, fileId: string): Promise<Response> {
+    if (!env.GALLERY_BUCKET) {
+        return jsonResponse({ error: "gallery not configured" }, { status: 503 }, env);
+    }
+    const key = `gallery/${fileId}`;
+    const object = await env.GALLERY_BUCKET.get(key);
+    if (!object) {
+        return jsonResponse({ error: "not found" }, { status: 404 }, env);
+    }
+
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    // The bucket stores these, but a value written by an older version or by
+    // `wrangler r2 object put` may lack them; the fallbacks keep the response
+    // usable rather than serving an unknown-type blob.
+    if (!headers.get("Content-Type")) headers.set("Content-Type", "application/octet-stream");
+    if (!headers.get("Cache-Control")) headers.set("Cache-Control", "public, max-age=31536000, immutable");
+    // An id addresses one immutable object, so a validator is free and makes a
+    // conditional revalidation a 304 instead of a re-download.
+    headers.set("ETag", object.httpEtag);
+    headers.set("Vary", "Origin");
+
+    return new Response(object.body, { status: 200, headers });
+}
+
+/**
+ * `POST /manage/gallery` -- an officer uploads a photo.
+ *
+ * THE PERMISSION CHECK IS THE ONLY GATE. The Drive write uses the service
+ * account's credentials, so Google enforces nothing about the caller -- exactly
+ * the same shape as event creation, and the same reasoning as permissions.ts.
+ * It reuses `canCreateEvents` rather than adding a parallel flag: "may manage
+ * the team's public presence" is one decision, and two flags would drift (see
+ * the note on the session claim).
+ *
+ * The bytes are read ONCE into memory because both Drive and R2 need them and a
+ * Worker request body can only be consumed once. The size ceiling in
+ * `validateGalleryUpload` is what keeps that bounded.
+ */
+async function handleGalleryUpload(env: Env, request: Request, now: Date): Promise<Response> {
+    const auth = await verifySession(env.SESSION_SECRET, bearerToken(request.headers.get("Authorization")));
+    if (!auth.ok) return managementError(env, 401, auth.reason);
+    if (!auth.payload.canCreateEvents) {
+        return managementError(env, 403, "Only officers can add photos.");
+    }
+    if (missingDriveConfig(env).length > 0) {
+        return managementError(env, 503, "The gallery is not configured yet.");
+    }
+
+    let form: FormData;
+    try {
+        form = await request.formData();
+    } catch {
+        return managementError(env, 400, "Expected a multipart form upload.");
+    }
+
+    const candidate = form.get("file");
+    if (!candidate || typeof candidate === "string") {
+        return managementError(env, 400, "No file was included.");
+    }
+
+    // Metadata is validated BEFORE the bytes are read, so an oversized or
+    // wrong-type file is refused without being pulled into memory.
+    const declared = validateGalleryUpload({
+        name: candidate.name,
+        mimeType: candidate.type,
+        size: candidate.size,
+    });
+    if (!declared.ok) return managementError(env, 400, declared.error);
+
+    const bytes = new Uint8Array(await candidate.arrayBuffer());
+    // The declared type comes from the operating system's guess at the
+    // extension, so the bytes get the final say.
+    const sniffed = checkImageBytes(bytes);
+    if (!sniffed.ok) return managementError(env, 400, sniffed.error);
+
+    try {
+        const created = await uploadGalleryImage(
+            env,
+            { name: declared.value.name, mimeType: sniffed.mimeType, bytes },
+            now,
+        );
+        return managementJson(
+            {
+                id: created.id,
+                name: created.name,
+                // `mirrored: false` is not an error: the photo is safely in
+                // Drive and the next sync will publish it. Reporting it lets
+                // the UI say "saved, appearing shortly".
+                mirrored: created.mirrored,
+            },
+            { status: 201 },
+            env,
+        );
+    } catch (err) {
+        const detail = err instanceof Error ? err.message : "The upload failed.";
+        return managementError(env, 502, detail);
+    }
+}
+
+/**
+ * `POST /manage/gallery/sync` -- force a sync now.
+ *
+ * For an operator who has just bulk-copied photos into Drive and does not want
+ * to wait for the cron, and for the CI step that seeds the bucket after a
+ * deploy. Gated by `GALLERY_SYNC_TOKEN` rather than a Discord session so it can
+ * be called from a script with no browser present; an unset token disables the
+ * route entirely (fail closed).
+ */
+async function handleGallerySync(env: Env, request: Request, now: Date): Promise<Response> {
+    const expected = env.GALLERY_SYNC_TOKEN;
+    if (!expected) return managementError(env, 503, "Gallery sync is not enabled.");
+    const provided = bearerToken(request.headers.get("Authorization"));
+    // Constant-time comparison: a length-dependent early exit leaks how much of
+    // a guessed token matched.
+    if (!provided || !timingSafeEqualStrings(provided, expected)) {
+        return managementError(env, 401, "Invalid sync token.");
+    }
+    const result = await syncGallery(env, now);
+    return managementJson(
+        {
+            syncedAt: result.manifest.syncedAt,
+            images: result.manifest.entries.length,
+            mirrored: result.mirrored,
+            deleted: result.deleted,
+            pending: result.manifest.pending.length,
+            warning: result.manifest.warning,
+        },
+        { status: 200 },
+        env,
+    );
+}
+
+/**
+ * Compare two strings without short-circuiting on the first difference.
+ *
+ * Kept local because the manual loop is the whole point -- `===` on a secret is
+ * a timing side channel.
+ */
+function timingSafeEqualStrings(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
+    let diff = 0;
+    for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    return diff === 0;
+}
+
+/**
  * Route table. Each entry maps a normalized pathname to what it serves.
  * `/officers/*` is not a secret: it is an unguessable URL, and anyone who has
  * it can read it.
@@ -1353,7 +1652,11 @@ type RouteEntry =
     | { kind: "audiences" }
     | { kind: "auth-url" }
     | { kind: "auth-callback" | "session" | "create-event"; methods: string[] }
-    | { kind: "delete-event"; methods: string[] };
+    | { kind: "delete-event"; methods: string[] }
+    | { kind: "gallery-manifest" }
+    | { kind: "gallery-image"; methods: string[] }
+    | { kind: "gallery-upload"; methods: string[] }
+    | { kind: "gallery-sync"; methods: string[] };
 
 const ROUTES: Record<string, RouteEntry> = {
     "/events": { kind: "json", audience: "public" },
@@ -1367,6 +1670,13 @@ const ROUTES: Record<string, RouteEntry> = {
     "/manage/auth/callback": { kind: "auth-callback", methods: ["POST"] },
     "/manage/session": { kind: "session", methods: ["GET"] },
     "/manage/events": { kind: "create-event", methods: ["POST"] },
+    // Gallery. The manifest is public and read-only; the upload is officer-only
+    // and lives under `/manage` like the other write routes. `/manage/gallery/sync`
+    // is token-gated rather than session-gated so CI can seed the mirror with no
+    // browser present.
+    "/gallery": { kind: "gallery-manifest" },
+    "/manage/gallery": { kind: "gallery-upload", methods: ["POST"] },
+    "/manage/gallery/sync": { kind: "gallery-sync", methods: ["POST"] },
 };
 
 /**
@@ -1383,11 +1693,35 @@ const ROUTES: Record<string, RouteEntry> = {
  */
 const MANAGE_EVENT_PREFIX = "/manage/events/";
 
+/**
+ * Path prefix for one mirrored gallery image.
+ *
+ * WARNING: The id is validated as part of MATCHING, exactly like the event delete
+ * path, and for the same reason: an unknown path must stay a 404 rather than
+ * answering "method not allowed" (which implies the path is real), and this is
+ * the single place the value is checked before it is used as an R2 key. R2 keys
+ * are flat strings, so an unvalidated suffix could address a different object.
+ */
+const GALLERY_IMAGE_PREFIX = "/gallery/image/";
+
+/**
+ * Drive file ids: alphanumerics, hyphens and underscores.
+ *
+ * WARNING: This is deliberately BROADER than `^[A-Za-z0-9_-]+$` applied to a strict
+ * length. Real Drive ids are 28-44 characters, but a Shared Drive id, an id
+ * copied from a URL, and ids in test fixtures all differ in length. Rejecting a
+ * short-but-legal id would 404 a real image, so only the CHARACTER SET is
+ * enforced here -- which is what actually matters, since this value becomes an
+ * R2 key and a URL path segment. Length is bounded on both ends purely to keep
+ * a pathological key out of the bucket.
+ */
+const DRIVE_FILE_ID = /^[A-Za-z0-9_-]{4,128}$/;
+
 /** Discord snowflake: 15-20 decimal digits. */
 const SNOWFLAKE = /^\d{15,20}$/;
 
-/** Resolve a request path to a route, including the parameterized delete path. */
-function resolveRoute(pathname: string): { entry: RouteEntry; eventId?: string } | null {
+/** Resolve a request path to a route, including the parameterized paths. */
+function resolveRoute(pathname: string): { entry: RouteEntry; eventId?: string; fileId?: string } | null {
     const exact = ROUTES[pathname];
     if (exact) return { entry: exact };
 
@@ -1397,6 +1731,13 @@ function resolveRoute(pathname: string): { entry: RouteEntry; eventId?: string }
         // `/manage/events/not-an-id` are both simply unknown paths.
         if (SNOWFLAKE.test(eventId)) {
             return { entry: { kind: "delete-event", methods: ["DELETE"] }, eventId };
+        }
+    }
+
+    if (pathname.startsWith(GALLERY_IMAGE_PREFIX)) {
+        const fileId = pathname.slice(GALLERY_IMAGE_PREFIX.length);
+        if (DRIVE_FILE_ID.test(fileId)) {
+            return { entry: { kind: "gallery-image", methods: ["GET"] }, fileId };
         }
     }
     return null;
@@ -1419,13 +1760,24 @@ export default {
         if (!resolved) {
             return jsonResponse({ error: "not found" }, { status: 404 }, env);
         }
-        const { entry: route, eventId } = resolved;
+        const { entry: route, eventId, fileId } = resolved;
+        const now = new Date();
 
         // Management routes carry the write-side CORS headers (which allow
         // POST/DELETE + Authorization) and must never be cached. The read routes
         // keep their own header set -- widening theirs would advertise a write
         // surface on endpoints that have none.
-        const isManagement = route.kind !== "json" && route.kind !== "ics" && route.kind !== "audiences";
+        //
+        // WARNING: `gallery-manifest` and `gallery-image` are READ routes and must
+        // stay out of this group. Putting them in would advertise POST/DELETE and
+        // an Authorization header on public image endpoints, and would make the
+        // browser preflight every image request.
+        const isManagement =
+            route.kind !== "json" &&
+            route.kind !== "ics" &&
+            route.kind !== "audiences" &&
+            route.kind !== "gallery-manifest" &&
+            route.kind !== "gallery-image";
 
         if (isManagement) {
             if (method === "OPTIONS") {
@@ -1437,13 +1789,17 @@ export default {
             }
             switch (route.kind) {
                 case "auth-url":
-                    return handleAuthUrl(env);
+                    return handleAuthUrl(env, url);
                 case "auth-callback":
                     return handleAuthCallback(env, request);
                 case "session":
                     return handleGetSession(env, request);
                 case "delete-event":
                     return handleDeleteEvent(env, ctx, request, eventId ?? "");
+                case "gallery-upload":
+                    return handleGalleryUpload(env, request, now);
+                case "gallery-sync":
+                    return handleGallerySync(env, request, now);
                 default:
                     return handleCreateEvent(env, ctx, request);
             }
@@ -1461,9 +1817,45 @@ export default {
                 return handleGetIcs(env, ctx, route.audience, parseChannelFilter(url.searchParams));
             case "audiences":
                 return handleGetAudiences(env);
+            case "gallery-manifest":
+                return handleGetGalleryManifest(env, ctx, now);
+            case "gallery-image":
+                return handleGetGalleryImage(env, fileId ?? "");
             default:
                 return handleGetEvents(env, ctx, route.audience, parseChannelFilter(url.searchParams));
         }
+    },
+
+    /**
+     * Cron entry point: keep the gallery mirror in step with the Drive folder.
+     *
+     * This is what makes "put a photo in Drive and it appears on the site" true
+     * without anyone deploying. Scheduled in wrangler.jsonc.
+     *
+     * WARNING: A cron failure is logged and swallowed. Throwing would surface in the
+     * Workers dashboard as an error on every run for what is usually a
+     * transient Google problem, and the next run repairs it -- the manifest keeps
+     * serving throughout.
+     */
+    async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+        if (missingDriveConfig(env).length > 0) {
+            console.warn("gallery sync skipped: Drive is not configured");
+            return;
+        }
+        ctx.waitUntil(
+            syncGallery(env)
+                .then((result) => {
+                    console.log(
+                        `gallery sync: ${result.manifest.entries.length} images, ` +
+                            `${result.mirrored} mirrored, ${result.deleted} deleted, ` +
+                            `${result.manifest.pending.length} pending` +
+                            (result.manifest.warning ? ` (${result.manifest.warning})` : ""),
+                    );
+                })
+                .catch((err: unknown) => {
+                    console.error(`gallery sync failed: ${err instanceof Error ? err.message : "unknown error"}`);
+                }),
+        );
     },
     // Exported so `wrangler types` picks up the Env shape for editor use.
 } satisfies ExportedHandler<Env>;

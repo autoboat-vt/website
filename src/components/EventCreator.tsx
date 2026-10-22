@@ -4,12 +4,12 @@ import { SUBTEAM_CHANNELS } from "../lib/eventChannels";
 import {
     beginLogin,
     clearSession,
-    completeLogin,
     createEvent,
     loadSession,
     ManageError,
     type ManageSession,
 } from "../lib/eventManage";
+import { completeLoginFromUrl } from "../lib/loginRedirect";
 import { announceDropdownOpen, useCloseOnOtherDropdownOpen } from "./calendarDropdown";
 
 /**
@@ -173,42 +173,40 @@ export default function EventCreator({ onCreated }: EventCreatorProps) {
     /**
      * Finish a login if Discord just redirected back with `?code=`.
      *
-     * The code is single-use and short-lived, so the query string is cleared
-     * immediately -- leaving it in the address bar invites a refresh to replay
-     * a spent code, which fails confusingly.
+     * The exchange itself lives in `loginRedirect.ts` because the gallery page
+     * completes the same flow against its own redirect URI. What stays here is
+     * how the outcome is presented: a refusal becomes the explained `denied`
+     * block, and anything else becomes a one-line error.
      */
     useEffect(() => {
-        const params = new URLSearchParams(globalThis.location.search);
-        const code = params.get("code");
-        const state = params.get("state");
-        if (!code || !state) return;
-
-        params.delete("code");
-        params.delete("state");
-        params.delete("iss");
-        const cleanUrl = `${globalThis.location.pathname}${params.toString() ? `?${params}` : ""}${globalThis.location.hash}`;
-        globalThis.history.replaceState({}, "", cleanUrl);
-
-        setBusy(true);
-        completeLogin(code, state)
-            .then((next) => {
-                setSession(next);
-                setDenied(null);
-                setOpen(true);
-            })
-            .catch((err: unknown) => {
-                // A permission refusal is a explained state (wrong account, or
-                // no officer role) rather than a terse error line.
-                if (err instanceof ManageError && err.remedy !== null) {
-                    setDenied(err);
-                    setOpen(true);
-                    setError(null);
-                } else {
-                    setError(err instanceof ManageError ? err.message : "Login failed. Please try again.");
-                    setOpen(true);
+        const controller = new AbortController();
+        completeLoginFromUrl()
+            .then((result) => {
+                if (controller.signal.aborted) return;
+                switch (result.kind) {
+                    case "success":
+                        setSession(result.session);
+                        setDenied(null);
+                        setOpen(true);
+                        break;
+                    case "denied":
+                        setDenied(result.error);
+                        setOpen(true);
+                        setError(null);
+                        break;
+                    case "failed":
+                        setError(result.message);
+                        setOpen(true);
+                        break;
+                    default:
+                        // No redirect in the URL: nothing to do.
+                        break;
                 }
             })
-            .finally(() => setBusy(false));
+            .finally(() => {
+                if (!controller.signal.aborted) setBusy(false);
+            });
+        return () => controller.abort();
     }, []);
 
     const handleLogin = async () => {

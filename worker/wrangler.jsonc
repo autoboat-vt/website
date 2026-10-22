@@ -14,6 +14,7 @@
         // Not a secret -- anyone in the guild can see this. Fill in after
         // creating the Discord application (see README.md).
         "DISCORD_GUILD_ID": "1017960606403416085",
+
         // Comma-separated allowlist of PUBLIC origins permitted to call this
         // Worker (the response echoes the caller's own Origin when it matches;
         // otherwise no Access-Control-Allow-Origin is sent and the browser
@@ -38,6 +39,7 @@
         // Blank allows nothing (safe). A lone "*" allows every origin, which is
         // a lockdown-off switch; a "*" mixed into a longer list fails closed.
         "ALLOWED_ORIGIN": "https://autoboat.aoe.vt.edu, https://www.autoboat.aoe.vt.edu",
+
         // How long to cache the Discord events payload in KV, in seconds.
         //
         // WARNING: This value is budgeted against the Workers KV FREE TIER, which
@@ -66,6 +68,7 @@
         // Google/Apple/Outlook calendars poll. Keep the website's
         // EVENTS_POLL_INTERVAL_MS in sync (it is only a READ-side concern now).
         "CACHE_TTL_SECONDS": "180",
+
         // OPTIONAL age-based pruning for the event archive, in days. LEFT UNSET
         // ON PURPOSE: the team asked to keep EVERY event, so the default is
         // unbounded retention and the KV key is written with no expiry.
@@ -86,6 +89,7 @@
         // the /calendar.ics feed. Public, non-secret. The /officers feed uses
         // its own default ("AutoBoat Officers") unless this is set.
         "CALENDAR_NAME": "AutoBoat at Virginia Tech",
+
         // Officer-only VOICE CHANNEL id. Events scheduled in this channel are
         // excluded from /events and /calendar.ics, and included only on
         // /officers/*. Every other channel is public. NOT a secret -- anyone in
@@ -100,19 +104,101 @@
         // DEFAULT_OFFICERS_CHANNEL_ID in worker/src/audience.ts.
         // Verify with `curl <worker-url>/audiences`.
         "OFFICERS_CHANNEL_ID": "1550594891766308997",
+
         // Discord application OAuth2 client id, for the "add event" login.
         // PUBLIC -- it appears in the authorize URL the browser visits. Find it
         // in the Discord developer portal -> your application -> OAuth2.
         "DISCORD_CLIENT_ID": "1550968963121283112",
-        // The exact URL Discord redirects back to after login. Must match an
-        // entry in the portal's "Redirects" list CHAR-FOR-CHAR, including the
-        // trailing slash -- Discord shows an error page on a mismatch instead
-        // of a usable message.
+
+        // Where Discord redirects back to after login. COMMA-SEPARATED, and
+        // every entry must be registered in the portal's "Redirects" list
+        // CHAR-FOR-CHAR, including the trailing slash -- Discord shows an error
+        // page on a mismatch instead of a usable message.
         //
-        // The page reads ?code= and POSTs it to /manage/auth/callback, so this
-        // points at the SITE, not the Worker.
-        "OAUTH_REDIRECT_URI": "https://autoboat.aoe.vt.edu/calendar/"
+        // WHY MORE THAN ONE: a login should complete on the page that started
+        // it. The Worker picks the entry whose PATH matches the page requesting
+        // the login (see `redirectUriFor` in src/oauth.ts) and falls back to the
+        // FIRST entry. So `/calendar/` is first because it is the fallback.
+        //
+        // WARNING: The URI is SELECTED from this list, never built from request
+        // input. Constructing one from a path would make any path a redirect
+        // target, and the whole point of the allowlist in oauth.ts is that
+        // nothing outside it can be reached.
+        //
+        // Each page reads ?code= and POSTs it to /manage/auth/callback, so these
+        // point at the SITE, not the Worker.
+        "OAUTH_REDIRECT_URI": "https://autoboat.aoe.vt.edu/calendar/, https://autoboat.aoe.vt.edu/gallery/",
+
+        // --- Gallery (Google Drive -> R2) -----------------------------------
+        //
+        // Id of the Drive folder whose images make up /gallery. PUBLIC: a
+        // folder id is not a capability, because the service account still has
+        // to be granted access.
+        //
+        // WARNING: This folder MUST live in a Shared Drive owned by the VT
+        // Workspace (autoboat@vt.edu), not in anyone's personal My Drive. A
+        // service account has no storage quota and cannot own files, so an
+        // upload into My Drive fails with a quota error. A personal @gmail.com
+        // account cannot create Shared Drives at all.
+        //
+        // Everything DIRECTLY inside this folder that is a displayable image
+        // appears on the page. Subfolders are not traversed. Grab the id from
+        // the folder URL: https://drive.google.com/drive/folders/<ID>
+        "DRIVE_GALLERY_FOLDER_ID": "1ckC3ZTQEMA0P85eiybk_2ngAHv46QqRQ",
+
+        // The service account's client_email, from its JSON key. NOT a secret
+        // (it is an address, and it is the thing the folder is shared with).
+        // The matching private key is the secret:
+        //     wrangler secret put GOOGLE_PRIVATE_KEY
+        "GOOGLE_SERVICE_ACCOUNT_EMAIL": "gallery-sync@gallery-sync-512417.iam.gserviceaccount.com"
+        // OPTIONAL, for the fallback path only. If the VT Workspace plan has no
+        // Shared Drives, set this to a Workspace user to act as, and a super
+        // administrator must authorize the service account's client ID for
+        // domain-wide delegation in the Admin console. Leave blank (the normal
+        // case) when the folder is in a Shared Drive.
+        // "GOOGLE_IMPERSONATE_EMAIL": "",
     },
+    // Cron trigger for the gallery sync.
+    //
+    // WHY A CRON AT ALL: Drive offers no cheap "something changed" signal to a
+    // Worker, and the requirement is that a photo dropped into the folder shows
+    // up on the site with no redeploy. So the folder is polled.
+    //
+    // WHY EVERY 5 MINUTES: this is the worst-case delay for a photo added
+    // through the Drive UI (an upload through the website mirrors immediately
+    // and does not wait). It is deliberately aligned with
+    // MANIFEST_TTL_SECONDS in src/gallerySync.ts, so the cron and a page-driven
+    // refresh do not disagree about what "stale" means.
+    //
+    // WARNING: Each run costs ONE KV write, so 5 minutes is 288 writes/day.
+    // Combined with the events cache (~480/day at a 180s TTL) that is still
+    // well inside the free tier's 1,000 writes/day -- but the two budgets share
+    // the same limit, so do not tighten either without redoing that arithmetic.
+    // A run with nothing new still writes the manifest (to record `syncedAt`),
+    // which is what keeps the cost predictable rather than bursty.
+    "triggers": {
+        "crons": ["*/5 * * * *"]
+    },
+    // R2 bucket holding the mirrored gallery images.
+    //
+    // WARNING: The gallery is served from R2, NOT from Drive. Drive's download
+    // URLs are rate-limited and not meant for embedding, and its API quota is
+    // per-user, so serving a public page from it would start failing under
+    // ordinary traffic. Drive is the archive and the upload target; R2 is the
+    // delivery mirror.
+    //
+    // Create it with:  npx wrangler r2 bucket create autoboat-gallery
+    "r2_buckets": [
+        {
+            "binding": "GALLERY_BUCKET",
+            "bucket_name": "autoboat-gallery"
+        },
+        {
+            "bucket_name": "autoboat-gallery",
+            "binding": "autoboat_gallery",
+            "remote": true
+        }
+    ],
     // Smart placement is recommended for Workers that are latency-sensitive and
     // need to be close to users. This is the case for our Discord events API.
     "placement": {

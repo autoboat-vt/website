@@ -2869,4 +2869,147 @@
     .calendar-add__panel .calendar-add__denied-body {
         color: var(--color-hovercolor);
     }
+
+    /* --- Gallery upload (officer-only control on /gallery) -----------------
+       Mirrors `.calendar-add` deliberately: both are a `.btn--sm` toggle with a
+       panel that drops below it, so an officer meets the same interaction on
+       two pages. The differences are only what the panel contains.
+
+       WARNING: This panel is NOT absolutely positioned. `.calendar-add` lives in
+       a header whose layout it must not disturb, so that panel is absolutely
+       positioned and overlays the page. Here the control sits under the page
+       title in normal flow, and an absolute panel would overlay the first row
+       of photos -- so this one is a static block that pushes content down. */
+    .gallery-upload {
+        position: relative;
+        display: inline-flex;
+    }
+
+    .gallery-upload__toggle {
+        white-space: nowrap;
+    }
+
+    .gallery-upload__panel {
+        position: absolute;
+        top: calc(100% + 0.5rem);
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        z-index: 20;
+        width: min(24rem, calc(100vw - 2rem));
+        padding: 1.125rem 1.25rem 1rem;
+        border: 1px solid var(--color-cardborder);
+        border-radius: 0.875rem;
+        background-color: var(--color-bgcolor);
+        /* The panel is left-aligned form content; the page heading above it is
+           centered, and `text-align` would otherwise be inherited. */
+        text-align: left;
+        box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.35);
+    }
+    .dark .gallery-upload__panel {
+        background-color: #262523;
+        box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.8);
+    }
+
+    /* Doubled-up selector: the panel can sit inside `Card`, whose `.card h3`
+       rule (0,1,1) would otherwise beat a single-class rule and render this
+       title at heading size. Same reasoning as the calendar panels. */
+    .gallery-upload__panel .gallery-upload__title {
+        margin: 0 0 0.5rem;
+        font-family: var(--font-heading);
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--color-fontcolor);
+    }
+
+    .gallery-upload__panel .gallery-upload__intro {
+        margin: 0 0 0.875rem;
+        font-size: 0.875rem;
+        line-height: 1.45;
+        color: var(--color-hovercolor);
+    }
+
+    .gallery-upload__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .gallery-upload__panel .gallery-upload__error,
+    .gallery-upload__panel .gallery-upload__notice {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.375rem;
+        margin: 0.75rem 0 0;
+        font-size: 0.8125rem;
+        line-height: 1.4;
+    }
+    .gallery-upload__panel .gallery-upload__error {
+        color: var(--color-cancelled);
+    }
+    .gallery-upload__panel .gallery-upload__notice {
+        color: var(--color-accent);
+    }
+    /* Decorative icons; keep them from shrinking on a wrapped line. */
+    .gallery-upload__panel .gallery-upload__error svg,
+    .gallery-upload__panel .gallery-upload__notice svg {
+        flex: 0 0 auto;
+        margin-top: 0.1rem;
+    }
+
+    /* Permission refusal: an explained block (who was refused, what to do)
+       rather than a line of red text. */
+    .gallery-upload__denied {
+        display: grid;
+        gap: 0.5rem;
+        justify-items: start;
+        margin-bottom: 0.875rem;
+        padding: 0.75rem 0.875rem;
+        border: 1px solid var(--color-cardborder);
+        border-radius: 0.625rem;
+        background-color: var(--color-card);
+    }
+    .gallery-upload__panel .gallery-upload__denied-title,
+    .gallery-upload__panel .gallery-upload__denied-body {
+        margin: 0;
+        font-size: 0.8125rem;
+        line-height: 1.45;
+    }
+    .gallery-upload__panel .gallery-upload__denied-title {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.375rem;
+        font-weight: 700;
+        color: var(--color-fontcolor);
+    }
+    .gallery-upload__panel .gallery-upload__denied-title svg {
+        flex: 0 0 auto;
+        margin-top: 0.1rem;
+        color: var(--color-cancelled);
+    }
+    .gallery-upload__panel .gallery-upload__denied-body {
+        color: var(--color-hovercolor);
+    }
+
+    /* Status line under the gallery heading: the "N still copying" note and the
+       Drive-loading state. Centered to match the heading block.
+
+       NOTE: the spinner's rotation comes from Tailwind's `animate-spin` on the
+       <svg>, not from a rule here -- this file defines no `spin` keyframes, and
+       a local `@keyframes` would duplicate what the framework already emits. */
+    .gallery-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        margin: 1rem 0 0;
+        font-size: 0.8125rem;
+        line-height: 1.4;
+        color: var(--color-hovercolor);
+    }
+    .gallery-status--error {
+        color: var(--color-cancelled);
+    }
+    .gallery-status svg {
+        flex: 0 0 auto;
+    }
 }
