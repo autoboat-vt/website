@@ -17,12 +17,9 @@
 import {
     buildManifest,
     type GalleryEntry,
-    type GalleryManifest,
     MAX_ORDERED_IDS,
     mirrorKey,
-    moveInOrder,
     parseOrder,
-    reorderableIds,
     serializeOrder,
     sortEntriesByOrder,
 } from "../../../worker/src/gallery";
@@ -148,47 +145,5 @@ describe("serializeOrder", () => {
     it("caps the list at the safety ceiling", () => {
         const many = Array.from({ length: MAX_ORDERED_IDS + 10 }, (_, i) => `id-${i}`);
         expect(serializeOrder(many, NOW).ids).toHaveLength(MAX_ORDERED_IDS);
-    });
-});
-
-describe("moveInOrder", () => {
-    it("moves an item earlier", () => {
-        expect(moveInOrder(["a", "b", "c"], 2, 0)).toEqual(["c", "a", "b"]);
-    });
-
-    it("moves an item later", () => {
-        expect(moveInOrder(["a", "b", "c"], 0, 2)).toEqual(["b", "c", "a"]);
-    });
-
-    it("returns an unchanged copy for a no-op move", () => {
-        const current = ["a", "b"];
-        const next = moveInOrder(current, 1, 1);
-        expect(next).toEqual(["a", "b"]);
-        // A new array, so a caller cannot accidentally mutate the input.
-        expect(next).not.toBe(current);
-    });
-
-    it("clamps out-of-range indices instead of throwing", () => {
-        // The list can change between the render that produced the click and the
-        // request carrying it.
-        expect(moveInOrder(["a", "b"], 5, 0)).toEqual(["b", "a"]);
-        expect(moveInOrder(["a", "b"], 0, 99)).toEqual(["b", "a"]);
-    });
-
-    it("handles an empty list", () => {
-        expect(moveInOrder([], 0, 1)).toEqual([]);
-    });
-});
-
-describe("reorderableIds", () => {
-    it("lists only visible photos, in display order", () => {
-        const manifest = buildManifest(FILES, MIRRORED, null, NOW, new Set(["bravo"]), ["charlie", "alpha", "bravo"]);
-        expect(reorderableIds(manifest)).toEqual(["charlie", "alpha"]);
-    });
-
-    it("excludes photos whose bytes are not mirrored yet", () => {
-        // They are not on the page, so arranging them would be invisible work.
-        const manifest: GalleryManifest = buildManifest(FILES, new Set([mirrorKey("alpha")]), null, NOW);
-        expect(reorderableIds(manifest)).toEqual(["alpha"]);
     });
 });

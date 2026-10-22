@@ -339,41 +339,6 @@ export async function setPhotoHidden(session: ManageSession, fileId: string, hid
 }
 
 /**
- * The photos an officer can reorder, in their current display order.
- *
- * Fetched rather than derived from the public manifest because the panel needs
- * human-readable names, and because the manifest the page holds may be a moment
- * behind. Officer-only.
- */
-export async function fetchGalleryOrder(session: ManageSession): Promise<GalleryImage[]> {
-    const url = `${MANAGE_GALLERY_URL}/order`;
-    let res: Response;
-    try {
-        res = await fetch(url, {
-            headers: { Authorization: `Bearer ${session.token}` },
-            cache: "no-store",
-        });
-    } catch (err) {
-        throw await describeFetchFailure(url, err);
-    }
-
-    if (!res.ok) {
-        const galleryError = await errorFrom(res);
-        if (res.status === 401 || res.status === 403) {
-            throw new ManageError(galleryError.message, res.status, {
-                reason: res.status === 403 ? "missing-role" : null,
-                needsRole: res.status === 403,
-            });
-        }
-        throw galleryError;
-    }
-
-    const body = (await res.json()) as Record<string, unknown>;
-    const images = Array.isArray(body.images) ? body.images.filter(isGalleryImage) : [];
-    return images.map(toGalleryImage);
-}
-
-/**
  * Save the display order.
  *
  * WARNING: The list is sent WHOLE -- it is an assertion about the intended order, not

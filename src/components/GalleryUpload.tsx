@@ -1,28 +1,12 @@
-import {
-    AlertCircle,
-    ArrowUpDown,
-    Check,
-    ChevronDown,
-    ChevronUp,
-    EyeOff,
-    GripVertical,
-    ImagePlus,
-    Loader2,
-    LogIn,
-    LogOut,
-    RotateCcw,
-    UserKey,
-} from "lucide-react";
+import { AlertCircle, Check, EyeOff, ImagePlus, Loader2, LogIn, LogOut, RotateCcw, UserKey } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { beginLogin, clearSession, loadSession, ManageError, type ManageSession } from "../lib/eventManage";
 import {
     ACCEPT_ATTRIBUTE,
     type GalleryImage as DriveImage,
-    fetchGalleryOrder,
     fetchHiddenPhotos,
     GalleryError,
     galleryImageUrl,
-    saveGalleryOrder,
     setPhotoHidden,
     uploadImage,
     validateFileLocally,
@@ -133,201 +117,6 @@ function RemovedPhotos({
         </section>
     );
 }
-
-/**
- * The reorder list: drag to move, or use the arrow buttons.
- *
- * WHY BOTH. Native HTML5 drag-and-drop does not fire on touch devices at all --
- * `dragstart` simply never happens on a phone -- so drag alone would make the
- * list unusable on mobile, which is where officers are most likely to be. The
- * buttons are therefore not a redundant nicety: they are the touch path AND the
- * keyboard path (a `<li>` with `draggable` is not focusable and cannot be
- * dragged from the keyboard). Keeping them also means the list degrades to
- * something usable if a browser suppresses drag.
- *
- * WHY IT SAVES ON EVERY MOVE rather than behind a Save button: the alternative
- * is an officer making several moves and losing them by closing the panel, and
- * "unsaved changes" is a state nobody asked for. Each move writes the full order,
- * which is idempotent, so a retry after a failure is safe.
- */
-function ReorderPhotos({
-    session,
-    photos,
-    onChanged,
-}: {
-    session: ManageSession;
-    photos: DriveImage[];
-    onChanged: () => void;
-}) {
-    const [order, setOrder] = useState<DriveImage[]>(photos);
-    const [busy, setBusy] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    /** Index being dragged, or null. */
-    const [dragIndex, setDragIndex] = useState<number | null>(null);
-    /** Index the dragged row is currently hovering over, for the drop indicator. */
-    const [overIndex, setOverIndex] = useState<number | null>(null);
-    const headingId = useId();
-
-    // The parent refetches the list when something else changes (an upload, a
-    // restore), so the local copy has to follow or the panel shows a stale order.
-    useEffect(() => {
-        setOrder(photos);
-    }, [photos]);
-
-    if (photos.length < 2) return null;
-
-    /** Persist a new local order, rolling back on failure. */
-    const persist = async (next: DriveImage[]) => {
-        const previous = order;
-        // Optimistic: apply locally first so the move feels immediate.
-        setOrder(next);
-        setBusy(true);
-        setError(null);
-        try {
-            await saveGalleryOrder(
-                session,
-                next.map((image) => image.id),
-            );
-            // The page's grid has to follow, or the panel and the gallery
-            // disagree about the order.
-            onChanged();
-        } catch (err) {
-            setOrder(previous);
-            setError(err instanceof Error ? err.message : "Could not save the new order.");
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    /** Move the row at `from` to position `to`. */
-    const moveTo = (from: number, to: number) => {
-        if (busy) return;
-        if (from === to) return;
-        if (from < 0 || from >= order.length || to < 0 || to >= order.length) return;
-
-        const next = [...order];
-        const [moved] = next.splice(from, 1);
-        if (moved === undefined) return;
-        next.splice(to, 0, moved);
-        void persist(next);
-    };
-
-    return (
-        <section className="gallery-upload__reorder" aria-labelledby={headingId}>
-            <h4 className="gallery-upload__reorder-title" id={headingId}>
-                <ArrowUpDown size={14} aria-hidden="true" />
-                Photo order
-            </h4>
-            <p className="gallery-upload__reorder-note">
-                Drag a photo to reposition it, or use the arrows. First photo appears first on the page; new uploads are
-                added at the end.
-            </p>
-            <ol className="gallery-upload__reorder-list">
-                {order.map((image, index) => {
-                    const isDragging = dragIndex === index;
-                    // Only show a drop line where the drop would actually change
-                    // something -- not on the row being dragged, and not when the
-                    // target is where it already is.
-                    const isDropTarget = overIndex === index && dragIndex !== null && dragIndex !== index;
-                    return (
-                        <li
-                            key={image.id}
-                            className={[
-                                "gallery-upload__reorder-item",
-                                isDragging ? "is-dragging" : "",
-                                isDropTarget ? "is-drop-target" : "",
-                            ]
-                                .filter(Boolean)
-                                .join(" ")}
-                            draggable={!busy}
-                            onDragStart={(event) => {
-                                setDragIndex(index);
-                                setError(null);
-                                // Firefox refuses to start a drag unless some data
-                                // is set, and `effectAllowed` is what makes the
-                                // cursor read as "move" rather than "copy".
-                                event.dataTransfer.effectAllowed = "move";
-                                event.dataTransfer.setData("text/plain", image.id);
-                            }}
-                            onDragOver={(event) => {
-                                // preventDefault is what marks this row as a valid
-                                // drop target; without it `drop` never fires.
-                                event.preventDefault();
-                                event.dataTransfer.dropEffect = "move";
-                                // Guarded so the state is only set when the target
-                                // actually changes -- `dragover` fires repeatedly
-                                // and unguarded setState here causes a re-render
-                                // storm while the pointer moves.
-                                if (overIndex !== index) setOverIndex(index);
-                            }}
-                            onDrop={(event) => {
-                                event.preventDefault();
-                                if (dragIndex !== null) moveTo(dragIndex, index);
-                                setDragIndex(null);
-                                setOverIndex(null);
-                            }}
-                            onDragEnd={() => {
-                                // Always clear, including on a cancelled drag
-                                // (dropped outside the list, or Escape).
-                                setDragIndex(null);
-                                setOverIndex(null);
-                            }}
-                        >
-                            {/* Drag affordance. Decorative: the row itself is the
-                                draggable element and the buttons are the
-                                accessible path, so this must not be announced. */}
-                            <span className="gallery-upload__reorder-grip" aria-hidden="true">
-                                <GripVertical size={14} />
-                            </span>
-                            <img
-                                src={galleryImageUrl(image.id)}
-                                alt=""
-                                loading="lazy"
-                                /* The browser's own drag image is the whole row,
-                                   which is a tall strip. A plain image preview is
-                                   easier to aim with. */
-                                className="gallery-upload__reorder-thumb"
-                            />
-                            <span className="gallery-upload__reorder-name">
-                                <span className="gallery-upload__reorder-index">{index + 1}.</span> {image.name}
-                            </span>
-                            <div className="gallery-upload__reorder-actions">
-                                <button
-                                    type="button"
-                                    className="btn btn--sm gallery-upload__reorder-btn"
-                                    onClick={() => moveTo(index, index - 1)}
-                                    disabled={index === 0 || busy}
-                                    // The visible glyph is a caret; the accessible
-                                    // name has to say WHICH photo moves, because
-                                    // "Move up" alone is meaningless out of context.
-                                    aria-label={`Move ${image.name} earlier`}
-                                >
-                                    <ChevronUp size={14} aria-hidden="true" />
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn btn--sm gallery-upload__reorder-btn"
-                                    onClick={() => moveTo(index, index + 1)}
-                                    disabled={index === order.length - 1 || busy}
-                                    aria-label={`Move ${image.name} later`}
-                                >
-                                    <ChevronDown size={14} aria-hidden="true" />
-                                </button>
-                            </div>
-                        </li>
-                    );
-                })}
-            </ol>
-            {error && (
-                <p className="gallery-upload__error" role="alert">
-                    <AlertCircle size={14} aria-hidden="true" />
-                    {error}
-                </p>
-            )}
-        </section>
-    );
-}
-
 export default function GalleryUpload({ onUploaded }: GalleryUploadProps) {
     const [session, setSession] = useState<ManageSession | null>(() => loadSession());
     const [open, setOpen] = useState(false);
@@ -350,8 +139,6 @@ export default function GalleryUpload({ onUploaded }: GalleryUploadProps) {
      * "something changed" signal so the page's grid refreshes too.
      */
     const [hidden, setHidden] = useState<DriveImage[]>([]);
-    /** The visible photos, in display order, for the reorder list. */
-    const [ordered, setOrdered] = useState<DriveImage[]>([]);
     const panelId = useId();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -361,7 +148,6 @@ export default function GalleryUpload({ onUploaded }: GalleryUploadProps) {
     const reloadHidden = useCallback(async (current: ManageSession | null) => {
         if (!current) {
             setHidden([]);
-            setOrdered([]);
             return;
         }
         try {
@@ -369,12 +155,6 @@ export default function GalleryUpload({ onUploaded }: GalleryUploadProps) {
         } catch {
             // A failed read leaves the list as it was rather than claiming
             // nothing is removed, which would look like the photos came back.
-        }
-        try {
-            setOrdered(await fetchGalleryOrder(current));
-        } catch {
-            // Same reasoning: a stale list is better than an empty one, which
-            // would read as "the gallery has no photos".
         }
     }, []);
 
@@ -623,17 +403,6 @@ export default function GalleryUpload({ onUploaded }: GalleryUploadProps) {
                                     {error}
                                 </p>
                             )}
-
-                            {/* Renders nothing when there is nothing to reorder
-                                (fewer than two visible photos). */}
-                            <ReorderPhotos
-                                session={session}
-                                photos={ordered}
-                                onChanged={() => {
-                                    void reloadHidden(session);
-                                    onUploaded?.();
-                                }}
-                            />
 
                             {/* Renders nothing when the list is empty, so the
                                 panel does not grow a permanently-empty section. */}

@@ -120,10 +120,10 @@ NOTE: The hide route costs two KV writes (the hidden set, then the manifest). Bo
 ## Reordering photos
 
 A signed-in officer drags photos **directly on the grid** -- no panel to open.
-The same order is also editable from the **Photo order** list in the Add photos
-panel, which remains the touch and keyboard path.
+This is the ONLY reorder UI; the panel used to carry a duplicate drag list and it
+was removed.
 
-WARNING: **The arrow buttons in the panel are NOT redundant with drag, and must not be removed as "duplicate UI".** Native HTML5 drag-and-drop does not fire on touch devices at all (`dragstart` never happens on a phone), and a `draggable` `<button>` is not draggable from the keyboard. Drag is the convenience; the buttons are the touch and keyboard path.
+WARNING: **Native HTML5 drag does not fire on touch devices** (`dragstart` never happens on a phone), and a `draggable` `<button>` cannot be dragged from the keyboard. Reordering is therefore desktop-pointer-only today. There is no button fallback -- that went with the panel list, and restoring one means either a touch-capable drag implementation or a per-tile move control on the grid.
 
 WARNING: **A drag is usually followed by a `click`, which would pop the lightbox for the photo just moved.** `dragEnd` clears the drag state BEFORE that click runs, so an `if (dragKey) return` guard is dead code -- it passes in a test that fires `click` by hand but not in a real browser. The guard is a timestamp (`lastDragEndRef`, 250ms window). A ref, not state: it would otherwise re-render the grid on every drag for a value only the click handler reads. `Gallery.test.tsx` pins it.
 

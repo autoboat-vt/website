@@ -698,9 +698,10 @@ WARNING: **Drive is never contacted while rendering the page.** A public page vi
 
 By default the gallery is newest-first. A signed-in officer can change it by
 **dragging a photo on the gallery grid itself** -- the change saves immediately.
-The same order is editable from the **Photo order** list in the **Add photos**
-panel, which is the touch and keyboard path (native drag does not fire on touch
-devices).
+
+NOTE: Drag is desktop-pointer-only. Native HTML5 drag does not fire on touch
+devices, so reordering cannot be done from a phone today. There is no button
+fallback (the panel list that used to provide one was removed as duplicate UI).
 
 ```bash
 # Current order (visible photos only).

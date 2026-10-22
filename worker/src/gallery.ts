@@ -425,44 +425,6 @@ export function serializeOrder(ids: readonly string[], now: Date): OrderList {
 }
 
 /**
- * The order an officer gets by moving one photo.
- *
- * `current` is the full display order as the officer sees it, so moving a photo
- * also PINS every other photo it passed -- that is what "the order I arranged"
- * means, and it is why the panel sends the whole visible sequence rather than a
- * (from, to) pair. A pair would be ambiguous the moment someone else uploaded a
- * photo between the two requests.
- *
- * Returns the reordered list unchanged in length; out-of-range indices are
- * clamped rather than throwing, because the list can change between the render
- * that produced the click and the request that carries it.
- */
-export function moveInOrder(current: readonly string[], from: number, to: number): string[] {
-    if (current.length === 0) return [];
-    const clampedFrom = Math.max(0, Math.min(from, current.length - 1));
-    const clampedTo = Math.max(0, Math.min(to, current.length - 1));
-    if (clampedFrom === clampedTo) return [...current];
-
-    const next = [...current];
-    const [moved] = next.splice(clampedFrom, 1);
-    if (moved === undefined) return [...current];
-    next.splice(clampedTo, 0, moved);
-    return next;
-}
-
-/**
- * Order the ids an officer can actually see, for the reorder list.
- *
- * Only visible entries are offered: reordering a HIDDEN photo would be invisible
- * work. When one is restored it lands at the end of the custom order, which is
- * the honest place for it -- nobody arranged a position for it while it was off
- * the page.
- */
-export function reorderableIds(manifest: GalleryManifest): string[] {
-    return renderableEntries(manifest).map((entry) => entry.id);
-}
-
-/**
  * Parse a stored manifest, tolerating anything unrecognisable.
  *
  * Returns null rather than throwing: a corrupt or pre-gallery KV value must
