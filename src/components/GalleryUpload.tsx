@@ -1,12 +1,27 @@
-import { AlertCircle, Check, EyeOff, ImagePlus, Loader2, LogIn, LogOut, RotateCcw, UserKey } from "lucide-react";
+import {
+    AlertCircle,
+    ArrowUpDown,
+    Check,
+    ChevronDown,
+    ChevronUp,
+    EyeOff,
+    ImagePlus,
+    Loader2,
+    LogIn,
+    LogOut,
+    RotateCcw,
+    UserKey,
+} from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { beginLogin, clearSession, loadSession, ManageError, type ManageSession } from "../lib/eventManage";
 import {
     ACCEPT_ATTRIBUTE,
     type GalleryImage as DriveImage,
+    fetchGalleryOrder,
     fetchHiddenPhotos,
     GalleryError,
     galleryImageUrl,
+    saveGalleryOrder,
     setPhotoHidden,
     uploadImage,
     validateFileLocally,
@@ -118,6 +133,129 @@ function RemovedPhotos({
     );
 }
 
+/**
+ * The reorder list.
+ *
+ * WHY BUTTONS AND NOT DRAG-AND-DROP: a drag handle is unusable with a keyboard
+ * and invisible to a screen reader, and this list has to work on a phone where a
+ * drag also fights the page scroll. Move up/down buttons are operable by every
+ * input method and announce their effect directly.
+ *
+ * WHY IT SAVES ON EVERY MOVE rather than behind a Save button: the alternative
+ * is an officer making several moves and losing them by closing the panel, and
+ * "unsaved changes" is a state nobody asked for. Each move writes the full order,
+ * which is idempotent, so a retry after a failure is safe.
+ */
+function ReorderPhotos({
+    session,
+    photos,
+    onChanged,
+}: {
+    session: ManageSession;
+    photos: DriveImage[];
+    onChanged: () => void;
+}) {
+    const [order, setOrder] = useState<DriveImage[]>(photos);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const headingId = useId();
+
+    // The parent refetches the list when something else changes (an upload, a
+    // restore), so the local copy has to follow or the panel shows a stale order.
+    useEffect(() => {
+        setOrder(photos);
+    }, [photos]);
+
+    if (photos.length < 2) return null;
+
+    const move = async (index: number, delta: number) => {
+        const target = index + delta;
+        if (target < 0 || target >= order.length || busy) return;
+
+        const next = [...order];
+        const [moved] = next.splice(index, 1);
+        if (moved === undefined) return;
+        next.splice(target, 0, moved);
+
+        // Optimistic: apply locally first so the button feels immediate, then
+        // roll back if the write fails.
+        const previous = order;
+        setOrder(next);
+        setBusy(true);
+        setError(null);
+        try {
+            await saveGalleryOrder(
+                session,
+                next.map((image) => image.id),
+            );
+            // The page's grid has to follow, or the panel and the gallery
+            // disagree about the order.
+            onChanged();
+        } catch (err) {
+            setOrder(previous);
+            setError(err instanceof Error ? err.message : "Could not save the new order.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <section className="gallery-upload__reorder" aria-labelledby={headingId}>
+            <h4 className="gallery-upload__reorder-title" id={headingId}>
+                <ArrowUpDown size={14} aria-hidden="true" />
+                Photo order
+            </h4>
+            <p className="gallery-upload__reorder-note">
+                First photo appears first on the page. New uploads are added at the end.
+            </p>
+            <ol className="gallery-upload__reorder-list">
+                {order.map((image, index) => (
+                    <li key={image.id} className="gallery-upload__reorder-item">
+                        <img
+                            src={galleryImageUrl(image.id)}
+                            alt=""
+                            loading="lazy"
+                            className="gallery-upload__reorder-thumb"
+                        />
+                        <span className="gallery-upload__reorder-name">
+                            <span className="gallery-upload__reorder-index">{index + 1}.</span> {image.name}
+                        </span>
+                        <div className="gallery-upload__reorder-actions">
+                            <button
+                                type="button"
+                                className="btn btn--sm gallery-upload__reorder-btn"
+                                onClick={() => move(index, -1)}
+                                disabled={index === 0 || busy}
+                                // The visible glyph is a caret; the accessible
+                                // name has to say WHICH photo moves, because
+                                // "Move up" alone is meaningless out of context.
+                                aria-label={`Move ${image.name} earlier`}
+                            >
+                                <ChevronUp size={14} aria-hidden="true" />
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn--sm gallery-upload__reorder-btn"
+                                onClick={() => move(index, 1)}
+                                disabled={index === order.length - 1 || busy}
+                                aria-label={`Move ${image.name} later`}
+                            >
+                                <ChevronDown size={14} aria-hidden="true" />
+                            </button>
+                        </div>
+                    </li>
+                ))}
+            </ol>
+            {error && (
+                <p className="gallery-upload__error" role="alert">
+                    <AlertCircle size={14} aria-hidden="true" />
+                    {error}
+                </p>
+            )}
+        </section>
+    );
+}
+
 export default function GalleryUpload({ onUploaded }: GalleryUploadProps) {
     const [session, setSession] = useState<ManageSession | null>(() => loadSession());
     const [open, setOpen] = useState(false);
@@ -140,6 +278,8 @@ export default function GalleryUpload({ onUploaded }: GalleryUploadProps) {
      * "something changed" signal so the page's grid refreshes too.
      */
     const [hidden, setHidden] = useState<DriveImage[]>([]);
+    /** The visible photos, in display order, for the reorder list. */
+    const [ordered, setOrdered] = useState<DriveImage[]>([]);
     const panelId = useId();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -149,6 +289,7 @@ export default function GalleryUpload({ onUploaded }: GalleryUploadProps) {
     const reloadHidden = useCallback(async (current: ManageSession | null) => {
         if (!current) {
             setHidden([]);
+            setOrdered([]);
             return;
         }
         try {
@@ -156,6 +297,12 @@ export default function GalleryUpload({ onUploaded }: GalleryUploadProps) {
         } catch {
             // A failed read leaves the list as it was rather than claiming
             // nothing is removed, which would look like the photos came back.
+        }
+        try {
+            setOrdered(await fetchGalleryOrder(current));
+        } catch {
+            // Same reasoning: a stale list is better than an empty one, which
+            // would read as "the gallery has no photos".
         }
     }, []);
 
@@ -404,6 +551,17 @@ export default function GalleryUpload({ onUploaded }: GalleryUploadProps) {
                                     {error}
                                 </p>
                             )}
+
+                            {/* Renders nothing when there is nothing to reorder
+                                (fewer than two visible photos). */}
+                            <ReorderPhotos
+                                session={session}
+                                photos={ordered}
+                                onChanged={() => {
+                                    void reloadHidden(session);
+                                    onUploaded?.();
+                                }}
+                            />
 
                             {/* Renders nothing when the list is empty, so the
                                 panel does not grow a permanently-empty section. */}

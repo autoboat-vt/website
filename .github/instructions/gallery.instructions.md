@@ -1,6 +1,6 @@
 ---
-description: "Use when working on the gallery upload flow: the Google Drive folder sync, the R2 mirror, the officer upload UI, the service-account credentials, or the gallery manifest. Covers why Drive is the source of truth and R2 the delivery mirror, the reconciliation rules in gallery.ts, the sync batch limits, HEIC rejection, the two registered OAuth redirect URIs, and the gallery test suites."
-applyTo: "worker/src/{googleAuth,drive,gallery,gallerySync,galleryUpload}.ts, src/lib/{galleryClient,galleryView,loginRedirect}.ts, src/components/GalleryUpload.tsx, src/pages/Gallery.tsx, worker/wrangler.jsonc, src/test/{lib,worker,pages,components}/*gallery*.test.ts, src/test/worker/galleryRoutes.test.ts, src/test/worker/oauthRedirect.test.ts"
+description: "Use when working on the gallery: the Google Drive folder sync, the R2 mirror, the officer upload UI, hiding/restoring a photo, ordering the photos, the service-account credentials, or the gallery manifest. Covers why Drive is the source of truth and R2 the delivery mirror, the reconciliation rules in gallery.ts, the sync batch limits, HEIC rejection, the two registered OAuth redirect URIs, and the gallery test suites."
+applyTo: "worker/src/{googleAuth,drive,gallery,gallerySync,galleryUpload}.ts, src/lib/{galleryClient,galleryView,loginRedirect}.ts, src/components/{GalleryUpload,ImageModal}.tsx, src/pages/Gallery.tsx, worker/wrangler.jsonc, src/test/{lib,worker,pages,components}/*gallery*.test.ts, src/test/worker/galleryRoutes.test.ts, src/test/worker/oauthRedirect.test.ts"
 ---
 
 # Gallery: Google Drive -> R2 -> the website
@@ -97,6 +97,8 @@ WARNING: **Subfolders are not traversed.** Only direct children of the configure
 | `POST /manage/gallery` | officer session | Writes Drive, then mirrors. |
 | `PATCH /manage/gallery/{id}` | officer session | Hides or restores one photo. |
 | `GET /manage/gallery/hidden` | officer session | The removed photos, for restore. |
+| `GET /manage/gallery/order` | officer session | Visible photos, in display order. |
+| `PUT /manage/gallery/order` | officer session | Sets the display order. |
 | `POST /manage/gallery/sync` | `GALLERY_SYNC_TOKEN` | For CI or an operator. |
 
 ## Hiding a photo does NOT delete it
@@ -114,6 +116,26 @@ WARNING: **`hidden` is a strict `=== true` when parsing** (in both `parseManifes
 NOTE: Hidden photos stay MIRRORED on purpose: the restore list shows their thumbnail, and restoring is then instant rather than "reappears after the next sync". The delete sweep only removes bytes for files that left DRIVE, so a hidden photo is never swept.
 
 NOTE: The hide route costs two KV writes (the hidden set, then the manifest). Both are officer-initiated and rare, so the read path's one-write-per-miss budget is untouched.
+
+## Reordering photos
+
+Officers arrange the display order from the **Photo order** list in the Add
+photos panel: each row has move-earlier / move-later buttons, and every move
+saves immediately.
+
+WARNING: **The order lives on its OWN KV key (`gallery:order:v1`)**, exactly like the hidden set, and `syncGallery` must load it and pass it to `buildManifest`. The manifest is rebuilt from Drive on every cron run, so an order stored only there reverts to newest-first within five minutes. `galleryOrderSync.test.ts` pins that wiring.
+
+WARNING: **A partial order is normal, not a bug.** Ids are not pruned when a photo leaves Drive, and a photo uploaded after the order was set is not in the list at all. `sortEntriesByOrder` therefore puts listed ids first in their given sequence and appends everything else in the default newest-first order. Do not "fix" this by dropping unlisted photos -- that would silently hide every new upload.
+
+WARNING: **The whole sequence is sent, not a single move.** A `(from, to)` pair is ambiguous once another officer can upload between the render and the request; sending the full list means "this is the order", which is idempotent and safe to retry. `moveInOrder` exists only as the pure helper for computing that list on the client side.
+
+WARNING: **`sortEntriesByOrder` builds a `Map` of ranks rather than calling `indexOf` per comparison.** With `indexOf` the comparator does an O(n) scan on every comparison, making the sort O(n^2 log n) on a large gallery.
+
+NOTE: Each move costs two KV writes (the order, then the manifest) on an officer-initiated path. The read path's one-write-per-miss budget is untouched.
+
+NOTE: The list is buttons, not drag-and-drop: a drag handle is unusable by keyboard and invisible to a screen reader, and it fights page scrolling on a phone. Each button's `aria-label` names the photo (`Move <name> earlier`) because "Move up" alone is meaningless out of context.
+
+NOTE: Hidden photos are excluded from the reorder list -- arranging a position for one would be invisible work. A restored photo lands at the end of the custom order.
 
 ## The committed gallery folder is gone
 
@@ -157,6 +179,9 @@ mean one copy eventually replays a spent code.
 - `src/test/worker/galleryUpload.test.ts` -- magic-byte sniffing per format, HEIC identification, filename sanitizing, size/type limits, and that the limit stays under Drive's ceiling.
 - `src/test/worker/galleryRoutes.test.ts` -- the auth gate (unauthenticated, forged, member, expired), the HEIC message end to end, public-vs-management CORS, and the return-path allowlist.
 - `src/test/worker/oauthRedirect.test.ts` -- `resolveReturnPath`, `parseRedirectUris`, `redirectUriFor` selection and fallback.
+- `src/test/worker/galleryOrder.test.ts` -- the pure ordering rule: listed ids first, unlisted appended newest-first, stale ids harmless, first-occurrence-wins for duplicates, `moveInOrder` clamping, `parseOrder` tolerance.
+- `src/test/worker/galleryOrderSync.test.ts` -- the WIRING, through `syncGallery` with the Drive client mocked. Removing the `loadOrder` call fails this file while every pure ordering test stays green.
+- `src/test/worker/galleryOrderRoutes.test.ts` -- the order endpoints: auth, body validation (non-array and non-string entries both 400), the immediate manifest re-sort, and that `/manage/gallery/order` is claimed before the `{id}` route.
 - `src/test/lib/galleryView.test.ts` -- merge order, dedupe by src, alt text from filenames, status wording.
 
 WARNING: **The `DRIVE_FILE_ID` check must accept short ids.** It was `{10,128}` and every image-route test 404'd; real Drive ids are 28-44 chars but a fixture or a Shared Drive id can be shorter, and only the CHARACTER SET actually matters because the value becomes an R2 key and a path segment.

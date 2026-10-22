@@ -59,6 +59,8 @@ keeps everything, exactly as before.
 | `POST /manage/gallery` | Uploads a photo to Drive and mirrors it. **Officers only.** |
 | `PATCH /manage/gallery/{id}` | Hides or restores a photo. **Officers only.** Nothing is deleted. |
 | `GET /manage/gallery/hidden` | The photos an officer has removed. **Officers only.** |
+| `GET /manage/gallery/order` | The visible photos, in their current display order. **Officers only.** |
+| `PUT /manage/gallery/order` | Sets the display order. **Officers only.** |
 | `POST /manage/gallery/sync` | Forces a Drive sync. Token-gated, for CI or an operator. |
 
 ## Creating events from the website
@@ -691,6 +693,28 @@ mirror.
   "Removing a photo" below.
 
 WARNING: **Drive is never contacted while rendering the page.** A public page view reads the manifest from KV and the bytes from R2 only. Blocking a visitor on a Drive call would make load time depend on Google and would burn the Drive quota on ordinary traffic.
+
+### Ordering the photos
+
+By default the gallery is newest-first. An officer can arrange it instead: open
+**Add photos** and use the **Photo order** list, where each row has move-earlier
+and move-later buttons. Every move saves immediately.
+
+```bash
+# Current order (visible photos only).
+curl <worker-url>/manage/gallery/order -H "Authorization: Bearer <session>"
+
+# Set it. The whole sequence, first photo most prominent.
+curl -X PUT <worker-url>/manage/gallery/order \
+  -H "Authorization: Bearer <session>" -H "Content-Type: application/json" \
+  -d '{"ids": ["<driveId>", "<driveId>"]}'
+```
+
+WARNING: **The order is stored on its own KV key (`gallery:order:v1`), not in the manifest.** The manifest is rebuilt from Drive every 5 minutes, so an order kept only there would revert to newest-first on the next cron run.
+
+NOTE: A partial list is fine. Ids that no longer match a photo are ignored, and any photo not named keeps its default place *after* the ones that are -- so a new upload appears at the end and never displaces something you arranged. That is why you do not have to reorder after every upload.
+
+NOTE: Hiding a photo does not change the order. A photo restored from the removed list reappears at the end of the custom order.
 
 ### Removing a photo
 

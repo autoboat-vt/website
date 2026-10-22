@@ -30,9 +30,12 @@ import {
     mirrorKey,
     parseHiddenList,
     parseManifest,
+    parseOrder,
     removeEntry,
     serializeHiddenList,
+    serializeOrder,
     setEntryHidden,
+    sortEntriesByOrder,
     withHidden,
 } from "./gallery";
 import { getAccessToken, serviceAccountConfigFromEnv } from "./googleAuth";
@@ -54,6 +57,19 @@ export const GALLERY_KV_KEY = "gallery:manifest:v1";
  * costs no KV budget on the read or sync path.
  */
 export const GALLERY_HIDDEN_KV_KEY = "gallery:hidden:v1";
+
+/**
+ * KV key for the officer-chosen display order.
+ *
+ * WARNING: A SEPARATE key, for exactly the reason the hidden set has its own: the
+ * manifest is rebuilt from Drive on every sync, so an order stored only there
+ * would be lost on the next cron run and the gallery would silently revert to
+ * newest-first.
+ *
+ * NOTE: Written only when an officer reorders, so it costs no KV budget on the
+ * read or sync path.
+ */
+export const GALLERY_ORDER_KV_KEY = "gallery:order:v1";
 
 /**
  * How many images one sync will copy into R2.
@@ -169,6 +185,56 @@ export async function loadHiddenIds(env: GalleryEnv): Promise<Set<string>> {
 /** Persist the hidden set. One write, on an officer-initiated path only. */
 export async function saveHiddenIds(env: GalleryEnv, ids: ReadonlySet<string>, now: Date): Promise<void> {
     await env.EVENTS_KV.put(GALLERY_HIDDEN_KV_KEY, JSON.stringify(serializeHiddenList(ids, now)));
+}
+
+/**
+ * Read the officer-chosen display order.
+ *
+ * A KV failure reads as "no custom order", which falls back to newest-first --
+ * a stale-but-sane gallery rather than a broken one.
+ */
+export async function loadOrder(env: GalleryEnv): Promise<string[]> {
+    try {
+        return parseOrder(await env.EVENTS_KV.get(GALLERY_ORDER_KV_KEY, { type: "json" }));
+    } catch {
+        return [];
+    }
+}
+
+/** Persist the display order. One write, on an officer-initiated path only. */
+export async function saveOrder(env: GalleryEnv, ids: readonly string[], now: Date): Promise<void> {
+    await env.EVENTS_KV.put(GALLERY_ORDER_KV_KEY, JSON.stringify(serializeOrder(ids, now)));
+}
+
+/**
+ * Replace the display order.
+ *
+ * Writes the order key (authoritative, survives a re-list) and then re-sorts the
+ * current manifest so the page reflects the change immediately rather than after
+ * the next sync. Both are officer-initiated, so the read path's
+ * one-write-per-miss budget is untouched.
+ *
+ * Accepts a partial list on purpose: a photo uploaded after the officer arranged
+ * things does not need to be named, and is appended. See `sortEntriesByOrder`.
+ */
+export async function setGalleryOrder(
+    env: GalleryEnv,
+    ids: readonly string[],
+    now: Date = new Date(),
+): Promise<GalleryManifest | null> {
+    const manifest = await loadManifest(env);
+    // No manifest means no sync has run yet, so there is nothing to sort. Report
+    // it rather than creating an empty one, which would mark the gallery fresh
+    // and blank it for a whole TTL.
+    if (manifest === null) return null;
+
+    await saveOrder(env, ids, now);
+
+    const entries = [...manifest.entries];
+    sortEntriesByOrder(entries, ids);
+    const updated: GalleryManifest = { ...manifest, entries };
+    await saveManifest(env, updated);
+    return updated;
 }
 
 /**
@@ -301,11 +367,12 @@ export async function syncGallery(env: GalleryEnv, now: Date = new Date()): Prom
     }
 
     const mirroredKeys = new Set(await listMirroredKeys(env));
-    // Re-apply the officer's takedowns on every rebuild. The hidden set lives on
-    // its own KV key precisely so a re-list of Drive cannot resurrect a removed
-    // photo.
+    // Re-apply the officer's takedowns and their chosen order on every rebuild.
+    // Both live on their own KV keys precisely so a re-list of Drive cannot
+    // resurrect a removed photo or silently revert the gallery to newest-first.
     const hiddenIds = await loadHiddenIds(env);
-    let manifest = buildManifest(driveFiles, mirroredKeys, previous, now, hiddenIds);
+    const order = await loadOrder(env);
+    let manifest = buildManifest(driveFiles, mirroredKeys, previous, now, hiddenIds, order);
 
     // Sweep R2 for photos that left Drive. Done before mirroring so the bucket
     // does not carry dead bytes for another cycle.
@@ -437,7 +504,10 @@ export async function uploadGalleryImage(
 
     const mounted = await loadManifest(env);
     const hiddenIds = await loadHiddenIds(env);
-    const manifest = buildManifest(known, mirroredKeys, mounted, now, hiddenIds);
+    // The new upload is not in the saved order yet, so `buildManifest` appends
+    // it after the photos an officer already arranged -- see `sortEntriesByOrder`.
+    const order = await loadOrder(env);
+    const manifest = buildManifest(known, mirroredKeys, mounted, now, hiddenIds, order);
     await saveManifest(env, {
         ...manifest,
         warning: manifest.pending.length > 0 ? `${manifest.pending.length} image(s) still copying.` : null,

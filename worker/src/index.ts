@@ -110,7 +110,14 @@ import { GUILD_SCHEDULED_EVENT_DELETE, parseDeletedEventIds } from "./audit";
 import { validateCreateEvent } from "./eventCreate";
 import { type CalendarEvent, type DiscordGuildScheduledEvent, normalizeEvents, publicEvents } from "./events";
 import { hiddenEntries, renderableEntries } from "./gallery";
-import { loadManifest, manifestIsStale, setPhotoHidden, syncGallery, uploadGalleryImage } from "./gallerySync";
+import {
+    loadManifest,
+    manifestIsStale,
+    setGalleryOrder,
+    setPhotoHidden,
+    syncGallery,
+    uploadGalleryImage,
+} from "./gallerySync";
 import { checkImageBytes, validateGalleryUpload } from "./galleryUpload";
 import { missingDriveConfig } from "./googleAuth";
 import { buildCalendar } from "./ics";
@@ -874,7 +881,11 @@ function managementCorsHeaders(env: Env): HeadersInit {
         // PATCH is here for the gallery's hide/restore route. A method missing
         // from this list fails at the PREFLIGHT with a generic network error,
         // not a 405, so it reads as "the server is down".
-        "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+        // PATCH is here for the gallery's hide/restore route, and PUT for setting
+        // the display order. A method missing from this list fails at the
+        // PREFLIGHT with a generic network error, not a 405, so it reads as
+        // "the server is down".
+        "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
         "Access-Control-Max-Age": "86400",
         Vary: "Origin",
@@ -1609,6 +1620,89 @@ async function handleGalleryHiddenList(env: Env, request: Request): Promise<Resp
     );
 }
 
+/**
+ * `GET /manage/gallery/order` -- the photos an officer can reorder.
+ *
+ * Returns the visible photos in their CURRENT display order, which is what the
+ * reorder panel renders and what it sends back after a move. Officer-only: the
+ * public manifest already implies this order, but the panel also needs the
+ * human-readable names, and it must not reveal hidden photos.
+ *
+ * The ids come from the manifest's order rather than the saved preference list,
+ * so an officer sees what a visitor sees -- including photos uploaded since the
+ * order was last set, which live at the end.
+ */
+async function handleGalleryOrderList(env: Env, request: Request): Promise<Response> {
+    const auth = await verifySession(env.SESSION_SECRET, bearerToken(request.headers.get("Authorization")));
+    if (!auth.ok) return managementError(env, 401, auth.reason);
+    if (!auth.payload.canCreateEvents) {
+        return managementError(env, 403, "Only officers can reorder photos.");
+    }
+    const manifest = await loadManifest(env);
+    // Hidden photos are excluded: arranging a position for one would be
+    // invisible work, and it would suggest the position is remembered while it
+    // is off the page.
+    const visible = manifest ? renderableEntries(manifest) : [];
+    return managementJson(
+        {
+            images: visible.map((entry) => ({
+                id: entry.id,
+                name: entry.name,
+                width: entry.width,
+                height: entry.height,
+                modifiedTime: entry.modifiedTime,
+            })),
+        },
+        { status: 200 },
+        env,
+    );
+}
+
+/**
+ * `PUT /manage/gallery/order` -- set the display order.
+ *
+ * Body: `{ "ids": ["driveId", ...] }`, most-prominent first.
+ *
+ * WARNING: The list is sent WHOLE, not as a single (from, to) move. A partial move
+ * would be ambiguous the moment another officer uploaded a photo between the
+ * render and the request, and applying it would shuffle unrelated photos. Sending
+ * the full sequence means "this is the order", which is idempotent and safe to
+ * retry.
+ *
+ * A partial or unknown id list is accepted: ids that are not in the gallery are
+ * ignored, and photos not named keep the default newest-first order AFTER the
+ * named ones. That is what lets an upload land without rewriting the order.
+ */
+async function handleGallerySetOrder(env: Env, request: Request, now: Date): Promise<Response> {
+    const auth = await verifySession(env.SESSION_SECRET, bearerToken(request.headers.get("Authorization")));
+    if (!auth.ok) return managementError(env, 401, auth.reason);
+    if (!auth.payload.canCreateEvents) {
+        return managementError(env, 403, "Only officers can reorder photos.");
+    }
+
+    let body: { ids?: unknown };
+    try {
+        body = (await request.json()) as typeof body;
+    } catch {
+        return managementError(env, 400, "Expected a JSON body.");
+    }
+    if (!Array.isArray(body.ids)) {
+        return managementError(env, 400, 'Expected { "ids": ["...", "..."] }.');
+    }
+    // Reject a non-string entry rather than filtering it out: silently dropping
+    // part of the submitted order would apply a sequence the officer never saw.
+    if (body.ids.some((id) => typeof id !== "string")) {
+        return managementError(env, 400, "Every entry in ids must be a string.");
+    }
+    const ids = body.ids as string[];
+
+    const updated = await setGalleryOrder(env, ids, now);
+    if (updated === null) {
+        return managementError(env, 404, "The gallery has not been synced yet.");
+    }
+    return managementJson({ ids, count: ids.length }, { status: 200 }, env);
+}
+
 async function handleGalleryUpload(env: Env, request: Request, now: Date): Promise<Response> {
     const auth = await verifySession(env.SESSION_SECRET, bearerToken(request.headers.get("Authorization")));
     if (!auth.ok) return managementError(env, 401, auth.reason);
@@ -1737,7 +1831,8 @@ type RouteEntry =
     | { kind: "gallery-upload"; methods: string[] }
     | { kind: "gallery-sync"; methods: string[] }
     | { kind: "gallery-hidden-list"; methods: string[] }
-    | { kind: "gallery-hide"; methods: string[] };
+    | { kind: "gallery-hide"; methods: string[] }
+    | { kind: "gallery-order"; methods: string[] };
 
 const ROUTES: Record<string, RouteEntry> = {
     "/events": { kind: "json", audience: "public" },
@@ -1762,6 +1857,9 @@ const ROUTES: Record<string, RouteEntry> = {
     // parameterized path is considered, and the id matcher below rejects a
     // non-id segment, so "hidden" can never be mistaken for a file id.
     "/manage/gallery/hidden": { kind: "gallery-hidden-list", methods: ["GET"] },
+    // The display order. Same reasoning: listed before the parameterized prefix,
+    // so "order" is claimed by this entry rather than treated as a file id.
+    "/manage/gallery/order": { kind: "gallery-order", methods: ["GET", "PUT"] },
 };
 
 /**
@@ -1904,6 +2002,10 @@ export default {
                     return handleGallerySync(env, request, now);
                 case "gallery-hidden-list":
                     return handleGalleryHiddenList(env, request);
+                case "gallery-order":
+                    return method === "PUT"
+                        ? handleGallerySetOrder(env, request, now)
+                        : handleGalleryOrderList(env, request);
                 case "gallery-hide":
                     return handleGalleryHide(env, request, fileId ?? "", now);
                 default:

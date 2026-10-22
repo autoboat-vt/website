@@ -122,6 +122,14 @@ export function buildManifest(
      * `renderableEntries` is what excludes them from the public list.
      */
     hiddenIds: ReadonlySet<string> = new Set<string>(),
+    /**
+     * The officer-chosen display order, most-prominent first.
+     *
+     * Ids not named here keep the default newest-first order and follow the
+     * listed ones. See `sortEntriesByOrder` for why a partial list is the normal
+     * case rather than an error.
+     */
+    order: readonly string[] = [],
 ): GalleryManifest {
     // Previous mirror timestamps, so an entry does not lose its "already copied"
     // state just because the id was re-listed.
@@ -155,7 +163,7 @@ export function buildManifest(
         });
     }
 
-    entries.sort(compareEntries);
+    sortEntriesByOrder(entries, order);
 
     return {
         syncedAt: now.getTime(),
@@ -165,7 +173,45 @@ export function buildManifest(
     };
 }
 
-/** Newest first, then by name, then by id so the order is total and stable. */
+/**
+ * Order entries by the officer's preference, falling back to newest-first.
+ *
+ * WHY A PARTIAL LIST IS NORMAL, and why this is not a bug to "fix":
+ *
+ *  - A photo uploaded after the order was set is not in the list yet. It must
+ *    still appear, so unlisted ids are appended rather than dropped.
+ *  - The list is deliberately NOT pruned when a photo leaves Drive. Pruning
+ *    would need a read-modify-write on every sync, and it would also lose the
+ *    position of a photo that comes back (a rename, an undo in Drive's trash).
+ *    A stale id is harmless: it matches nothing and costs a few bytes.
+ *
+ * Unlisted entries keep the default `compareEntries` order among themselves, so
+ * the newest upload is first among the leftovers -- which is what a visitor
+ * expects when the team has not curated anything recently.
+ */
+export function sortEntriesByOrder(entries: GalleryEntry[], order: readonly string[]): void {
+    // Position of each listed id. A Map rather than `indexOf` because indexOf is
+    // O(n) per comparison, which makes the sort O(n^2 log n) on a big gallery.
+    const rank = new Map<string, number>();
+    for (let i = 0; i < order.length; i++) {
+        const id = order[i];
+        // First occurrence wins, so a duplicated id cannot confuse the ranking.
+        if (id !== undefined && !rank.has(id)) rank.set(id, i);
+    }
+
+    entries.sort((a, b) => {
+        const ar = rank.get(a.id);
+        const br = rank.get(b.id);
+        if (ar !== undefined && br !== undefined) return ar - br;
+        // A listed photo always outranks an unlisted one, so appending a new
+        // upload never displaces a photo somebody deliberately placed.
+        if (ar !== undefined) return -1;
+        if (br !== undefined) return 1;
+        return compareEntries(a, b);
+    });
+}
+
+/** The default (curation-free) order: newest first, then by name, then by id. */
 function compareEntries(a: GalleryEntry, b: GalleryEntry): number {
     const am = a.modifiedTime ? Date.parse(a.modifiedTime) : Number.NaN;
     const bm = b.modifiedTime ? Date.parse(b.modifiedTime) : Number.NaN;
@@ -329,6 +375,91 @@ export function withHidden(ids: ReadonlySet<string>, fileId: string, hidden: boo
     if (hidden) next.add(fileId);
     else next.delete(fileId);
     return next;
+}
+
+/** The stored officer-chosen display order. */
+export interface OrderList {
+    ids: string[];
+    /** Epoch ms of the last change, for diagnostics. */
+    updatedAt: number;
+}
+
+/**
+ * Safety cap on the stored order.
+ *
+ * Not a policy -- there is no product limit on reordering. It bounds one KV
+ * value, and it is far above any plausible gallery size. Ids beyond it simply
+ * fall back to the default order.
+ */
+export const MAX_ORDERED_IDS = 2000;
+
+/**
+ * Parse a stored order, dropping anything unusable.
+ *
+ * An unreadable value reads as "no custom order", which shows the default
+ * newest-first gallery. That is the same fail-safe direction the hidden list
+ * takes: the alternative would be a page that renders nothing.
+ *
+ * De-duplicates while preserving the FIRST position, matching
+ * `sortEntriesByOrder`'s "first occurrence wins" rule so the stored list and the
+ * sort cannot disagree about a repeated id.
+ */
+export function parseOrder(value: unknown): string[] {
+    if (typeof value !== "object" || value === null) return [];
+    const raw = (value as Record<string, unknown>).ids;
+    if (!Array.isArray(raw)) return [];
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    for (const id of raw) {
+        if (typeof id !== "string" || id.length === 0) continue;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        ids.push(id);
+    }
+    return ids;
+}
+
+/** Serialize the order for KV, bounded by `MAX_ORDERED_IDS`. */
+export function serializeOrder(ids: readonly string[], now: Date): OrderList {
+    return { ids: ids.slice(0, MAX_ORDERED_IDS), updatedAt: now.getTime() };
+}
+
+/**
+ * The order an officer gets by moving one photo.
+ *
+ * `current` is the full display order as the officer sees it, so moving a photo
+ * also PINS every other photo it passed -- that is what "the order I arranged"
+ * means, and it is why the panel sends the whole visible sequence rather than a
+ * (from, to) pair. A pair would be ambiguous the moment someone else uploaded a
+ * photo between the two requests.
+ *
+ * Returns the reordered list unchanged in length; out-of-range indices are
+ * clamped rather than throwing, because the list can change between the render
+ * that produced the click and the request that carries it.
+ */
+export function moveInOrder(current: readonly string[], from: number, to: number): string[] {
+    if (current.length === 0) return [];
+    const clampedFrom = Math.max(0, Math.min(from, current.length - 1));
+    const clampedTo = Math.max(0, Math.min(to, current.length - 1));
+    if (clampedFrom === clampedTo) return [...current];
+
+    const next = [...current];
+    const [moved] = next.splice(clampedFrom, 1);
+    if (moved === undefined) return [...current];
+    next.splice(clampedTo, 0, moved);
+    return next;
+}
+
+/**
+ * Order the ids an officer can actually see, for the reorder list.
+ *
+ * Only visible entries are offered: reordering a HIDDEN photo would be invisible
+ * work. When one is restored it lands at the end of the custom order, which is
+ * the honest place for it -- nobody arranged a position for it while it was off
+ * the page.
+ */
+export function reorderableIds(manifest: GalleryManifest): string[] {
+    return renderableEntries(manifest).map((entry) => entry.id);
 }
 
 /**

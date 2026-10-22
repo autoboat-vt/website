@@ -339,6 +339,81 @@ export async function setPhotoHidden(session: ManageSession, fileId: string, hid
 }
 
 /**
+ * The photos an officer can reorder, in their current display order.
+ *
+ * Fetched rather than derived from the public manifest because the panel needs
+ * human-readable names, and because the manifest the page holds may be a moment
+ * behind. Officer-only.
+ */
+export async function fetchGalleryOrder(session: ManageSession): Promise<GalleryImage[]> {
+    const url = `${MANAGE_GALLERY_URL}/order`;
+    let res: Response;
+    try {
+        res = await fetch(url, {
+            headers: { Authorization: `Bearer ${session.token}` },
+            cache: "no-store",
+        });
+    } catch (err) {
+        throw await describeFetchFailure(url, err);
+    }
+
+    if (!res.ok) {
+        const galleryError = await errorFrom(res);
+        if (res.status === 401 || res.status === 403) {
+            throw new ManageError(galleryError.message, res.status, {
+                reason: res.status === 403 ? "missing-role" : null,
+                needsRole: res.status === 403,
+            });
+        }
+        throw galleryError;
+    }
+
+    const body = (await res.json()) as Record<string, unknown>;
+    const images = Array.isArray(body.images) ? body.images.filter(isGalleryImage) : [];
+    return images.map(toGalleryImage);
+}
+
+/**
+ * Save the display order.
+ *
+ * WARNING: The list is sent WHOLE -- it is an assertion about the intended order, not
+ * a single move. See the Worker's handler for why a (from, to) pair is unsafe
+ * once more than one officer can upload.
+ *
+ * A photo uploaded after this call is not in `ids`; it appears at the end of the
+ * custom order rather than displacing anything, which is why an officer does not
+ * have to reorder after every upload.
+ */
+export async function saveGalleryOrder(session: ManageSession, ids: readonly string[]): Promise<void> {
+    const url = `${MANAGE_GALLERY_URL}/order`;
+    let res: Response;
+    try {
+        res = await fetch(url, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.token}`,
+            },
+            body: JSON.stringify({ ids }),
+            cache: "no-store",
+        });
+    } catch (err) {
+        throw await describeFetchFailure(url, err);
+    }
+
+    if (!res.ok) {
+        const galleryError = await errorFrom(res);
+        if (res.status === 401 || res.status === 403) {
+            throw new ManageError(galleryError.message, res.status, {
+                reason: res.status === 403 ? "missing-role" : null,
+                needsRole: res.status === 403,
+            });
+        }
+        throw galleryError;
+    }
+}
+
+/**
  * The photos an officer has removed, so they can be restored.
  *
  * Without this the removal would be a one-way door short of opening Drive and
