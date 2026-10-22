@@ -697,8 +697,8 @@ WARNING: **Drive is never contacted while rendering the page.** A public page vi
 ### Ordering the photos
 
 By default the gallery is newest-first. An officer can arrange it instead: open
-**Add photos** and use the **Photo order** list, where each row has move-earlier
-and move-later buttons. Every move saves immediately.
+**Add photos** and use the **Photo order** list, dragging a row to reposition it
+(or using its move-earlier / move-later buttons). Every move saves immediately.
 
 ```bash
 # Current order (visible photos only).

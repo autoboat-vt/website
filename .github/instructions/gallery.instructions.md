@@ -120,8 +120,10 @@ NOTE: The hide route costs two KV writes (the hidden set, then the manifest). Bo
 ## Reordering photos
 
 Officers arrange the display order from the **Photo order** list in the Add
-photos panel: each row has move-earlier / move-later buttons, and every move
-saves immediately.
+photos panel: drag a row to reposition it, or use the move-earlier / move-later
+buttons. Every move saves immediately.
+
+WARNING: **The arrow buttons are NOT redundant with drag, and must not be removed as "duplicate UI".** Native HTML5 drag-and-drop does not fire on touch devices at all (`dragstart` never happens on a phone), and a `draggable` `<li>` is not focusable so it cannot be dragged from the keyboard. The buttons are the touch path AND the keyboard path. Drag is the convenience.
 
 WARNING: **The order lives on its OWN KV key (`gallery:order:v1`)**, exactly like the hidden set, and `syncGallery` must load it and pass it to `buildManifest`. The manifest is rebuilt from Drive on every cron run, so an order stored only there reverts to newest-first within five minutes. `galleryOrderSync.test.ts` pins that wiring.
 
@@ -136,6 +138,10 @@ NOTE: Each move costs two KV writes (the order, then the manifest) on an officer
 NOTE: The list is buttons, not drag-and-drop: a drag handle is unusable by keyboard and invisible to a screen reader, and it fights page scrolling on a phone. Each button's `aria-label` names the photo (`Move <name> earlier`) because "Move up" alone is meaningless out of context.
 
 NOTE: Hidden photos are excluded from the reorder list -- arranging a position for one would be invisible work. A restored photo lands at the end of the custom order.
+
+NOTE: The drop indicator is an `inset box-shadow`, not a border, so showing and hiding it cannot change a row's height and shift the list mid-drag. The dragged row is dimmed (not removed) for the same reason.
+
+WARNING: **`onDragOver` must call `preventDefault()`**, or the row is not a valid drop target and `drop` never fires. It also guards its `setState` on the hovered index changing -- `dragover` fires continuously and an unguarded setState re-renders the list on every pointer move.
 
 ## The committed gallery folder is gone
 

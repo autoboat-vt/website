@@ -5,6 +5,7 @@ import {
     ChevronDown,
     ChevronUp,
     EyeOff,
+    GripVertical,
     ImagePlus,
     Loader2,
     LogIn,
@@ -134,12 +135,15 @@ function RemovedPhotos({
 }
 
 /**
- * The reorder list.
+ * The reorder list: drag to move, or use the arrow buttons.
  *
- * WHY BUTTONS AND NOT DRAG-AND-DROP: a drag handle is unusable with a keyboard
- * and invisible to a screen reader, and this list has to work on a phone where a
- * drag also fights the page scroll. Move up/down buttons are operable by every
- * input method and announce their effect directly.
+ * WHY BOTH. Native HTML5 drag-and-drop does not fire on touch devices at all --
+ * `dragstart` simply never happens on a phone -- so drag alone would make the
+ * list unusable on mobile, which is where officers are most likely to be. The
+ * buttons are therefore not a redundant nicety: they are the touch path AND the
+ * keyboard path (a `<li>` with `draggable` is not focusable and cannot be
+ * dragged from the keyboard). Keeping them also means the list degrades to
+ * something usable if a browser suppresses drag.
  *
  * WHY IT SAVES ON EVERY MOVE rather than behind a Save button: the alternative
  * is an officer making several moves and losing them by closing the panel, and
@@ -158,6 +162,10 @@ function ReorderPhotos({
     const [order, setOrder] = useState<DriveImage[]>(photos);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    /** Index being dragged, or null. */
+    const [dragIndex, setDragIndex] = useState<number | null>(null);
+    /** Index the dragged row is currently hovering over, for the drop indicator. */
+    const [overIndex, setOverIndex] = useState<number | null>(null);
     const headingId = useId();
 
     // The parent refetches the list when something else changes (an upload, a
@@ -168,18 +176,10 @@ function ReorderPhotos({
 
     if (photos.length < 2) return null;
 
-    const move = async (index: number, delta: number) => {
-        const target = index + delta;
-        if (target < 0 || target >= order.length || busy) return;
-
-        const next = [...order];
-        const [moved] = next.splice(index, 1);
-        if (moved === undefined) return;
-        next.splice(target, 0, moved);
-
-        // Optimistic: apply locally first so the button feels immediate, then
-        // roll back if the write fails.
+    /** Persist a new local order, rolling back on failure. */
+    const persist = async (next: DriveImage[]) => {
         const previous = order;
+        // Optimistic: apply locally first so the move feels immediate.
         setOrder(next);
         setBusy(true);
         setError(null);
@@ -199,6 +199,19 @@ function ReorderPhotos({
         }
     };
 
+    /** Move the row at `from` to position `to`. */
+    const moveTo = (from: number, to: number) => {
+        if (busy) return;
+        if (from === to) return;
+        if (from < 0 || from >= order.length || to < 0 || to >= order.length) return;
+
+        const next = [...order];
+        const [moved] = next.splice(from, 1);
+        if (moved === undefined) return;
+        next.splice(to, 0, moved);
+        void persist(next);
+    };
+
     return (
         <section className="gallery-upload__reorder" aria-labelledby={headingId}>
             <h4 className="gallery-upload__reorder-title" id={headingId}>
@@ -206,45 +219,104 @@ function ReorderPhotos({
                 Photo order
             </h4>
             <p className="gallery-upload__reorder-note">
-                First photo appears first on the page. New uploads are added at the end.
+                Drag a photo to reposition it, or use the arrows. First photo appears first on the page; new uploads are
+                added at the end.
             </p>
             <ol className="gallery-upload__reorder-list">
-                {order.map((image, index) => (
-                    <li key={image.id} className="gallery-upload__reorder-item">
-                        <img
-                            src={galleryImageUrl(image.id)}
-                            alt=""
-                            loading="lazy"
-                            className="gallery-upload__reorder-thumb"
-                        />
-                        <span className="gallery-upload__reorder-name">
-                            <span className="gallery-upload__reorder-index">{index + 1}.</span> {image.name}
-                        </span>
-                        <div className="gallery-upload__reorder-actions">
-                            <button
-                                type="button"
-                                className="btn btn--sm gallery-upload__reorder-btn"
-                                onClick={() => move(index, -1)}
-                                disabled={index === 0 || busy}
-                                // The visible glyph is a caret; the accessible
-                                // name has to say WHICH photo moves, because
-                                // "Move up" alone is meaningless out of context.
-                                aria-label={`Move ${image.name} earlier`}
-                            >
-                                <ChevronUp size={14} aria-hidden="true" />
-                            </button>
-                            <button
-                                type="button"
-                                className="btn btn--sm gallery-upload__reorder-btn"
-                                onClick={() => move(index, 1)}
-                                disabled={index === order.length - 1 || busy}
-                                aria-label={`Move ${image.name} later`}
-                            >
-                                <ChevronDown size={14} aria-hidden="true" />
-                            </button>
-                        </div>
-                    </li>
-                ))}
+                {order.map((image, index) => {
+                    const isDragging = dragIndex === index;
+                    // Only show a drop line where the drop would actually change
+                    // something -- not on the row being dragged, and not when the
+                    // target is where it already is.
+                    const isDropTarget = overIndex === index && dragIndex !== null && dragIndex !== index;
+                    return (
+                        <li
+                            key={image.id}
+                            className={[
+                                "gallery-upload__reorder-item",
+                                isDragging ? "is-dragging" : "",
+                                isDropTarget ? "is-drop-target" : "",
+                            ]
+                                .filter(Boolean)
+                                .join(" ")}
+                            draggable={!busy}
+                            onDragStart={(event) => {
+                                setDragIndex(index);
+                                setError(null);
+                                // Firefox refuses to start a drag unless some data
+                                // is set, and `effectAllowed` is what makes the
+                                // cursor read as "move" rather than "copy".
+                                event.dataTransfer.effectAllowed = "move";
+                                event.dataTransfer.setData("text/plain", image.id);
+                            }}
+                            onDragOver={(event) => {
+                                // preventDefault is what marks this row as a valid
+                                // drop target; without it `drop` never fires.
+                                event.preventDefault();
+                                event.dataTransfer.dropEffect = "move";
+                                // Guarded so the state is only set when the target
+                                // actually changes -- `dragover` fires repeatedly
+                                // and unguarded setState here causes a re-render
+                                // storm while the pointer moves.
+                                if (overIndex !== index) setOverIndex(index);
+                            }}
+                            onDrop={(event) => {
+                                event.preventDefault();
+                                if (dragIndex !== null) moveTo(dragIndex, index);
+                                setDragIndex(null);
+                                setOverIndex(null);
+                            }}
+                            onDragEnd={() => {
+                                // Always clear, including on a cancelled drag
+                                // (dropped outside the list, or Escape).
+                                setDragIndex(null);
+                                setOverIndex(null);
+                            }}
+                        >
+                            {/* Drag affordance. Decorative: the row itself is the
+                                draggable element and the buttons are the
+                                accessible path, so this must not be announced. */}
+                            <span className="gallery-upload__reorder-grip" aria-hidden="true">
+                                <GripVertical size={14} />
+                            </span>
+                            <img
+                                src={galleryImageUrl(image.id)}
+                                alt=""
+                                loading="lazy"
+                                /* The browser's own drag image is the whole row,
+                                   which is a tall strip. A plain image preview is
+                                   easier to aim with. */
+                                className="gallery-upload__reorder-thumb"
+                            />
+                            <span className="gallery-upload__reorder-name">
+                                <span className="gallery-upload__reorder-index">{index + 1}.</span> {image.name}
+                            </span>
+                            <div className="gallery-upload__reorder-actions">
+                                <button
+                                    type="button"
+                                    className="btn btn--sm gallery-upload__reorder-btn"
+                                    onClick={() => moveTo(index, index - 1)}
+                                    disabled={index === 0 || busy}
+                                    // The visible glyph is a caret; the accessible
+                                    // name has to say WHICH photo moves, because
+                                    // "Move up" alone is meaningless out of context.
+                                    aria-label={`Move ${image.name} earlier`}
+                                >
+                                    <ChevronUp size={14} aria-hidden="true" />
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn--sm gallery-upload__reorder-btn"
+                                    onClick={() => moveTo(index, index + 1)}
+                                    disabled={index === order.length - 1 || busy}
+                                    aria-label={`Move ${image.name} later`}
+                                >
+                                    <ChevronDown size={14} aria-hidden="true" />
+                                </button>
+                            </div>
+                        </li>
+                    );
+                })}
             </ol>
             {error && (
                 <p className="gallery-upload__error" role="alert">
