@@ -1,4 +1,4 @@
-import { ALL_GALLERY_IMAGES, GALLERY_PHOTOS, SUBTEAM_IMAGES } from "../../lib/galleryImages";
+import { ALL_GALLERY_IMAGES, SUBTEAM_IMAGES } from "../../lib/galleryImages";
 
 /**
  * Tests for the shared gallery image data.
@@ -19,25 +19,32 @@ describe("gallery image data", () => {
         expect(dupes).toEqual([]);
     });
 
-    it("combines the loose photos and every subteam's images", () => {
-        expect(ALL_GALLERY_IMAGES).toHaveLength(GALLERY_PHOTOS.length + ALL_SUBTEAM_IMAGES.length);
+    it("is exactly the flattened subteam images", () => {
+        // The loose photo list was removed: general team photos now come from
+        // the Drive folder at runtime, so this module is build-time content
+        // only. Asserting equality (not just containment) is what catches a
+        // re-added hard-coded list.
+        expect(ALL_GALLERY_IMAGES).toEqual(ALL_SUBTEAM_IMAGES);
     });
 
     it("includes the subteam images so /gallery shows them", () => {
-        // The point of this change: every image on Meet the Team also appears
-        // on /gallery.
+        // Every image on Meet the Team also appears on /gallery.
         for (const img of ALL_SUBTEAM_IMAGES) {
             expect(ALL_GALLERY_IMAGES).toContainEqual(img);
         }
     });
 
-    it("keeps the loose gallery photos first", () => {
-        expect(ALL_GALLERY_IMAGES.slice(0, GALLERY_PHOTOS.length)).toEqual(GALLERY_PHOTOS);
-    });
-
-    it("gives every image a src and a non-empty alt", () => {
+    it("points every image at the committed images folder", () => {
+        // These are build-time assets, so a path into a Drive URL here would be
+        // a bug -- Drive photos belong to the manifest, not this module.
         for (const img of ALL_GALLERY_IMAGES) {
             expect(img.src).toMatch(/^\/images\/.+\.webp$/);
+        }
+    });
+
+    it("gives every image a non-empty alt", () => {
+        // The src format is asserted above; this is about accessible names.
+        for (const img of ALL_GALLERY_IMAGES) {
             expect(img.alt.trim().length).toBeGreaterThan(0);
         }
     });

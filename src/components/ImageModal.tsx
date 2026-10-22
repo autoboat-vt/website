@@ -5,9 +5,19 @@ interface ImageModalProps {
     alt?: string;
     caption?: string;
     onClose: () => void;
+    /**
+     * Optional actions rendered under the caption.
+     *
+     * WHY A SLOT RATHER THAN A `onRemove` PROP: the modal is shared by /gallery
+     * (which offers hide/restore to officers) and Meet the Team (which offers
+     * nothing). A generic slot keeps the "who may do this and what it means"
+     * decision in the page that owns it, instead of growing a permission-shaped
+     * prop the modal itself cannot evaluate.
+     */
+    actions?: React.ReactNode;
 }
 
-export default function ImageModal({ src, alt, caption, onClose }: ImageModalProps) {
+export default function ImageModal({ src, alt, caption, onClose, actions }: ImageModalProps) {
     const closeBtnRef = useRef<HTMLButtonElement>(null);
     const lastActiveRef = useRef<HTMLElement | null>(null);
     const [isOpen, setIsOpen] = useState(false);
@@ -75,6 +85,9 @@ export default function ImageModal({ src, alt, caption, onClose }: ImageModalPro
                 </button>
                 <img className="max-h-[85vh] w-full rounded-lg object-contain" src={src} alt={alt} />
                 {caption && <p className="mt-3 text-center text-base leading-relaxed text-white/85">{caption}</p>}
+                {/* Rendered only when the page supplies actions, so the Meet the
+                    Team lightbox is unchanged. */}
+                {actions && <div className="image-modal__actions">{actions}</div>}
             </div>
         </div>
     );

@@ -1,12 +1,14 @@
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, EyeOff, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import GalleryUpload from "../components/GalleryUpload";
 import ImageModal from "../components/ImageModal";
+import { loadSession, ManageError, type ManageSession } from "../lib/eventManage";
 import {
     type GalleryImage as DriveImage,
     fetchGalleryManifest,
     type GalleryManifest,
     galleryImageUrl,
+    setPhotoHidden,
 } from "../lib/galleryClient";
 import { ALL_GALLERY_IMAGES } from "../lib/galleryImages";
 import { buildGalleryTiles, galleryStatusNote } from "../lib/galleryView";
@@ -26,12 +28,34 @@ import { buildGalleryTiles, galleryStatusNote } from "../lib/galleryView";
  * problem -- which matters because the Worker is a different origin.
  */
 export default function Gallery() {
-    const [modalImage, setModalImage] = useState<{ src: string; alt: string; caption?: string } | null>(null);
+    const [modalImage, setModalImage] = useState<{
+        src: string;
+        alt: string;
+        caption?: string;
+        driveId?: string;
+    } | null>(null);
     const [manifest, setManifest] = useState<GalleryManifest | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
-    /** Bumped to re-run the fetch after an upload. */
+    /** Bumped to re-run the fetch after an upload or a hide. */
     const [reloadToken, setReloadToken] = useState(0);
+    /**
+     * The current officer session, if any.
+     *
+     * Re-read on focus so a session that expired while the tab sat open stops
+     * offering actions that would only 401.
+     */
+    const [session, setSession] = useState<ManageSession | null>(() => loadSession());
+    /** Set while a hide request is in flight, to disable the button. */
+    const [hiding, setHiding] = useState(false);
+    /** A failed hide, shown inside the lightbox rather than replacing the page. */
+    const [hideError, setHideError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const sync = () => setSession(loadSession());
+        globalThis.addEventListener?.("focus", sync);
+        return () => globalThis.removeEventListener?.("focus", sync);
+    }, []);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -61,6 +85,34 @@ export default function Gallery() {
     }, [reloadToken]);
 
     const refresh = useCallback(() => setReloadToken((n) => n + 1), []);
+
+    /**
+     * Take the open photo off the public gallery.
+     *
+     * WARNING: HIDES, DOES NOT DELETE. The Drive file and its mirror stay put; the
+     * photo can be restored with the "Add photos" panel. That is why there is no
+     * confirmation dialog -- undoing it costs one click, so a modal would be
+     * friction without protection.
+     */
+    const hideCurrent = useCallback(async () => {
+        const driveId = modalImage?.driveId;
+        if (!session || !driveId) return;
+        setHiding(true);
+        setHideError(null);
+        try {
+            await setPhotoHidden(session, driveId, true);
+            setModalImage(null);
+            refresh();
+        } catch (err) {
+            if (err instanceof ManageError && err.status === 401) {
+                // Dead token: stop offering the action rather than retrying it.
+                setSession(null);
+            }
+            setHideError(err instanceof Error ? err.message : "Could not remove that photo.");
+        } finally {
+            setHiding(false);
+        }
+    }, [modalImage, session, refresh]);
 
     const tiles = useMemo(() => {
         const drive: DriveImage[] = manifest?.images ?? [];
@@ -93,7 +145,6 @@ export default function Gallery() {
                 <div className="mt-4 flex justify-center">
                     <GalleryUpload onUploaded={refresh} />
                 </div>
-
                 {statusNote && (
                     <p className="gallery-status" role="status" aria-live="polite">
                         <Loader2 size={14} aria-hidden="true" className="animate-spin" />
@@ -116,7 +167,15 @@ export default function Gallery() {
                         key={photo.key}
                         type="button"
                         className="group block cursor-pointer border-none bg-none p-0 m-0 focus-visible:rounded-[10px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fontcolor"
-                        onClick={() => setModalImage({ src: photo.src, alt: photo.alt, caption: photo.caption })}
+                        onClick={() => {
+                            setHideError(null);
+                            setModalImage({
+                                src: photo.src,
+                                alt: photo.alt,
+                                caption: photo.caption,
+                                driveId: photo.driveId,
+                            });
+                        }}
                     >
                         {/* overflow-hidden clips the hover scale-up to the rounded corners. */}
                         <div className="overflow-hidden rounded-lg">
@@ -144,7 +203,33 @@ export default function Gallery() {
                 src={modalImage?.src}
                 alt={modalImage?.alt}
                 caption={modalImage?.caption}
-                onClose={() => setModalImage(null)}
+                onClose={() => {
+                    setHideError(null);
+                    setModalImage(null);
+                }}
+                actions={
+                    // Only for a signed-in officer looking at a DRIVE photo. A
+                    // curated tile has no `driveId`, so there is nothing the
+                    // endpoint could hide.
+                    session && modalImage?.driveId ? (
+                        <>
+                            <button
+                                type="button"
+                                className="btn btn--sm image-modal__action"
+                                onClick={hideCurrent}
+                                disabled={hiding}
+                            >
+                                <EyeOff size={15} aria-hidden="true" />
+                                {hiding ? "Removing..." : "Remove from gallery"}
+                            </button>
+                            {hideError && (
+                                <p className="image-modal__error" role="alert">
+                                    {hideError}
+                                </p>
+                            )}
+                        </>
+                    ) : null
+                }
             />
         </>
     );

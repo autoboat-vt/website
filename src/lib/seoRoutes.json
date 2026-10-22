@@ -1,7 +1,7 @@
 {
     "siteUrl": "https://autoboat.aoe.vt.edu",
     "siteName": "AutoBoat at Virginia Tech",
-    "ogImagePath": "/images/gallery/14.webp",
+    "ogImagePath": "/images/hero.webp",
     "routes": [
         {
             "path": "/",

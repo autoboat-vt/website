@@ -34,7 +34,7 @@ describe("seo metadata", () => {
         // relative path, which is what shipped before (a bare
         // "/images/favicon.ico" that no crawler could render).
         it("is an absolute URL", () => {
-            expect(OG_IMAGE_URL).toBe("https://autoboat.aoe.vt.edu/images/gallery/14.webp");
+            expect(OG_IMAGE_URL).toBe("https://autoboat.aoe.vt.edu/images/hero.webp");
             expect(() => new URL(OG_IMAGE_URL)).not.toThrow();
         });
 

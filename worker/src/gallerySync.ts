@@ -28,13 +28,32 @@ import {
     keysToDelete,
     markMirrored,
     mirrorKey,
+    parseHiddenList,
     parseManifest,
     removeEntry,
+    serializeHiddenList,
+    setEntryHidden,
+    withHidden,
 } from "./gallery";
 import { getAccessToken, serviceAccountConfigFromEnv } from "./googleAuth";
 
 /** KV key for the manifest. Separate from the events key by design. */
 export const GALLERY_KV_KEY = "gallery:manifest:v1";
+
+/**
+ * KV key for the set of photos an officer has removed from the public gallery.
+ *
+ * WARNING: A SEPARATE key from the manifest, and that is what makes hiding durable.
+ * The manifest is rebuilt from Drive on every sync, so a `hidden` flag stored
+ * only there would be erased the moment the folder was re-listed. Keeping the
+ * authoritative set on its own key means the flag is re-applied on every
+ * rebuild -- and it means the manifest can be safely dropped or corrupt without
+ * the team's takedowns being forgotten.
+ *
+ * NOTE: This key is only WRITTEN when an officer hides or restores a photo, so it
+ * costs no KV budget on the read or sync path.
+ */
+export const GALLERY_HIDDEN_KV_KEY = "gallery:hidden:v1";
 
 /**
  * How many images one sync will copy into R2.
@@ -132,6 +151,65 @@ export function manifestIsStale(manifest: GalleryManifest | null, now: Date): bo
     return now.getTime() - manifest.syncedAt >= MANIFEST_TTL_SECONDS * 1000;
 }
 
+/**
+ * Read the set of hidden photo ids.
+ *
+ * A KV failure reads as "nothing hidden", which shows the full gallery -- the
+ * safe direction, since the alternative is a page that hides photos the team
+ * never took down.
+ */
+export async function loadHiddenIds(env: GalleryEnv): Promise<Set<string>> {
+    try {
+        return parseHiddenList(await env.EVENTS_KV.get(GALLERY_HIDDEN_KV_KEY, { type: "json" }));
+    } catch {
+        return new Set<string>();
+    }
+}
+
+/** Persist the hidden set. One write, on an officer-initiated path only. */
+export async function saveHiddenIds(env: GalleryEnv, ids: ReadonlySet<string>, now: Date): Promise<void> {
+    await env.EVENTS_KV.put(GALLERY_HIDDEN_KV_KEY, JSON.stringify(serializeHiddenList(ids, now)));
+}
+
+/**
+ * Hide or restore one photo.
+ *
+ * WARNING: NOTHING IS DELETED. The Drive file, the R2 mirror, and the manifest entry
+ * all stay exactly as they are; only the public list stops including the photo.
+ * That is deliberate and is the whole requirement: an officer removing the
+ * wrong photo must be able to put it back, and recovering a deleted Drive file
+ * is not something this Worker can do.
+ *
+ * Returns the updated manifest, or null when the gallery does not contain that
+ * id (which the caller reports as 404 -- hiding a photo that is not there means
+ * the request is wrong, or the photo already left Drive).
+ *
+ * Writes TWICE on purpose: the hidden set (authoritative, survives a re-list)
+ * and the manifest (so the current page reflects it immediately rather than
+ * after the next sync). Both are officer-initiated, so neither touches the read
+ * path's budget.
+ */
+export async function setPhotoHidden(
+    env: GalleryEnv,
+    fileId: string,
+    hidden: boolean,
+    now: Date = new Date(),
+): Promise<GalleryManifest | null> {
+    const manifest = await loadManifest(env);
+    // No manifest means no sync has run, so nothing is published yet. Treat it
+    // as "not found" rather than creating an empty one -- a manifest with no
+    // entries would be marked fresh and blank the gallery for a whole TTL.
+    if (manifest === null) return null;
+
+    const updated = setEntryHidden(manifest, fileId, hidden);
+    if (updated === null) return null;
+
+    const hiddenIds = withHidden(await loadHiddenIds(env), fileId, hidden);
+    await saveHiddenIds(env, hiddenIds, now);
+    await saveManifest(env, updated);
+    return updated;
+}
+
 /** List the R2 keys under the gallery prefix. */
 async function listMirroredKeys(env: GalleryEnv): Promise<string[]> {
     const keys: string[] = [];
@@ -223,7 +301,11 @@ export async function syncGallery(env: GalleryEnv, now: Date = new Date()): Prom
     }
 
     const mirroredKeys = new Set(await listMirroredKeys(env));
-    let manifest = buildManifest(driveFiles, mirroredKeys, previous, now);
+    // Re-apply the officer's takedowns on every rebuild. The hidden set lives on
+    // its own KV key precisely so a re-list of Drive cannot resurrect a removed
+    // photo.
+    const hiddenIds = await loadHiddenIds(env);
+    let manifest = buildManifest(driveFiles, mirroredKeys, previous, now, hiddenIds);
 
     // Sweep R2 for photos that left Drive. Done before mirroring so the bucket
     // does not carry dead bytes for another cycle.
@@ -353,7 +435,9 @@ export async function uploadGalleryImage(
     const mirroredKeys = new Set(await listMirroredKeys(env).catch(() => []));
     if (mirrored) mirroredKeys.add(mirrorKey(created.id));
 
-    const manifest = buildManifest(known, mirroredKeys, previous, now);
+    const mounted = await loadManifest(env);
+    const hiddenIds = await loadHiddenIds(env);
+    const manifest = buildManifest(known, mirroredKeys, mounted, now, hiddenIds);
     await saveManifest(env, {
         ...manifest,
         warning: manifest.pending.length > 0 ? `${manifest.pending.length} image(s) still copying.` : null,

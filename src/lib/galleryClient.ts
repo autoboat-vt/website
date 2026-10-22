@@ -293,3 +293,80 @@ export async function uploadImage(session: ManageSession, file: File): Promise<U
         mirrored: body.mirrored === true,
     };
 }
+
+/** Where the hide/restore endpoints live, relative to the manage root. */
+const MANAGE_GALLERY_HIDDEN_URL = `${MANAGE_GALLERY_URL}/hidden`;
+
+/**
+ * Hide or restore one photo on the public gallery.
+ *
+ * WARNING: THIS DOES NOT DELETE ANYTHING. The Drive file and the mirrored bytes are
+ * untouched; only the public list stops including the photo. That is deliberate:
+ * an officer removing the wrong photo must be able to put it back, and the
+ * Worker has no way to recover a deleted Drive file.
+ *
+ * Throws `ManageError` for the session problems the calendar already words
+ * (401 expired, 403 lost the role) and `GalleryError` for everything else.
+ */
+export async function setPhotoHidden(session: ManageSession, fileId: string, hidden: boolean): Promise<void> {
+    let res: Response;
+    try {
+        res = await fetch(`${MANAGE_GALLERY_URL}/${encodeURIComponent(fileId)}`, {
+            method: "PATCH",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.token}`,
+            },
+            // A real boolean, not a string: the Worker rejects anything else
+            // rather than reading `"false"` as truthy.
+            body: JSON.stringify({ hidden }),
+            cache: "no-store",
+        });
+    } catch (err) {
+        throw await describeFetchFailure(`${MANAGE_GALLERY_URL}/${fileId}`, err);
+    }
+
+    if (!res.ok) {
+        const galleryError = await errorFrom(res);
+        if (res.status === 401 || res.status === 403) {
+            throw new ManageError(galleryError.message, res.status, {
+                reason: res.status === 403 ? "missing-role" : null,
+                needsRole: res.status === 403,
+            });
+        }
+        throw galleryError;
+    }
+}
+
+/**
+ * The photos an officer has removed, so they can be restored.
+ *
+ * Without this the removal would be a one-way door short of opening Drive and
+ * matching filenames by hand.
+ */
+export async function fetchHiddenPhotos(session: ManageSession): Promise<GalleryImage[]> {
+    let res: Response;
+    try {
+        res = await fetch(MANAGE_GALLERY_HIDDEN_URL, {
+            headers: { Authorization: `Bearer ${session.token}` },
+            cache: "no-store",
+        });
+    } catch (err) {
+        throw await describeFetchFailure(MANAGE_GALLERY_HIDDEN_URL, err);
+    }
+
+    if (!res.ok) {
+        const galleryError = await errorFrom(res);
+        if (res.status === 401 || res.status === 403) {
+            throw new ManageError(galleryError.message, res.status, {
+                reason: res.status === 403 ? "missing-role" : null,
+                needsRole: res.status === 403,
+            });
+        }
+        throw galleryError;
+    }
+
+    const body = (await res.json()) as Record<string, unknown>;
+    const images = Array.isArray(body.images) ? body.images.filter(isGalleryImage) : [];
+    return images.map(toGalleryImage);
+}

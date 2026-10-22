@@ -57,6 +57,8 @@ keeps everything, exactly as before.
 | `GET /gallery` | Public gallery manifest: every image in the Drive folder whose bytes are already mirrored to R2. |
 | `GET /gallery/image/{id}` | One mirrored image's bytes, streamed from R2. |
 | `POST /manage/gallery` | Uploads a photo to Drive and mirrors it. **Officers only.** |
+| `PATCH /manage/gallery/{id}` | Hides or restores a photo. **Officers only.** Nothing is deleted. |
+| `GET /manage/gallery/hidden` | The photos an officer has removed. **Officers only.** |
 | `POST /manage/gallery/sync` | Forces a Drive sync. Token-gated, for CI or an operator. |
 
 ## Creating events from the website
@@ -683,8 +685,26 @@ mirror.
 - A **deleted** photo leaves the gallery and its bytes are swept from R2.
 - Only images that are already mirrored are advertised, so the page never shows
   a broken tile.
+- A **removed** photo is hidden from the page, not deleted. The "Remove from
+  gallery" button in the lightbox flips a flag; the Drive file and the R2 copy
+  are untouched, so it can be restored from the **Add photos** panel. See
+  "Removing a photo" below.
 
 WARNING: **Drive is never contacted while rendering the page.** A public page view reads the manifest from KV and the bytes from R2 only. Blocking a visitor on a Drive call would make load time depend on Google and would burn the Drive quota on ordinary traffic.
+
+### Removing a photo
+
+An officer can take a photo off the public page without deleting it. Open the
+photo, click **Remove from gallery**, and it disappears from `/gallery`. To put
+it back, open **Add photos** and use **Restore** in the "Removed from the
+gallery" list.
+
+WARNING: **Nothing is deleted.** The Drive file and the mirrored bytes stay exactly as they are -- only the public list stops including the photo. This is deliberate: removing the wrong photo has to be undoable, and the Worker cannot recover a file deleted from Drive. To actually delete a photo, remove it in the Drive UI.
+
+WARNING: **The hidden set is stored on its own KV key (`gallery:hidden:v1`), not just in the manifest.** The manifest is rebuilt from Drive on every sync, so a flag kept only there would be erased on the next run and every removed photo would reappear.
+
+The endpoint is `PATCH /manage/gallery/{id}` with `{"hidden": true}` (or
+`false` to restore), and `GET /manage/gallery/hidden` lists what is removed.
 
 ### Which Google account to use
 

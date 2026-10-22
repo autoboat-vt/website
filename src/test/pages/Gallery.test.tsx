@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { EVENTS_URL } from "../../lib/discord";
-import { GALLERY_PHOTOS, SUBTEAM_IMAGES } from "../../lib/galleryImages";
+import { ALL_GALLERY_IMAGES } from "../../lib/galleryImages";
 import Gallery from "../../pages/Gallery";
 
 /**
@@ -16,7 +16,7 @@ import Gallery from "../../pages/Gallery";
  */
 
 const MANIFEST_URL = `${EVENTS_URL}/gallery`;
-const curatedCount = GALLERY_PHOTOS.length + Object.values(SUBTEAM_IMAGES).flat().length;
+const curatedCount = ALL_GALLERY_IMAGES.length;
 
 /** Stub fetch to answer the manifest request with `body`. */
 function mockManifest(body: unknown, ok = true) {

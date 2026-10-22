@@ -1,7 +1,16 @@
-import { AlertCircle, Check, ImagePlus, Loader2, LogIn, LogOut, UserKey } from "lucide-react";
+import { AlertCircle, Check, EyeOff, ImagePlus, Loader2, LogIn, LogOut, RotateCcw, UserKey } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { beginLogin, clearSession, loadSession, ManageError, type ManageSession } from "../lib/eventManage";
-import { ACCEPT_ATTRIBUTE, GalleryError, uploadImage, validateFileLocally } from "../lib/galleryClient";
+import {
+    ACCEPT_ATTRIBUTE,
+    type GalleryImage as DriveImage,
+    fetchHiddenPhotos,
+    GalleryError,
+    galleryImageUrl,
+    setPhotoHidden,
+    uploadImage,
+    validateFileLocally,
+} from "../lib/galleryClient";
 import { completeLoginFromUrl } from "../lib/loginRedirect";
 
 /**
@@ -29,6 +38,86 @@ export interface GalleryUploadProps {
 /** What the panel is currently doing, so the button can be disabled correctly. */
 type Status = "idle" | "uploading" | "done";
 
+/**
+ * The removed-photos list.
+ *
+ * WHY IT LIVES IN THIS PANEL: removing a photo and putting it back are the same
+ * decision seen from two sides, and both are officer-only. Splitting them across
+ * two controls would mean two places to be signed in at, and a restore control
+ * nobody would find.
+ *
+ * WARNING: "Removed" means hidden from this page, NOT deleted. The Drive file is
+ * untouched -- the copy here exists purely so removal is reversible.
+ */
+function RemovedPhotos({
+    session,
+    hidden,
+    onChanged,
+}: {
+    session: ManageSession;
+    hidden: DriveImage[];
+    onChanged: () => void;
+}) {
+    const [restoring, setRestoring] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const headingId = useId();
+
+    if (hidden.length === 0) return null;
+
+    const restore = async (id: string) => {
+        setRestoring(id);
+        setError(null);
+        try {
+            await setPhotoHidden(session, id, false);
+            onChanged();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Could not restore that photo.");
+        } finally {
+            setRestoring(null);
+        }
+    };
+
+    return (
+        <section className="gallery-upload__removed" aria-labelledby={headingId}>
+            <h4 className="gallery-upload__removed-title" id={headingId}>
+                <EyeOff size={14} aria-hidden="true" />
+                Removed from the gallery ({hidden.length})
+            </h4>
+            <p className="gallery-upload__removed-note">
+                These are hidden from the public page, not deleted from Drive.
+            </p>
+            <ul className="gallery-upload__removed-list">
+                {hidden.map((image) => (
+                    <li key={image.id} className="gallery-upload__removed-item">
+                        <img
+                            src={galleryImageUrl(image.id)}
+                            alt=""
+                            loading="lazy"
+                            className="gallery-upload__removed-thumb"
+                        />
+                        <span className="gallery-upload__removed-name">{image.name}</span>
+                        <button
+                            type="button"
+                            className="btn btn--sm"
+                            onClick={() => restore(image.id)}
+                            disabled={restoring !== null}
+                        >
+                            <RotateCcw size={14} aria-hidden="true" />
+                            {restoring === image.id ? "Restoring..." : "Restore"}
+                        </button>
+                    </li>
+                ))}
+            </ul>
+            {error && (
+                <p className="gallery-upload__error" role="alert">
+                    <AlertCircle size={14} aria-hidden="true" />
+                    {error}
+                </p>
+            )}
+        </section>
+    );
+}
+
 export default function GalleryUpload({ onUploaded }: GalleryUploadProps) {
     const [session, setSession] = useState<ManageSession | null>(() => loadSession());
     const [open, setOpen] = useState(false);
@@ -43,10 +132,38 @@ export default function GalleryUpload({ onUploaded }: GalleryUploadProps) {
      * cause is signing in with a personal account instead of the school one.
      */
     const [denied, setDenied] = useState<ManageError | null>(null);
+    /**
+     * Photos the team has hidden from the public gallery.
+     *
+     * Held here rather than in the page because restoring is an officer action,
+     * and this panel is where officer actions live. `onUploaded` doubles as the
+     * "something changed" signal so the page's grid refreshes too.
+     */
+    const [hidden, setHidden] = useState<DriveImage[]>([]);
     const panelId = useId();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const busy = status === "uploading";
+
+    /** Read the removed-photos list, keeping the previous list on failure. */
+    const reloadHidden = useCallback(async (current: ManageSession | null) => {
+        if (!current) {
+            setHidden([]);
+            return;
+        }
+        try {
+            setHidden(await fetchHiddenPhotos(current));
+        } catch {
+            // A failed read leaves the list as it was rather than claiming
+            // nothing is removed, which would look like the photos came back.
+        }
+    }, []);
+
+    // Fetched when the panel opens, not on mount: an anonymous visitor should
+    // not cause a 401 probe.
+    useEffect(() => {
+        if (open && session) void reloadHidden(session);
+    }, [open, session, reloadHidden]);
 
     // A session that expired while this tab sat open should not present an
     // upload form that will only 401. Re-reading on focus keeps it honest
@@ -145,6 +262,9 @@ export default function GalleryUpload({ onUploaded }: GalleryUploadProps) {
                     ? `Added "${result.name}".`
                     : `Saved "${result.name}" to Drive. It will appear in a few minutes.`,
             );
+            // An upload can un-hide a filename that was previously removed, so
+            // the restore list may be stale as well as the grid.
+            void reloadHidden(session);
             onUploaded?.();
         } catch (err) {
             setStatus("idle");
@@ -284,6 +404,20 @@ export default function GalleryUpload({ onUploaded }: GalleryUploadProps) {
                                     {error}
                                 </p>
                             )}
+
+                            {/* Renders nothing when the list is empty, so the
+                                panel does not grow a permanently-empty section. */}
+                            <RemovedPhotos
+                                session={session}
+                                hidden={hidden}
+                                onChanged={() => {
+                                    void reloadHidden(session);
+                                    // The grid has to re-render: a restored photo
+                                    // reappears, and a photo hidden from the
+                                    // lightbox has to stop being offered.
+                                    onUploaded?.();
+                                }}
+                            />
                         </>
                     )}
                 </div>

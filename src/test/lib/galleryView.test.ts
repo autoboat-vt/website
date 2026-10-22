@@ -9,8 +9,8 @@ import { altFromFileName, buildGalleryTiles, galleryStatusNote } from "../../lib
  */
 
 const curated = [
-    { src: "/images/gallery/1.webp", alt: "#1" },
     { src: "/images/our_team_images/software/cv.webp", alt: "Computer Vision", caption: "A caption" },
+    { src: "/images/our_team_images/mechanical/boat1.webp", alt: "Vessel Hull 1" },
 ];
 
 const imageUrl = (id: string) => `https://worker.example/gallery/image/${id}`;
@@ -40,8 +40,11 @@ describe("buildGalleryTiles", () => {
 
     it("omits caption entirely when there is none", () => {
         // An explicit `caption: undefined` would render an empty paragraph.
+        // Targeted by src rather than index so reordering the fixture cannot
+        // silently make this assert the wrong tile.
         const tiles = buildGalleryTiles([], curated, imageUrl);
-        expect(tiles[0]).not.toHaveProperty("caption");
+        const uncaptioned = tiles.find((t) => t.src.includes("boat1.webp"));
+        expect(uncaptioned).not.toHaveProperty("caption");
     });
 
     it("derives alt text from the filename", () => {

@@ -92,12 +92,42 @@ WARNING: **Subfolders are not traversed.** Only direct children of the configure
 
 | Route | Auth | Notes |
 | ----- | ---- | ----- |
-| `GET /gallery` | public | Manifest; only mirror-complete images. |
+| `GET /gallery` | public | Manifest; only mirror-complete, non-hidden images. |
 | `GET /gallery/image/{id}` | public | Streams from R2, immutable-cached. |
 | `POST /manage/gallery` | officer session | Writes Drive, then mirrors. |
+| `PATCH /manage/gallery/{id}` | officer session | Hides or restores one photo. |
+| `GET /manage/gallery/hidden` | officer session | The removed photos, for restore. |
 | `POST /manage/gallery/sync` | `GALLERY_SYNC_TOKEN` | For CI or an operator. |
 
-WARNING: **The session check is the ONLY gate on upload.** The Drive write uses the service account's credentials, so Google enforces nothing about the caller -- the same shape as event creation. It reuses `canCreateEvents` rather than adding a parallel flag, because "may manage the team's public presence" is one decision and two flags would drift.
+## Hiding a photo does NOT delete it
+
+Officers can take a photo off the public page from the lightbox ("Remove from
+gallery") and put it back from the "Removed from the gallery" list in the Add
+photos panel.
+
+WARNING: **Nothing is deleted.** The Drive file, the R2 mirror, and the manifest entry all stay. Removing a photo flips one boolean. That is the requirement: an officer who removes the wrong photo must be able to undo it in one click, and this Worker has no way to recover a deleted Drive file. Do not "optimize" this into a delete or an R2 sweep.
+
+WARNING: **The hidden set lives on its OWN KV key (`gallery:hidden:v1`), not only in the manifest.** The manifest is rebuilt from Drive on every sync, so a flag stored only there is erased the moment the folder is re-listed and every removed photo comes back. `syncGallery` must load the set and pass it to `buildManifest`; `gallerySync.test.ts` pins that, because a test that hands `buildManifest` a hidden set directly passes even when the sync forgets to.
+
+WARNING: **`hidden` is a strict `=== true` when parsing** (in both `parseManifest` and the route's body check). A truthiness read would treat `"false"` as hidden, silently hiding a photo the caller meant to restore.
+
+NOTE: Hidden photos stay MIRRORED on purpose: the restore list shows their thumbnail, and restoring is then instant rather than "reappears after the next sync". The delete sweep only removes bytes for files that left DRIVE, so a hidden photo is never swept.
+
+NOTE: The hide route costs two KV writes (the hidden set, then the manifest). Both are officer-initiated and rare, so the read path's one-write-per-miss budget is untouched.
+
+## The committed gallery folder is gone
+
+`public/images/gallery/` no longer exists. The general team photos it held now
+live in the Drive folder and arrive at runtime, so `GALLERY_PHOTOS` was removed
+and `ALL_GALLERY_IMAGES` is exactly the flattened `SUBTEAM_IMAGES`.
+
+WARNING: **Three of those files were load-bearing outside the gallery**, which is why they were moved rather than deleted: `14.webp` was the home hero background, the Theseus photo, AND `og:image`; `13.webp` was Lumpy; `16.webp` was Ducky. They now live at `/images/hero.webp` and `/images/fleet/{ducky,theseus,lumpy}.webp`.
+
+WARNING: **Pages that are not galleries keep their photos in `public/images/`.** The home hero, the Fleet vessels, and the social preview must render without a call to the Worker -- a Drive photo would make the home page's first paint depend on the gallery API. Only `/gallery` is Drive-backed.
+
+NOTE: Adding a photo for Meet the Team / subteam content still means editing `src/lib/galleryImages.ts` and redeploying. That is intentional: those are editorial images that appear alongside copy, not the team's photo library. Anything the team wants to add casually goes in Drive.
+
+WARNING: **The route check is the only gate on upload AND on hide.** The Drive write uses the service account's credentials, so Google enforces nothing about the caller -- the same shape as event creation. Both reuse `canCreateEvents` rather than adding a parallel flag, because "may manage the team's public presence" is one decision and two flags would drift.
 
 WARNING: **`/gallery` and `/gallery/image/*` must stay OUT of the management CORS group** in `index.ts`. Putting them in advertises POST/DELETE and an Authorization header on public image endpoints and makes the browser preflight every image.
 
@@ -121,7 +151,9 @@ mean one copy eventually replays a spent code.
 
 ## Tests
 
-- `src/test/worker/gallery.test.ts` -- reconciliation: mirror time surviving a re-list, clearing it when bytes vanish, `renderableEntries` excluding pending, the delete sweep ignoring non-gallery keys, ordering, `parseManifest` tolerance.
+- `src/test/worker/gallery.test.ts` -- reconciliation: mirror time surviving a re-list, clearing it when bytes vanish, `renderableEntries` excluding pending AND hidden, the delete sweep ignoring non-gallery keys, ordering, `parseManifest` tolerance.
+- `src/test/worker/galleryHidden.test.ts` -- the hide/restore endpoints: that a hide leaves the mirror untouched, that the entry survives with only the flag changed, the strict-boolean body check, and the officer-only gate.
+- `src/test/worker/gallerySync.test.ts` -- drives `syncGallery` itself with the Drive client mocked. This is the only place the hidden set's WIRING is checked: removing the `loadHiddenIds` call from the sync fails this file while every pure test stays green.
 - `src/test/worker/galleryUpload.test.ts` -- magic-byte sniffing per format, HEIC identification, filename sanitizing, size/type limits, and that the limit stays under Drive's ceiling.
 - `src/test/worker/galleryRoutes.test.ts` -- the auth gate (unauthenticated, forged, member, expired), the HEIC message end to end, public-vs-management CORS, and the return-path allowlist.
 - `src/test/worker/oauthRedirect.test.ts` -- `resolveReturnPath`, `parseRedirectUris`, `redirectUriFor` selection and fallback.

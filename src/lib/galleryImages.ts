@@ -5,6 +5,25 @@
  * Meet the Team page (grouped per subteam) and mixed into the /gallery
  * grid -- so it lives here rather than being duplicated in both pages.
  * Update this file and both pages follow.
+ *
+ * WHY THERE IS NO "LOOSE PHOTOS" LIST ANY MORE. The /gallery page used to show
+ * a hard-coded set of general team photos from `public/images/gallery/` before
+ * the subteam ones. Those photos now live in the team's Google Drive gallery
+ * folder and are fetched at runtime (see `galleryClient.ts` and
+ * `worker/src/gallerySync.ts`), so the folder and the array were removed --
+ * uploading a photo no longer requires a redeploy, and the repo no longer
+ * carries a duplicate copy of the photo library.
+ *
+ * WARNING: This module is now ONLY the curated, build-time images: the subteam
+ * photos that also appear on Meet the Team. Anything the team wants to add
+ * later goes in the Drive folder, not here. Adding a photo here means editing
+ * source and redeploying, which is exactly what the Drive folder replaced.
+ *
+ * WARNING: The site pages that are NOT galleries (the home hero, the three
+ * Fleet vessels, and the social preview image) deliberately keep their photos
+ * in `public/images/` -- `/images/hero.webp` and `/images/fleet/*.webp`. They
+ * must render without a network call to the Worker, and a Drive photo would
+ * make the home page's hero depend on the gallery API.
  */
 
 export interface GalleryImage {
@@ -12,28 +31,6 @@ export interface GalleryImage {
     alt: string;
     caption?: string;
 }
-
-/**
- * Loose photos of the team and boats with no particular subteam home.
- * Shown first on /gallery.
- */
-export const GALLERY_PHOTOS: GalleryImage[] = [
-    { src: "/images/gallery/1.webp", alt: "#1" },
-    { src: "/images/gallery/2.webp", alt: "#2" },
-    { src: "/images/gallery/3.webp", alt: "#3" },
-    { src: "/images/gallery/4.webp", alt: "#4" },
-    { src: "/images/gallery/5.webp", alt: "#5" },
-    { src: "/images/gallery/6.webp", alt: "#6" },
-    { src: "/images/gallery/7.webp", alt: "#7" },
-    { src: "/images/gallery/8.webp", alt: "#8" },
-    { src: "/images/gallery/9.webp", alt: "#9" },
-    { src: "/images/gallery/10.webp", alt: "#10" },
-    { src: "/images/gallery/11.webp", alt: "#11" },
-    { src: "/images/gallery/12.webp", alt: "#12" },
-    { src: "/images/gallery/13.webp", alt: "#13" },
-    { src: "/images/gallery/14.webp", alt: "#14" },
-    { src: "/images/gallery/15.webp", alt: "#15" },
-];
 
 /**
  * Per-subteam photography, keyed by the subteam `id` used on the
@@ -102,11 +99,14 @@ export const SUBTEAM_IMAGES = {
 } satisfies Record<string, GalleryImage[]>;
 
 /**
- * Every image on the site, for the /gallery grid: the loose photos first,
- * then the subteam photography.
+ * The curated images the /gallery grid shows in addition to the Drive ones:
+ * every subteam's photography, flattened.
+ *
+ * These are the BUILD-TIME half of the gallery. The Drive manifest supplies the
+ * rest at runtime, and `buildGalleryTiles` merges the two.
  *
  * WARNING: The /gallery grid keys tiles by `src`, so a `src` appearing twice
  * would drop a tile and emit a React duplicate-key warning. There are
  * currently no duplicates -- `src/test/lib/galleryImages.test.ts` guards it.
  */
-export const ALL_GALLERY_IMAGES: GalleryImage[] = [...GALLERY_PHOTOS, ...Object.values(SUBTEAM_IMAGES).flat()];
+export const ALL_GALLERY_IMAGES: GalleryImage[] = Object.values(SUBTEAM_IMAGES).flat();

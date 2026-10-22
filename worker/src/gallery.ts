@@ -38,6 +38,16 @@ export interface GalleryEntry {
     modifiedTime: string | null;
     /** Epoch ms the mirror completed, or null while it is still pending. */
     mirroredAt: number | null;
+    /**
+     * Whether an officer has taken this photo off the public gallery.
+     *
+     * WARNING: HIDDEN IS NOT DELETED. The Drive file is untouched and the R2 mirror
+     * is kept, so restoring is instant and nothing is lost if someone hides the
+     * wrong photo. It only removes the photo from the public list. Do not
+     * "optimize" this into a delete -- recovering a deleted Drive file is not
+     * something this Worker can do.
+     */
+    hidden: boolean;
 }
 
 /** The stored manifest, heartbeated so staleness is visible. */
@@ -103,6 +113,15 @@ export function buildManifest(
     mirroredKeys: ReadonlySet<string>,
     existing: GalleryManifest | null,
     now: Date,
+    /**
+     * Files an officer has removed from the public gallery.
+     *
+     * WARNING: These are kept in the manifest, not filtered out. Keeping them means
+     * the entry keeps its mirror state, so restoring is a flag flip rather than
+     * a re-copy, and the officer's "removed photos" list can show a thumbnail.
+     * `renderableEntries` is what excludes them from the public list.
+     */
+    hiddenIds: ReadonlySet<string> = new Set<string>(),
 ): GalleryManifest {
     // Previous mirror timestamps, so an entry does not lose its "already copied"
     // state just because the id was re-listed.
@@ -115,6 +134,9 @@ export function buildManifest(
     for (const file of driveFiles) {
         const key = mirrorKey(file.id);
         const isMirrored = mirroredKeys.has(key);
+        // Hidden photos are STILL mirrored: the bytes are needed for the
+        // officer's removed-photos thumbnail, and keeping them makes restore
+        // instant instead of "appears after the next sync".
         if (!isMirrored) pending.push(file.id);
 
         const prior = previous.get(file.id);
@@ -129,6 +151,7 @@ export function buildManifest(
             // that is exactly the case the next sync has to repair, so reporting
             // it as mirrored would strand the image.
             mirroredAt: isMirrored ? (prior?.mirroredAt ?? now.getTime()) : null,
+            hidden: hiddenIds.has(file.id),
         });
     }
 
@@ -225,14 +248,87 @@ export function removeEntry(manifest: GalleryManifest, fileId: string): GalleryM
 }
 
 /**
- * What the public gallery should render: only entries whose bytes exist.
+ * What the public gallery should render: only entries whose bytes exist and
+ * that an officer has not removed.
  *
  * This is the guard against a broken tile. `pending` is visible in the
  * manifest for diagnostics, but the page is never told about an image it cannot
- * load.
+ * load -- and never told about one the team took down.
  */
 export function renderableEntries(manifest: GalleryManifest): GalleryEntry[] {
-    return manifest.entries.filter((entry) => entry.mirroredAt !== null);
+    return manifest.entries.filter((entry) => entry.mirroredAt !== null && !entry.hidden);
+}
+
+/**
+ * The photos an officer has removed, for the restore list.
+ *
+ * Only mirrored ones are returned, because the list renders a thumbnail and an
+ * unmirrored entry has no image to show yet. A hidden photo that is still
+ * copying appears once the sync finishes.
+ */
+export function hiddenEntries(manifest: GalleryManifest): GalleryEntry[] {
+    return manifest.entries.filter((entry) => entry.hidden && entry.mirroredAt !== null);
+}
+
+/**
+ * Apply a hidden/visible change to one entry, on disk and in memory.
+ *
+ * Returns the new manifest, or null when the id is not in it -- the caller
+ * reports that as a 404, because hiding something the gallery does not contain
+ * means the request is wrong (or the photo already left Drive).
+ *
+ * Deliberately only flips the flag: nothing is removed from the manifest, from
+ * R2, or from Drive.
+ */
+export function setEntryHidden(manifest: GalleryManifest, fileId: string, hidden: boolean): GalleryManifest | null {
+    if (!manifest.entries.some((entry) => entry.id === fileId)) return null;
+    return {
+        ...manifest,
+        entries: manifest.entries.map((entry) => (entry.id === fileId ? { ...entry, hidden } : entry)),
+    };
+}
+
+/** The stored record of which photos are hidden. */
+export interface HiddenList {
+    ids: string[];
+    /** Epoch ms of the last change, for diagnostics. */
+    updatedAt: number;
+}
+
+/**
+ * Safety cap on the hidden list.
+ *
+ * This is not a policy -- there is no product limit on hiding photos. It exists
+ * so a runaway loop cannot grow one KV value without bound. At ~30 bytes per id
+ * this is generous.
+ */
+export const MAX_HIDDEN_IDS = 5000;
+
+/**
+ * Parse the stored hidden list into a set.
+ *
+ * Tolerant for the same reason `parseManifest` is: an unreadable value must
+ * read as "nothing is hidden", which shows the full gallery, rather than as an
+ * error that takes the page down.
+ */
+export function parseHiddenList(value: unknown): Set<string> {
+    if (typeof value !== "object" || value === null) return new Set();
+    const raw = (value as Record<string, unknown>).ids;
+    if (!Array.isArray(raw)) return new Set();
+    return new Set(raw.filter((id): id is string => typeof id === "string" && id.length > 0));
+}
+
+/** Serialize the hidden set for KV, bounded by `MAX_HIDDEN_IDS`. */
+export function serializeHiddenList(ids: ReadonlySet<string>, now: Date): HiddenList {
+    return { ids: [...ids].slice(0, MAX_HIDDEN_IDS), updatedAt: now.getTime() };
+}
+
+/** Add or remove one id from a hidden set, returning a NEW set. */
+export function withHidden(ids: ReadonlySet<string>, fileId: string, hidden: boolean): Set<string> {
+    const next = new Set(ids);
+    if (hidden) next.add(fileId);
+    else next.delete(fileId);
+    return next;
 }
 
 /**
@@ -261,6 +357,9 @@ export function parseManifest(value: unknown): GalleryManifest | null {
             modifiedTime: typeof entry.modifiedTime === "string" ? entry.modifiedTime : null,
             mirroredAt:
                 typeof entry.mirroredAt === "number" && Number.isFinite(entry.mirroredAt) ? entry.mirroredAt : null,
+            // Strict `=== true`: a manifest written before hiding existed must
+            // read as "visible", not as a truthy default.
+            hidden: entry.hidden === true,
         });
     }
 

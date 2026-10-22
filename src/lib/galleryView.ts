@@ -18,6 +18,15 @@ export interface GalleryTile {
     alt: string;
     /** Optional longer caption shown under the enlarged photo. */
     caption?: string;
+    /**
+     * The Drive file id, for tiles that came from the Drive manifest.
+     *
+     * WARNING: Undefined for the curated (build-time) tiles. Those are part of the
+     * site's design, not the team's photo library, so there is nothing to hide
+     * -- and the hide endpoint would 404 on them. The page uses this to decide
+     * whether to offer the officer actions at all.
+     */
+    driveId?: string;
 }
 
 /**
@@ -69,7 +78,7 @@ export function buildGalleryTiles(
         if (seen.has(src)) continue;
         seen.add(src);
         const alt = altFromFileName(image.name);
-        tiles.push({ key: `drive:${image.id}`, src, alt });
+        tiles.push({ key: `drive:${image.id}`, src, alt, driveId: image.id });
     }
 
     for (const image of curated) {

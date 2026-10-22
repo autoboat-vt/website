@@ -109,8 +109,8 @@ import {
 import { GUILD_SCHEDULED_EVENT_DELETE, parseDeletedEventIds } from "./audit";
 import { validateCreateEvent } from "./eventCreate";
 import { type CalendarEvent, type DiscordGuildScheduledEvent, normalizeEvents, publicEvents } from "./events";
-import { renderableEntries } from "./gallery";
-import { loadManifest, manifestIsStale, syncGallery, uploadGalleryImage } from "./gallerySync";
+import { hiddenEntries, renderableEntries } from "./gallery";
+import { loadManifest, manifestIsStale, setPhotoHidden, syncGallery, uploadGalleryImage } from "./gallerySync";
 import { checkImageBytes, validateGalleryUpload } from "./galleryUpload";
 import { missingDriveConfig } from "./googleAuth";
 import { buildCalendar } from "./ics";
@@ -871,7 +871,10 @@ function handlePreflight(env: Env): Response {
  */
 function managementCorsHeaders(env: Env): HeadersInit {
     const headers: Record<string, string> = {
-        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+        // PATCH is here for the gallery's hide/restore route. A method missing
+        // from this list fails at the PREFLIGHT with a generic network error,
+        // not a 405, so it reads as "the server is down".
+        "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
         "Access-Control-Max-Age": "86400",
         Vary: "Origin",
@@ -1530,6 +1533,82 @@ async function handleGetGalleryImage(env: Env, fileId: string): Promise<Response
  * Worker request body can only be consumed once. The size ceiling in
  * `validateGalleryUpload` is what keeps that bounded.
  */
+/**
+ * `PATCH /manage/gallery/{id}` -- hide or restore a photo.
+ *
+ * WARNING: NOTHING IS DELETED. This is the whole point of the endpoint: an officer can
+ * take a photo off the public gallery and put it back later, and the Drive file
+ * is never touched. Deleting from Drive is a destructive, hard-to-undo action
+ * that belongs in the Drive UI where the person can see what they are doing --
+ * not behind a button on a public page.
+ *
+ * Gated on the same `canCreateEvents` claim as every other write, for the same
+ * reason: "may manage the team's public presence" is one decision, and a
+ * separate flag would drift.
+ *
+ * Writes the hidden set (authoritative, survives a Drive re-list) and the
+ * manifest (so the page reflects it immediately). Both are officer-initiated,
+ * so the read path's one-write-per-miss invariant is untouched.
+ */
+async function handleGalleryHide(env: Env, request: Request, fileId: string, now: Date): Promise<Response> {
+    const auth = await verifySession(env.SESSION_SECRET, bearerToken(request.headers.get("Authorization")));
+    if (!auth.ok) return managementError(env, 401, auth.reason);
+    if (!auth.payload.canCreateEvents) {
+        return managementError(env, 403, "Only officers can change which photos are shown.");
+    }
+
+    let body: { hidden?: unknown };
+    try {
+        body = (await request.json()) as typeof body;
+    } catch {
+        return managementError(env, 400, "Expected a JSON body.");
+    }
+    // WARNING: Strict boolean, no truthiness. `{"hidden": "false"}` is a string and
+    // would otherwise read as `true`, silently hiding a photo the caller meant
+    // to restore.
+    if (typeof body.hidden !== "boolean") {
+        return managementError(env, 400, 'Expected { "hidden": true } or { "hidden": false }.');
+    }
+
+    const updated = await setPhotoHidden(env, fileId, body.hidden, now);
+    if (updated === null) {
+        return managementError(env, 404, "That photo is not in the gallery.");
+    }
+
+    return managementJson({ id: fileId, hidden: body.hidden }, { status: 200 }, env);
+}
+
+/**
+ * `GET /manage/gallery/hidden` -- the photos an officer has removed.
+ *
+ * Exists so removal is REVERSIBLE from the page: without this list, hiding a
+ * photo would be a one-way door short of opening Drive and matching filenames
+ * by hand. Officer-only, like every other `/manage` read.
+ */
+async function handleGalleryHiddenList(env: Env, request: Request): Promise<Response> {
+    const auth = await verifySession(env.SESSION_SECRET, bearerToken(request.headers.get("Authorization")));
+    if (!auth.ok) return managementError(env, 401, auth.reason);
+    if (!auth.payload.canCreateEvents) {
+        return managementError(env, 403, "Only officers can see removed photos.");
+    }
+    const manifest = await loadManifest(env);
+    return managementJson(
+        {
+            images: manifest
+                ? hiddenEntries(manifest).map((entry) => ({
+                      id: entry.id,
+                      name: entry.name,
+                      width: entry.width,
+                      height: entry.height,
+                      modifiedTime: entry.modifiedTime,
+                  }))
+                : [],
+        },
+        { status: 200 },
+        env,
+    );
+}
+
 async function handleGalleryUpload(env: Env, request: Request, now: Date): Promise<Response> {
     const auth = await verifySession(env.SESSION_SECRET, bearerToken(request.headers.get("Authorization")));
     if (!auth.ok) return managementError(env, 401, auth.reason);
@@ -1656,7 +1735,9 @@ type RouteEntry =
     | { kind: "gallery-manifest" }
     | { kind: "gallery-image"; methods: string[] }
     | { kind: "gallery-upload"; methods: string[] }
-    | { kind: "gallery-sync"; methods: string[] };
+    | { kind: "gallery-sync"; methods: string[] }
+    | { kind: "gallery-hidden-list"; methods: string[] }
+    | { kind: "gallery-hide"; methods: string[] };
 
 const ROUTES: Record<string, RouteEntry> = {
     "/events": { kind: "json", audience: "public" },
@@ -1677,6 +1758,10 @@ const ROUTES: Record<string, RouteEntry> = {
     "/gallery": { kind: "gallery-manifest" },
     "/manage/gallery": { kind: "gallery-upload", methods: ["POST"] },
     "/manage/gallery/sync": { kind: "gallery-sync", methods: ["POST"] },
+    // Hiding and restoring. `/manage/gallery/hidden` is listed BEFORE the
+    // parameterized path is considered, and the id matcher below rejects a
+    // non-id segment, so "hidden" can never be mistaken for a file id.
+    "/manage/gallery/hidden": { kind: "gallery-hidden-list", methods: ["GET"] },
 };
 
 /**
@@ -1703,6 +1788,16 @@ const MANAGE_EVENT_PREFIX = "/manage/events/";
  * are flat strings, so an unvalidated suffix could address a different object.
  */
 const GALLERY_IMAGE_PREFIX = "/gallery/image/";
+
+/**
+ * Path prefix for hiding/restoring one photo.
+ *
+ * WARNING: Matched AFTER the exact-match table, so `/manage/gallery/hidden` and
+ * `/manage/gallery/sync` are claimed before this prefix is considered. A
+ * literal segment that happens to look like an id would otherwise be treated as
+ * one.
+ */
+const MANAGE_GALLERY_PREFIX = "/manage/gallery/";
 
 /**
  * Drive file ids: alphanumerics, hyphens and underscores.
@@ -1738,6 +1833,13 @@ function resolveRoute(pathname: string): { entry: RouteEntry; eventId?: string; 
         const fileId = pathname.slice(GALLERY_IMAGE_PREFIX.length);
         if (DRIVE_FILE_ID.test(fileId)) {
             return { entry: { kind: "gallery-image", methods: ["GET"] }, fileId };
+        }
+    }
+
+    if (pathname.startsWith(MANAGE_GALLERY_PREFIX)) {
+        const fileId = pathname.slice(MANAGE_GALLERY_PREFIX.length);
+        if (DRIVE_FILE_ID.test(fileId)) {
+            return { entry: { kind: "gallery-hide", methods: ["PATCH"] }, fileId };
         }
     }
     return null;
@@ -1800,6 +1902,10 @@ export default {
                     return handleGalleryUpload(env, request, now);
                 case "gallery-sync":
                     return handleGallerySync(env, request, now);
+                case "gallery-hidden-list":
+                    return handleGalleryHiddenList(env, request);
+                case "gallery-hide":
+                    return handleGalleryHide(env, request, fileId ?? "", now);
                 default:
                     return handleCreateEvent(env, ctx, request);
             }
