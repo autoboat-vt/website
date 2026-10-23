@@ -216,16 +216,17 @@ describe("Gallery page drag to reorder", () => {
         expect(tiles(container)[0]?.getAttribute("draggable")).toBe("true");
     });
 
-    it("leaves the curated tiles un-draggable even for an officer", async () => {
-        // They have no server-side position to change, so promising a reorder
-        // would be a lie the save cannot honour.
+    it("makes the curated tiles draggable too, for an officer", async () => {
+        // THE BUG THIS GUARDS: an earlier version only made DRIVE tiles draggable,
+        // because the saved order was a list of Drive ids. The curated photos had
+        // no id, so "some images can't be reordered". Ordering is keyed now.
         signIn();
         mockWithOrder();
         const { container } = render(<Gallery />);
 
         await waitFor(() => expect(tiles(container).length).toBeGreaterThan(3));
         const curatedTile = tiles(container)[3];
-        expect(curatedTile?.getAttribute("draggable")).toBe("false");
+        expect(curatedTile?.getAttribute("draggable")).toBe("true");
     });
 
     it("saves the whole order after dragging one photo onto another", async () => {
@@ -241,8 +242,10 @@ describe("Gallery page drag to reorder", () => {
         await waitFor(() => {
             expect(writes).toHaveLength(1);
         });
-        // alpha moved to position 3.
-        expect(writes[0]).toEqual({ ids: ["bravo", "charlie", "alpha"] });
+        // alpha moved to position 3, and the payload is TILE KEYS -- which is what
+        // lets curated photos appear in the same sequence.
+        const sent = writes[0] as { keys: string[] };
+        expect(sent.keys.slice(0, 3)).toEqual(["drive:bravo", "drive:charlie", "drive:alpha"]);
     });
 
     it("shows the new order immediately, before the refetch lands", async () => {

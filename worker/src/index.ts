@@ -109,9 +109,10 @@ import {
 import { GUILD_SCHEDULED_EVENT_DELETE, parseDeletedEventIds } from "./audit";
 import { validateCreateEvent } from "./eventCreate";
 import { type CalendarEvent, type DiscordGuildScheduledEvent, normalizeEvents, publicEvents } from "./events";
-import { hiddenEntries, renderableEntries } from "./gallery";
+import { driveTileKey, hiddenEntries, renderableEntries } from "./gallery";
 import {
     loadManifest,
+    loadOrder,
     manifestIsStale,
     setGalleryOrder,
     setPhotoHidden,
@@ -1487,6 +1488,16 @@ async function handleGetGalleryManifest(env: Env, ctx: ExecutionContext, now: Da
             // silently showing a shorter gallery than exists in Drive.
             pending: manifest?.pending.length ?? 0,
             warning: manifest?.warning ?? null,
+            // The officer-chosen display order, by tile key.
+            //
+            // WHY IT IS PUBLIC AND NOT FOLDED INTO `images`: curated photos are
+            // compiled into the site, not stored here, so this Worker has no
+            // entry for them and cannot sort the whole grid itself. The keys are
+            // opaque (`drive:<id>` / `site:<src>`) and reveal nothing a visitor
+            // cannot already see in the page, so handing the sequence over and
+            // letting the browser apply it is both simpler and the only way to
+            // keep ONE order across both sources.
+            order: await loadOrder(env),
         },
         { status: 200, headers: { "Cache-Control": "public, max-age=60" } },
         env,
@@ -1661,7 +1672,14 @@ async function handleGalleryOrderList(env: Env, request: Request): Promise<Respo
 /**
  * `PUT /manage/gallery/order` -- set the display order.
  *
- * Body: `{ "ids": ["driveId", ...] }`, most-prominent first.
+ * Body: `{ "keys": ["drive:<id>", "site:<path>", ...] }`, most-prominent first.
+ *
+ * WHY KEYS. The grid is half Drive photos and half curated photos compiled into
+ * the site, and this Worker only knows about the Drive half. An id-only sequence
+ * could therefore only ever describe part of the page -- which is exactly why
+ * "some images can't be reordered". Tile keys are unique across both sources, so
+ * one sequence expresses the whole grid; this Worker sorts its own entries and
+ * the browser applies the rest.
  *
  * WARNING: The list is sent WHOLE, not as a single (from, to) move. A partial move
  * would be ambiguous the moment another officer uploaded a photo between the
@@ -1669,9 +1687,12 @@ async function handleGalleryOrderList(env: Env, request: Request): Promise<Respo
  * the full sequence means "this is the order", which is idempotent and safe to
  * retry.
  *
- * A partial or unknown id list is accepted: ids that are not in the gallery are
- * ignored, and photos not named keep the default newest-first order AFTER the
- * named ones. That is what lets an upload land without rewriting the order.
+ * A partial or unknown list is accepted: keys that match nothing are ignored, and
+ * photos not named keep the default newest-first order AFTER the named ones. That
+ * is what lets an upload land without rewriting the order.
+ *
+ * `ids` is still accepted for a hand-written curl body; bare Drive ids are
+ * treated as if they were `drive:<id>` keys.
  */
 async function handleGallerySetOrder(env: Env, request: Request, now: Date): Promise<Response> {
     const auth = await verifySession(env.SESSION_SECRET, bearerToken(request.headers.get("Authorization")));
@@ -1680,27 +1701,33 @@ async function handleGallerySetOrder(env: Env, request: Request, now: Date): Pro
         return managementError(env, 403, "Only officers can reorder photos.");
     }
 
-    let body: { ids?: unknown };
+    let body: { keys?: unknown; ids?: unknown };
     try {
         body = (await request.json()) as typeof body;
     } catch {
         return managementError(env, 400, "Expected a JSON body.");
     }
-    if (!Array.isArray(body.ids)) {
-        return managementError(env, 400, 'Expected { "ids": ["...", "..."] }.');
+
+    // `keys` is the real field; `ids` is the legacy/hand-written form.
+    const raw = body.keys ?? body.ids;
+    if (!Array.isArray(raw)) {
+        return managementError(env, 400, 'Expected { "keys": ["drive:<id>", ...] }.');
     }
     // Reject a non-string entry rather than filtering it out: silently dropping
     // part of the submitted order would apply a sequence the officer never saw.
-    if (body.ids.some((id) => typeof id !== "string")) {
-        return managementError(env, 400, "Every entry in ids must be a string.");
+    if (raw.some((entry) => typeof entry !== "string")) {
+        return managementError(env, 400, "Every entry in keys must be a string.");
     }
-    const ids = body.ids as string[];
+    // Bare Drive ids become `drive:<id>` keys, so an older client or a curl body
+    // keeps working instead of silently matching nothing.
+    const keys = (raw as string[]).map((entry) => (entry.includes(":") ? entry : driveTileKey(entry)));
 
-    const updated = await setGalleryOrder(env, ids, now);
+    const updated = await setGalleryOrder(env, keys, now);
     if (updated === null) {
         return managementError(env, 404, "The gallery has not been synced yet.");
     }
-    return managementJson({ ids, count: ids.length }, { status: 200 }, env);
+
+    return managementJson({ keys, count: keys.length }, { status: 200 }, env);
 }
 
 async function handleGalleryUpload(env: Env, request: Request, now: Date): Promise<Response> {

@@ -202,8 +202,8 @@ export async function loadOrder(env: GalleryEnv): Promise<string[]> {
 }
 
 /** Persist the display order. One write, on an officer-initiated path only. */
-export async function saveOrder(env: GalleryEnv, ids: readonly string[], now: Date): Promise<void> {
-    await env.EVENTS_KV.put(GALLERY_ORDER_KV_KEY, JSON.stringify(serializeOrder(ids, now)));
+export async function saveOrder(env: GalleryEnv, keys: readonly string[], now: Date): Promise<void> {
+    await env.EVENTS_KV.put(GALLERY_ORDER_KV_KEY, JSON.stringify(serializeOrder(keys, now)));
 }
 
 /**
@@ -214,12 +214,16 @@ export async function saveOrder(env: GalleryEnv, ids: readonly string[], now: Da
  * the next sync. Both are officer-initiated, so the read path's
  * one-write-per-miss budget is untouched.
  *
+ * `keys` are TILE keys (`drive:<id>` / `site:<src>`), so one sequence can describe
+ * the whole grid -- including the curated photos this Worker has no entry for.
+ * Only the Drive half is sorted here; the browser applies the rest.
+ *
  * Accepts a partial list on purpose: a photo uploaded after the officer arranged
  * things does not need to be named, and is appended. See `sortEntriesByOrder`.
  */
 export async function setGalleryOrder(
     env: GalleryEnv,
-    ids: readonly string[],
+    keys: readonly string[],
     now: Date = new Date(),
 ): Promise<GalleryManifest | null> {
     const manifest = await loadManifest(env);
@@ -228,10 +232,10 @@ export async function setGalleryOrder(
     // and blank it for a whole TTL.
     if (manifest === null) return null;
 
-    await saveOrder(env, ids, now);
+    await saveOrder(env, keys, now);
 
     const entries = [...manifest.entries];
-    sortEntriesByOrder(entries, ids);
+    sortEntriesByOrder(entries, keys);
     const updated: GalleryManifest = { ...manifest, entries };
     await saveManifest(env, updated);
     return updated;

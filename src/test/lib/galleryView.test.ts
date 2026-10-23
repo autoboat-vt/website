@@ -2,9 +2,9 @@ import {
     altFromFileName,
     applyTileOrder,
     buildGalleryTiles,
-    driveIdsOf,
     galleryStatusNote,
     moveWithin,
+    tileKeysOf,
 } from "../../lib/galleryView";
 
 /**
@@ -136,26 +136,24 @@ describe("galleryStatusNote", () => {
     });
 });
 
-describe("driveIdsOf", () => {
+describe("tileKeysOf", () => {
     const imageUrl = (id: string) => `https://worker.example/gallery/image/${id}`;
 
-    it("lists only the Drive ids, in order", () => {
-        // Curated tiles have no id and cannot be reordered, so they are omitted
-        // from the sequence the reorder request sends.
+    it("lists EVERY tile key, curated ones included", () => {
+        // THE BUG THIS GUARDS. An earlier version used Drive ids, so the curated
+        // photos had no entry in the sequence and could not be reordered. Keys
+        // exist for both sources.
         const tiles = buildGalleryTiles(
-            [
-                { id: "a", name: "a.jpg", width: null, height: null, modifiedTime: null },
-                { id: "b", name: "b.jpg", width: null, height: null, modifiedTime: null },
-            ],
+            [{ id: "a", name: "a.jpg", width: null, height: null, modifiedTime: null }],
             curated,
             imageUrl,
         );
 
-        expect(driveIdsOf(tiles)).toEqual(["a", "b"]);
+        expect(tileKeysOf(tiles)).toEqual([`drive:a`, `site:${curated[0]?.src}`, `site:${curated[1]?.src}`]);
     });
 
-    it("returns an empty list when there are no Drive tiles", () => {
-        expect(driveIdsOf(buildGalleryTiles([], curated, imageUrl))).toEqual([]);
+    it("returns every key when there are no Drive tiles", () => {
+        expect(tileKeysOf(buildGalleryTiles([], curated, imageUrl))).toHaveLength(curated.length);
     });
 });
 
@@ -173,26 +171,36 @@ describe("applyTileOrder", () => {
         );
 
     it("reorders the Drive tiles", () => {
-        expect(driveIdsOf(applyTileOrder(threeDrive(), ["c", "a", "b"]))).toEqual(["c", "a", "b"]);
+        expect(tileKeysOf(applyTileOrder(threeDrive(), ["drive:c", "drive:a", "drive:b"]))).toEqual([
+            "drive:c",
+            "drive:a",
+            "drive:b",
+            `site:${curated[0]?.src}`,
+            `site:${curated[1]?.src}`,
+        ]);
     });
 
-    it("leaves the curated tiles at the end", () => {
-        // The server cannot reorder them, so a photo must never be moved into
-        // that section.
-        const result = applyTileOrder(threeDrive(), ["c", "a", "b"]);
-        const curatedPart = result.slice(3);
-        expect(curatedPart.every((t) => !t.driveId)).toBe(true);
-        expect(curatedPart).toHaveLength(curated.length);
+    it("reorders a curated tile too", () => {
+        // The whole point of the key change: curated photos are arrangeable.
+        const tiles = threeDrive();
+        const curatedKey = `site:${curated[1]?.src}`;
+        const result = applyTileOrder(tiles, [curatedKey]);
+
+        expect(result[0]?.key).toBe(curatedKey);
+        expect(result).toHaveLength(tiles.length);
     });
 
-    it("appends Drive tiles the order does not name", () => {
+    it("appends tiles the order does not name", () => {
         // A photo uploaded after the drag happened is not in the list yet, so it
         // must still appear rather than vanish.
-        expect(driveIdsOf(applyTileOrder(threeDrive(), ["c"]))).toEqual(["c", "a", "b"]);
+        const result = applyTileOrder(threeDrive(), ["drive:c"]);
+        expect(result[0]?.key).toBe("drive:c");
+        expect(result).toHaveLength(threeDrive().length);
     });
 
-    it("ignores an id that is not in the list", () => {
-        expect(driveIdsOf(applyTileOrder(threeDrive(), ["gone", "b", "a", "c"]))).toEqual(["b", "a", "c"]);
+    it("ignores a key that is not in the list", () => {
+        const result = applyTileOrder(threeDrive(), ["gone", "drive:b", "drive:a"]);
+        expect(tileKeysOf(result).slice(0, 3)).toEqual(["drive:b", "drive:a", "drive:c"]);
     });
 
     it("returns the tiles unchanged for an empty order", () => {
@@ -201,9 +209,9 @@ describe("applyTileOrder", () => {
 
     it("does not mutate the input", () => {
         const tiles = threeDrive();
-        const before = driveIdsOf(tiles);
-        applyTileOrder(tiles, ["c", "b", "a"]);
-        expect(driveIdsOf(tiles)).toEqual(before);
+        const before = tileKeysOf(tiles);
+        applyTileOrder(tiles, ["drive:c", "drive:b", "drive:a"]);
+        expect(tileKeysOf(tiles)).toEqual(before);
     });
 });
 

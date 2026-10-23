@@ -188,20 +188,34 @@ export function buildManifest(
  * Unlisted entries keep the default `compareEntries` order among themselves, so
  * the newest upload is first among the leftovers -- which is what a visitor
  * expects when the team has not curated anything recently.
+ *
+ * `order` holds TILE KEYS (`drive:<id>`), not bare ids, so one saved sequence can
+ * also describe the curated photos the browser owns. `ids` are accepted too, as
+ * a courtesy to a hand-written `PUT` body -- see `orderIdsFromKeys`'s inverse
+ * below.
  */
 export function sortEntriesByOrder(entries: GalleryEntry[], order: readonly string[]): void {
-    // Position of each listed id. A Map rather than `indexOf` because indexOf is
-    // O(n) per comparison, which makes the sort O(n^2 log n) on a big gallery.
+    // Position of each listed entry. A Map rather than `indexOf` because indexOf
+    // is O(n) per comparison, which makes the sort O(n^2 log n) on a big gallery.
+    //
+    // Keyed by the TILE KEY the site uses, so a key and a bare id both resolve:
+    // `driveTileKey` is what the browser sends, and a bare id is what a curl
+    // user would naturally type.
     const rank = new Map<string, number>();
     for (let i = 0; i < order.length; i++) {
-        const id = order[i];
-        // First occurrence wins, so a duplicated id cannot confuse the ranking.
-        if (id !== undefined && !rank.has(id)) rank.set(id, i);
+        const key = order[i];
+        // First occurrence wins, so a duplicated entry cannot confuse the ranking.
+        if (key === undefined || rank.has(key)) continue;
+        rank.set(key, i);
+        // Also rank the bare id, so a body of plain ids still orders correctly.
+        for (const id of orderIdsFromKeys([key])) {
+            if (!rank.has(id)) rank.set(id, i);
+        }
     }
 
     entries.sort((a, b) => {
-        const ar = rank.get(a.id);
-        const br = rank.get(b.id);
+        const ar = rank.get(driveTileKey(a.id)) ?? rank.get(a.id);
+        const br = rank.get(driveTileKey(b.id)) ?? rank.get(b.id);
         if (ar !== undefined && br !== undefined) return ar - br;
         // A listed photo always outranks an unlisted one, so appending a new
         // upload never displaces a photo somebody deliberately placed.
@@ -377,9 +391,54 @@ export function withHidden(ids: ReadonlySet<string>, fileId: string, hidden: boo
     return next;
 }
 
+/**
+ * Prefix for a Drive entry's TILE KEY, matching `buildGalleryTiles` on the site.
+ *
+ * WHY KEYS AND NOT JUST IDS. The saved display order has to describe the WHOLE
+ * grid, and roughly half of it is curated photos compiled into the site -- this
+ * Worker has no entry for those at all. A single sequence of opaque keys is
+ * therefore the only thing that can express the arrangement, and the browser
+ * applies the parts it owns.
+ *
+ * WARNING: This literal is duplicated in `src/lib/galleryView.ts`, which cannot
+ * import from the Worker (that code must not ship in the bundle). If one side
+ * changes, saved orders silently stop matching -- so any edit here must be
+ * mirrored there, and `galleryOrder.test.ts` pins the format.
+ */
+export const DRIVE_TILE_PREFIX = "drive:";
+
+/** The tile key for a Drive entry. */
+export function driveTileKey(fileId: string): string {
+    return `${DRIVE_TILE_PREFIX}${fileId}`;
+}
+
+/**
+ * The Drive file ids named by a saved tile-key order, in order.
+ *
+ * Drops curated keys (`site:...`) and anything unrecognisable: this Worker sorts
+ * only its own entries, and the curated half is the browser's business.
+ */
+export function orderIdsFromKeys(keys: readonly string[]): string[] {
+    const ids: string[] = [];
+    for (const key of keys) {
+        if (!key.startsWith(DRIVE_TILE_PREFIX)) continue;
+        const id = key.slice(DRIVE_TILE_PREFIX.length);
+        if (id) ids.push(id);
+    }
+    return ids;
+}
+
 /** The stored officer-chosen display order. */
 export interface OrderList {
-    ids: string[];
+    /**
+     * Tile keys, most-prominent first.
+     *
+     * WARNING: Named `keys` rather than `ids` since the order covers curated tiles
+     * too. A stored `ids` value from before that change simply parses as no
+     * order, which falls back to newest-first -- the same fail-safe direction as
+     * a corrupt value.
+     */
+    keys: string[];
     /** Epoch ms of the last change, for diagnostics. */
     updatedAt: number;
 }
@@ -388,7 +447,7 @@ export interface OrderList {
  * Safety cap on the stored order.
  *
  * Not a policy -- there is no product limit on reordering. It bounds one KV
- * value, and it is far above any plausible gallery size. Ids beyond it simply
+ * value, and it is far above any plausible gallery size. Keys beyond it simply
  * fall back to the default order.
  */
 export const MAX_ORDERED_IDS = 2000;
@@ -402,26 +461,26 @@ export const MAX_ORDERED_IDS = 2000;
  *
  * De-duplicates while preserving the FIRST position, matching
  * `sortEntriesByOrder`'s "first occurrence wins" rule so the stored list and the
- * sort cannot disagree about a repeated id.
+ * sort cannot disagree about a repeated key.
  */
 export function parseOrder(value: unknown): string[] {
     if (typeof value !== "object" || value === null) return [];
-    const raw = (value as Record<string, unknown>).ids;
+    const raw = (value as Record<string, unknown>).keys;
     if (!Array.isArray(raw)) return [];
     const seen = new Set<string>();
-    const ids: string[] = [];
-    for (const id of raw) {
-        if (typeof id !== "string" || id.length === 0) continue;
-        if (seen.has(id)) continue;
-        seen.add(id);
-        ids.push(id);
+    const keys: string[] = [];
+    for (const key of raw) {
+        if (typeof key !== "string" || key.length === 0) continue;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        keys.push(key);
     }
-    return ids;
+    return keys;
 }
 
 /** Serialize the order for KV, bounded by `MAX_ORDERED_IDS`. */
-export function serializeOrder(ids: readonly string[], now: Date): OrderList {
-    return { ids: ids.slice(0, MAX_ORDERED_IDS), updatedAt: now.getTime() };
+export function serializeOrder(keys: readonly string[], now: Date): OrderList {
+    return { keys: keys.slice(0, MAX_ORDERED_IDS), updatedAt: now.getTime() };
 }
 
 /**

@@ -24,7 +24,10 @@ export interface GalleryTile {
      * WARNING: Undefined for the curated (build-time) tiles. Those are part of the
      * site's design, not the team's photo library, so there is nothing to hide
      * -- and the hide endpoint would 404 on them. The page uses this to decide
-     * whether to offer the officer actions at all.
+     * whether to offer the photo's REMOVAL action.
+     *
+     * NOTE: An absent id does NOT mean the tile cannot be reordered. Ordering uses
+     * `key` (see `tileKeysOf`) precisely so curated photos can be arranged too.
      */
     driveId?: string;
 }
@@ -96,59 +99,48 @@ export function buildGalleryTiles(
 }
 
 /**
- * The Drive ids in a tile list, in display order.
+ * Every tile key, in display order -- the sequence a reorder request sends.
  *
- * Curated tiles have no `driveId` (they are not in Drive and cannot be
- * reordered), so they are filtered out. This is the sequence the reorder request
- * sends.
+ * WARNING: This uses `key`, not `driveId`. Curated photos have no Drive id, and an
+ * id-based sequence could therefore only ever describe the Drive half of the
+ * grid -- which is why "some images can't be reordered". Keys are unique across
+ * BOTH sources (`drive:<id>` / `site:<src>`), so one sequence can express the
+ * whole grid.
  */
-export function driveIdsOf(tiles: readonly GalleryTile[]): string[] {
-    const ids: string[] = [];
-    for (const tile of tiles) {
-        if (tile.driveId) ids.push(tile.driveId);
-    }
-    return ids;
+export function tileKeysOf(tiles: readonly GalleryTile[]): string[] {
+    return tiles.map((tile) => tile.key);
 }
 
 /**
- * Re-apply an officer's order to a tile list, for immediate feedback.
+ * Re-apply a saved order to a tile list, for immediate feedback.
  *
- * Only the DRIVE tiles move. The curated ones stay at the end -- they are the
- * site's editorial images, not part of the team's photo library, and dragging a
- * photo into that section would have no meaning on the server.
- *
- * Ids in `order` that are not in the list are skipped (a photo may have left
- * Drive), and drive tiles the order does not name keep their relative order
- * after the named ones. That mirrors `sortEntriesByOrder` on the Worker, so the
- * optimistic page and the server can never disagree about where something goes.
+ * Works on EVERY tile, curated included. Keys in `order` that are not in the list
+ * are skipped (a photo may have left Drive), and tiles the order does not name
+ * keep their relative order after the named ones -- mirroring the Worker's
+ * `sortEntriesByOrder`, so the optimistic page and the server cannot disagree
+ * about where something goes.
  */
 export function applyTileOrder(tiles: readonly GalleryTile[], order: readonly string[]): GalleryTile[] {
     if (order.length === 0) return [...tiles];
 
-    const driveTiles = tiles.filter((tile) => tile.driveId);
-    const curatedTiles = tiles.filter((tile) => !tile.driveId);
-
-    // Index the current tiles by id so an unknown id in the order is simply
-    // skipped rather than dropping the tile.
-    const byId = new Map<string, GalleryTile>();
-    for (const tile of driveTiles) {
-        if (tile.driveId) byId.set(tile.driveId, tile);
-    }
+    const byKey = new Map<string, GalleryTile>();
+    for (const tile of tiles) byKey.set(tile.key, tile);
 
     const placed = new Set<string>();
     const ordered: GalleryTile[] = [];
-    for (const id of order) {
-        const tile = byId.get(id);
-        if (!tile || placed.has(id)) continue;
+    for (const key of order) {
+        const tile = byKey.get(key);
+        if (!tile || placed.has(key)) continue;
         ordered.push(tile);
-        placed.add(id);
+        placed.add(key);
     }
-    // Anything the order did not name follows, keeping its current position.
-    for (const tile of driveTiles) {
-        if (tile.driveId && !placed.has(tile.driveId)) ordered.push(tile);
+    // Anything the order did not name follows, keeping its current position --
+    // which is what lets a newly uploaded photo appear at the end.
+    for (const tile of tiles) {
+        if (!placed.has(tile.key)) ordered.push(tile);
     }
 
-    return [...ordered, ...curatedTiles];
+    return ordered;
 }
 
 /**

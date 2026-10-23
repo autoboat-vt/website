@@ -1,6 +1,6 @@
 ---
 description: "Use when working on the gallery: the Google Drive folder sync, the R2 mirror, the officer upload UI, hiding/restoring a photo, ordering the photos, the service-account credentials, or the gallery manifest. Covers why Drive is the source of truth and R2 the delivery mirror, the reconciliation rules in gallery.ts, the sync batch limits, HEIC rejection, the two registered OAuth redirect URIs, and the gallery test suites."
-applyTo: "worker/src/{googleAuth,drive,gallery,gallerySync,galleryUpload}.ts, src/lib/{galleryClient,galleryView,loginRedirect}.ts, src/components/{GalleryUpload,ImageModal}.tsx, src/pages/Gallery.tsx, worker/wrangler.jsonc, src/test/{lib,worker,pages,components}/*gallery*.test.ts, src/test/worker/galleryRoutes.test.ts, src/test/worker/oauthRedirect.test.ts"
+applyTo: "worker/src/{googleAuth,drive,gallery,gallerySync,galleryUpload}.ts, src/lib/{galleryClient,galleryView,imageConvert,loginRedirect}.ts, src/components/{GalleryUpload,ImageModal}.tsx, src/pages/Gallery.tsx, worker/wrangler.jsonc, src/test/{lib,worker,pages,components}/*gallery*.test.ts, src/test/lib/imageConvert.test.ts, src/test/worker/galleryRoutes.test.ts, src/test/worker/oauthRedirect.test.ts"
 ---
 
 # Gallery: Google Drive -> R2 -> the website
@@ -84,6 +84,21 @@ WARNING: **The R2 delete sweep must only touch the `gallery/` prefix.** Anything
 - **Type**: an allowlist of JPEG, PNG, WebP, GIF, AVIF.
 - **Bytes are sniffed**, because `File.type` is the OS's guess at the extension.
 
+### Everything is converted to WebP before upload
+
+`src/lib/imageConvert.ts` (`toWebp`) re-encodes the file in the browser before it
+is sent, so BOTH the Drive copy and the R2 mirror are WebP.
+
+WARNING: **The Worker cannot do this conversion.** Cloudflare Workers have no image encoder -- `sharp` and every native codec are unavailable -- so a conversion there is not an option. The browser's `createImageBitmap` + `canvas.toBlob` is both free and the only path, and it makes the UPLOAD smaller too, which matters on a phone at a regatta.
+
+WARNING: **The conversion replaces the bytes in Drive.** The uploaded file is the WebP, not the camera original. `WEBP_QUALITY` is therefore 0.9 (typically 25-35% smaller than the JPEG with no visible difference) rather than a size-first setting. If the team ever wants true originals archived, they must keep them outside this folder.
+
+WARNING: **Conversion failure must NEVER block an upload.** Every failure path -- an unsupported codec, an oversized canvas, a decode error, a result that is not smaller -- returns the ORIGINAL file with `converted: false`. A gallery that refuses an upload because an optimization failed is worse than a gallery with a JPEG in it. `imageConvert.test.ts` pins each path.
+
+WARNING: **The dimension clamp runs BEFORE the canvas.** `canvas.toBlob` silently returns an EMPTY blob once the canvas exceeds the browser's area limit (Chrome ~268 MP, Safari lower), which looks like an encoder failure rather than a size problem. `MAX_CONVERT_DIMENSION` (4096) keeps a 48 MP phone photo convertible.
+
+NOTE: An already-WebP upload is passed through untouched -- re-encoding a lossy format only loses quality.
+
 WARNING: **HEIC is checked BEFORE the generic allowlist.** It is the iPhone default, no browser can render it, and the generic "unsupported type" message does not tell the user there is a setting that fixes it. Ordering matters: HEIC is not in the allowlist, so the generic branch would otherwise swallow it -- which is exactly what happened until a test caught it.
 
 WARNING: **Subfolders are not traversed.** Only direct children of the configured folder are published. Recursing would let an unrelated folder dragged into the tree publish itself by accident.
@@ -122,6 +137,14 @@ NOTE: The hide route costs two KV writes (the hidden set, then the manifest). Bo
 A signed-in officer drags photos **directly on the grid** -- no panel to open.
 This is the ONLY reorder UI; the panel used to carry a duplicate drag list and it
 was removed.
+
+WARNING: **The saved order is a list of TILE KEYS (`drive:<id>` / `site:<src>`), not Drive ids.** The grid is half Drive photos and half curated photos compiled into the site, and the Worker only knows the Drive half -- an id-only sequence can therefore only describe part of the page, which is exactly what made "some images can't be reordered". Keys are unique across both sources, so one sequence covers the whole grid: the Worker sorts its own entries and the browser applies the rest.
+
+WARNING: **`DRIVE_TILE_PREFIX` is duplicated** in `worker/src/gallery.ts` and `src/lib/galleryView.ts`. The site cannot import from the Worker (that code must not ship in the bundle), so changing one literal silently breaks matching against saved orders. Edit both, and keep `galleryOrder.test.ts` pinning the format.
+
+WARNING: **Every tile is draggable for an officer, curated photos included.** Do not reintroduce a `photo.driveId` check on `canReorder` -- that was the bug. `driveId` still gates REMOVAL (the hide endpoint needs it) and nothing else.
+
+NOTE: The put route still accepts a bare `{ "ids": [...] }` body and normalizes each entry to `drive:<id>`, so a hand-written curl call keeps working.
 
 WARNING: **Native HTML5 drag does not fire on touch devices** (`dragstart` never happens on a phone), and a `draggable` `<button>` cannot be dragged from the keyboard. Reordering is therefore desktop-pointer-only today. There is no button fallback -- that went with the panel list, and restoring one means either a touch-capable drag implementation or a per-tile move control on the grid.
 
@@ -200,7 +223,8 @@ mean one copy eventually replays a spent code.
 - `src/test/worker/galleryOrder.test.ts` -- the pure ordering rule: listed ids first, unlisted appended newest-first, stale ids harmless, first-occurrence-wins for duplicates, `moveInOrder` clamping, `parseOrder` tolerance.
 - `src/test/worker/galleryOrderSync.test.ts` -- the WIRING, through `syncGallery` with the Drive client mocked. Removing the `loadOrder` call fails this file while every pure ordering test stays green.
 - `src/test/worker/galleryOrderRoutes.test.ts` -- the order endpoints: auth, body validation (non-array and non-string entries both 400), the immediate manifest re-sort, and that `/manage/gallery/order` is claimed before the `{id}` route.
-- `src/test/lib/galleryView.test.ts` -- merge order, dedupe by src, alt text from filenames, status wording.
+- `src/test/lib/galleryView.test.ts` -- merge order, dedupe by src, alt text from filenames, status wording, and that `tileKeysOf` covers BOTH sources (the curated-tile reorder bug).
+- `src/test/lib/imageConvert.test.ts` -- WebP conversion: filename rewriting, the dimension clamp, and that every failure path returns the untouched original.
 
 WARNING: **The `DRIVE_FILE_ID` check must accept short ids.** It was `{10,128}` and every image-route test 404'd; real Drive ids are 28-44 chars but a fixture or a Shared Drive id can be shorter, and only the CHARACTER SET actually matters because the value becomes an R2 key and a path segment.
 

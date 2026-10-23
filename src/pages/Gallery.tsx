@@ -12,7 +12,7 @@ import {
     setPhotoHidden,
 } from "../lib/galleryClient";
 import { ALL_GALLERY_IMAGES } from "../lib/galleryImages";
-import { applyTileOrder, buildGalleryTiles, driveIdsOf, galleryStatusNote, moveWithin } from "../lib/galleryView";
+import { applyTileOrder, buildGalleryTiles, galleryStatusNote, moveWithin, tileKeysOf } from "../lib/galleryView";
 
 /**
  * The public gallery.
@@ -186,18 +186,16 @@ export default function Gallery() {
             const fromIndex = renderedTiles.findIndex((tile) => tile.key === fromKey);
             const toIndex = renderedTiles.findIndex((tile) => tile.key === toKey);
             if (fromIndex < 0 || toIndex < 0) return;
-            // Dropping onto a curated tile would put a photo into a section the
-            // server cannot reorder, so it is ignored rather than silently
-            // saved as a no-op.
-            if (!renderedTiles[fromIndex]?.driveId || !renderedTiles[toIndex]?.driveId) return;
 
             const next = moveWithin(renderedTiles, fromIndex, toIndex);
-            const ids = driveIdsOf(next);
-            setPendingOrder(ids);
+            // Tile keys, not Drive ids: the curated photos have no Drive id, and
+            // an id-only sequence is why some images could not be reordered.
+            const keys = tileKeysOf(next);
+            setPendingOrder(keys);
             setOrderError(null);
             setSavingOrder(true);
 
-            saveGalleryOrder(session, ids)
+            saveGalleryOrder(session, keys)
                 .then(() => {
                     // Refetch so the manifest (and therefore every other viewer)
                     // reflects the new order, then drop the local override.
@@ -271,11 +269,11 @@ export default function Gallery() {
                 column turns the page into an ~11,000px scroll. */}
             <div className="photo-container mx-auto grid max-w-275 grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 px-4 pb-50 max-[620px]:grid-cols-2 max-[620px]:gap-2">
                 {renderedTiles.map((photo) => {
-                    // Only DRIVE tiles are draggable, and only for an officer.
-                    // A curated photo is part of the site's design and has no
-                    // server-side position to change, so making it draggable
-                    // would promise something the save cannot honour.
-                    const canReorder = Boolean(session && photo.driveId);
+                    // EVERY tile is draggable for an officer now -- curated photos
+                    // included, which is what "some images can't be reordered"
+                    // was about. Ordering is a property of the KEY, not of a Drive
+                    // id, so both sources share one sequence.
+                    const canReorder = Boolean(session);
                     const isDragging = dragKey === photo.key;
                     const isDropTarget = overKey === photo.key && dragKey !== null && dragKey !== photo.key;
 
@@ -300,7 +298,7 @@ export default function Gallery() {
                                 // `effectAllowed` is what makes the cursor read as
                                 // "move" instead of "copy".
                                 event.dataTransfer.effectAllowed = "move";
-                                event.dataTransfer.setData("text/plain", photo.driveId ?? "");
+                                event.dataTransfer.setData("text/plain", photo.key);
                             }}
                             onDragOver={(event) => {
                                 if (!canReorder || dragKey === null) return;

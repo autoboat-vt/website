@@ -345,11 +345,12 @@ export async function setPhotoHidden(session: ManageSession, fileId: string, hid
  * a single move. See the Worker's handler for why a (from, to) pair is unsafe
  * once more than one officer can upload.
  *
- * A photo uploaded after this call is not in `ids`; it appears at the end of the
- * custom order rather than displacing anything, which is why an officer does not
- * have to reorder after every upload.
+ * `keys` are TILE keys (`drive:<id>` / `site:<src>`), not Drive ids, so one
+ * sequence can describe the whole grid including the curated photos. A photo
+ * uploaded later is not named and appears at the end rather than displacing
+ * anything, which is why an officer does not have to reorder after every upload.
  */
-export async function saveGalleryOrder(session: ManageSession, ids: readonly string[]): Promise<void> {
+export async function saveGalleryOrder(session: ManageSession, keys: readonly string[]): Promise<void> {
     const url = `${MANAGE_GALLERY_URL}/order`;
     let res: Response;
     try {
@@ -359,7 +360,10 @@ export async function saveGalleryOrder(session: ManageSession, ids: readonly str
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${session.token}`,
             },
-            body: JSON.stringify({ ids }),
+            // `keys` matches what the Worker stores. The route still accepts an
+            // `ids` body for a hand-written curl call, but the page always sends
+            // keys so curated photos are covered.
+            body: JSON.stringify({ keys }),
             cache: "no-store",
         });
     } catch (err) {

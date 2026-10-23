@@ -697,7 +697,8 @@ WARNING: **Drive is never contacted while rendering the page.** A public page vi
 ### Ordering the photos
 
 By default the gallery is newest-first. A signed-in officer can change it by
-**dragging a photo on the gallery grid itself** -- the change saves immediately.
+**dragging a photo on the gallery grid itself** -- any photo, including the ones
+built into the site -- and the change saves immediately.
 
 NOTE: Drag is desktop-pointer-only. Native HTML5 drag does not fire on touch
 devices, so reordering cannot be done from a phone today. There is no button
@@ -707,10 +708,11 @@ fallback (the panel list that used to provide one was removed as duplicate UI).
 # Current order (visible photos only).
 curl <worker-url>/manage/gallery/order -H "Authorization: Bearer <session>"
 
-# Set it. The whole sequence, first photo most prominent.
+# Set it. The whole sequence, first photo most prominent. Keys are
+# `drive:<id>` / `site:<path>`; a bare Drive id is accepted and normalized.
 curl -X PUT <worker-url>/manage/gallery/order \
   -H "Authorization: Bearer <session>" -H "Content-Type: application/json" \
-  -d '{"ids": ["<driveId>", "<driveId>"]}'
+  -d '{"keys": ["drive:<driveId>", "drive:<driveId>"]}'
 ```
 
 WARNING: **The order is stored on its own KV key (`gallery:order:v1`), not in the manifest.** The manifest is rebuilt from Drive every 5 minutes, so an order kept only there would revert to newest-first on the next cron run.
@@ -718,6 +720,14 @@ WARNING: **The order is stored on its own KV key (`gallery:order:v1`), not in th
 NOTE: A partial list is fine. Ids that no longer match a photo are ignored, and any photo not named keeps its default place *after* the ones that are -- so a new upload appears at the end and never displaces something you arranged. That is why you do not have to reorder after every upload.
 
 NOTE: Hiding a photo does not change the order. A photo restored from the removed list reappears at the end of the custom order.
+
+Uploads are converted to **WebP in the browser** before they are sent, so the
+Drive copy and the R2 mirror are both WebP. The Worker cannot do this -- Workers
+have no image encoder -- and the side benefit is a smaller upload from a phone.
+
+NOTE: This means the file in Drive is the converted WebP, not the camera
+original. Quality is set high (0.9) rather than size-first. Keep originals
+elsewhere if the team needs a true archive.
 
 ### Removing a photo
 

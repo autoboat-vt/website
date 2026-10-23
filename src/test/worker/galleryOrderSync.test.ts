@@ -106,7 +106,9 @@ describe("syncGallery applies the saved order", () => {
     it("re-sorts the manifest from the stored order", async () => {
         // THE REGRESSION TEST for this feature. Without the `loadOrder` call in
         // the sync, this reverts to charlie/bravo/alpha (newest first).
-        const kv = makeKv({ [GALLERY_ORDER_KV_KEY]: { ids: ["bravo", "charlie", "alpha"], updatedAt: 1 } });
+        const kv = makeKv({
+            [GALLERY_ORDER_KV_KEY]: { keys: ["drive:bravo", "drive:charlie", "drive:alpha"], updatedAt: 1 },
+        });
 
         const result = await syncGallery(makeEnv(kv, makeBucket(ALL_MIRRORED)), NOW);
 
@@ -122,7 +124,7 @@ describe("syncGallery applies the saved order", () => {
     it("keeps a newly uploaded photo at the end rather than first", async () => {
         // The list is partial by design: a photo added after the order was saved
         // is not named in it, so it must not displace a deliberate placement.
-        const kv = makeKv({ [GALLERY_ORDER_KV_KEY]: { ids: ["charlie"], updatedAt: 1 } });
+        const kv = makeKv({ [GALLERY_ORDER_KV_KEY]: { keys: ["drive:charlie"], updatedAt: 1 } });
 
         const result = await syncGallery(makeEnv(kv, makeBucket(ALL_MIRRORED)), NOW);
 
@@ -132,7 +134,7 @@ describe("syncGallery applies the saved order", () => {
     it("does not write the order key during a sync", async () => {
         // The order only changes when an officer acts, so the sync must not spend
         // KV writes on it. (The manifest write is the sync's one write.)
-        const kv = makeKv({ [GALLERY_ORDER_KV_KEY]: { ids: ["bravo"], updatedAt: 1 } });
+        const kv = makeKv({ [GALLERY_ORDER_KV_KEY]: { keys: ["drive:bravo"], updatedAt: 1 } });
 
         await syncGallery(makeEnv(kv, makeBucket(ALL_MIRRORED)), NOW);
 
@@ -144,7 +146,7 @@ describe("syncGallery applies the saved order", () => {
         // The two preferences are independent and must both survive a rebuild.
         const kv = makeKv({
             "gallery:hidden:v1": { ids: ["alpha"], updatedAt: 1 },
-            [GALLERY_ORDER_KV_KEY]: { ids: ["charlie", "bravo", "alpha"], updatedAt: 1 },
+            [GALLERY_ORDER_KV_KEY]: { keys: ["drive:charlie", "drive:bravo", "drive:alpha"], updatedAt: 1 },
         });
 
         const result = await syncGallery(makeEnv(kv, makeBucket(ALL_MIRRORED)), NOW);
@@ -169,7 +171,10 @@ describe("syncGallery applies the saved order", () => {
         // A photo deleted from Drive leaves its id behind in the list. That is
         // deliberate (see sortEntriesByOrder) and must not break the sync.
         const kv = makeKv({
-            [GALLERY_ORDER_KV_KEY]: { ids: ["deleted-photo", "charlie", "alpha", "bravo"], updatedAt: 1 },
+            [GALLERY_ORDER_KV_KEY]: {
+                keys: ["drive:deleted-photo", "drive:charlie", "drive:alpha", "drive:bravo"],
+                updatedAt: 1,
+            },
         });
 
         const result = await syncGallery(makeEnv(kv, makeBucket(ALL_MIRRORED)), NOW);
@@ -201,7 +206,7 @@ describe("order round-trip through the route's write path", () => {
         const kv = makeKv({ "gallery:manifest:v1": seeded });
         const bucket = makeBucket(ALL_MIRRORED);
 
-        await setGalleryOrder(makeEnv(kv, bucket), ["alpha", "bravo", "charlie"], NOW);
+        await setGalleryOrder(makeEnv(kv, bucket), ["drive:alpha", "drive:bravo", "drive:charlie"], NOW);
         const result = await syncGallery(makeEnv(kv, bucket), NOW);
 
         expect(result.manifest.entries.map((e) => e.id)).toEqual(["alpha", "bravo", "charlie"]);

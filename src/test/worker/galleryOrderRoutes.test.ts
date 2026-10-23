@@ -146,14 +146,44 @@ describe("PUT /manage/gallery/order", () => {
         const res = await call(
             "PUT",
             "/manage/gallery/order",
-            { ids: ["alpha", "charlie", "bravo"] },
+            { keys: ["drive:alpha", "drive:charlie", "drive:bravo"] },
             await officerToken(),
             { EVENTS_KV: kv },
         ).res;
 
         expect(res.status).toBe(200);
-        const stored = kv.store["gallery:order:v1"] as { ids: string[] };
-        expect(stored.ids).toEqual(["alpha", "charlie", "bravo"]);
+        const stored = kv.store["gallery:order:v1"] as { keys: string[] };
+        expect(stored.keys).toEqual(["drive:alpha", "drive:charlie", "drive:bravo"]);
+    });
+
+    it("normalizes bare Drive ids to tile keys", async () => {
+        // A hand-written curl body naturally uses plain ids; accepting them keeps
+        // that from silently matching nothing.
+        const kv = makeKv({ "gallery:manifest:v1": manifestWithThree() });
+        const res = await call("PUT", "/manage/gallery/order", { ids: ["alpha"] }, await officerToken(), {
+            EVENTS_KV: kv,
+        }).res;
+
+        expect(res.status).toBe(200);
+        const stored = kv.store["gallery:order:v1"] as { keys: string[] };
+        expect(stored.keys).toEqual(["drive:alpha"]);
+    });
+
+    it("accepts a curated key it has no entry for", async () => {
+        // The browser owns the curated half, so the Worker must store the key
+        // without complaining even though it cannot sort anything with it.
+        const kv = makeKv({ "gallery:manifest:v1": manifestWithThree() });
+        const res = await call(
+            "PUT",
+            "/manage/gallery/order",
+            { keys: ["site:/images/x.webp", "drive:alpha"] },
+            await officerToken(),
+            { EVENTS_KV: kv },
+        ).res;
+
+        expect(res.status).toBe(200);
+        const stored = kv.store["gallery:order:v1"] as { keys: string[] };
+        expect(stored.keys).toEqual(["site:/images/x.webp", "drive:alpha"]);
     });
 
     it("re-sorts the manifest so the page reflects it immediately", async () => {

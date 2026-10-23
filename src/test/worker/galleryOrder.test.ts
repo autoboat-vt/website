@@ -117,7 +117,7 @@ describe("buildManifest with an order", () => {
 
 describe("parseOrder", () => {
     it("reads a stored list", () => {
-        expect(parseOrder({ ids: ["a", "b"] })).toEqual(["a", "b"]);
+        expect(parseOrder({ keys: ["a", "b"] })).toEqual(["a", "b"]);
     });
 
     it("reads anything unrecognisable as no custom order", () => {
@@ -125,25 +125,25 @@ describe("parseOrder", () => {
         // a gallery that renders nothing.
         expect(parseOrder(null)).toEqual([]);
         expect(parseOrder({})).toEqual([]);
-        expect(parseOrder({ ids: "nope" })).toEqual([]);
+        expect(parseOrder({ keys: "nope" })).toEqual([]);
     });
 
     it("drops non-string and empty entries", () => {
-        expect(parseOrder({ ids: ["a", 3, null, "", "b"] })).toEqual(["a", "b"]);
+        expect(parseOrder({ keys: ["a", 3, null, "", "b"] })).toEqual(["a", "b"]);
     });
 
     it("de-duplicates keeping the first occurrence", () => {
-        expect(parseOrder({ ids: ["a", "b", "a"] })).toEqual(["a", "b"]);
+        expect(parseOrder({ keys: ["a", "b", "a"] })).toEqual(["a", "b"]);
     });
 });
 
 describe("serializeOrder", () => {
     it("stores the ids with a timestamp", () => {
-        expect(serializeOrder(["a", "b"], NOW)).toEqual({ ids: ["a", "b"], updatedAt: NOW.getTime() });
+        expect(serializeOrder(["a", "b"], NOW)).toEqual({ keys: ["a", "b"], updatedAt: NOW.getTime() });
     });
 
     it("caps the list at the safety ceiling", () => {
         const many = Array.from({ length: MAX_ORDERED_IDS + 10 }, (_, i) => `id-${i}`);
-        expect(serializeOrder(many, NOW).ids).toHaveLength(MAX_ORDERED_IDS);
+        expect(serializeOrder(many, NOW).keys).toHaveLength(MAX_ORDERED_IDS);
     });
 });

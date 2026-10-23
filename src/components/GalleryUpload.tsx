@@ -11,6 +11,7 @@ import {
     uploadImage,
     validateFileLocally,
 } from "../lib/galleryClient";
+import { toWebp } from "../lib/imageConvert";
 import { completeLoginFromUrl } from "../lib/loginRedirect";
 
 /**
@@ -254,7 +255,11 @@ export default function GalleryUpload({ onUploaded }: GalleryUploadProps) {
 
         setStatus("uploading");
         try {
-            const result = await uploadImage(session, file);
+            // Convert BEFORE uploading, so the Drive copy and the R2 mirror are
+            // both WebP. A failed conversion returns the original, which is why
+            // this cannot block the upload.
+            const converted = await toWebp(file);
+            const result = await uploadImage(session, converted.file);
             setStatus("done");
             setMessage(
                 result.mirrored
