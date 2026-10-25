@@ -190,10 +190,6 @@
     // Create it with:  npx wrangler r2 bucket create autoboat-gallery
     "r2_buckets": [
         {
-            "binding": "GALLERY_BUCKET",
-            "bucket_name": "autoboat-gallery"
-        },
-        {
             "bucket_name": "autoboat-gallery",
             "binding": "autoboat_gallery",
             "remote": true
