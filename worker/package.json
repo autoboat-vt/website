@@ -1,5 +1,5 @@
 {
-    "name": "autoboat-discord-events-worker",
+    "name": "autoboat-cloudflare-helper-worker",
     "private": true,
     "version": "1.0.0",
     "type": "module",

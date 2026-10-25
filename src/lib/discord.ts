@@ -37,7 +37,7 @@ declare global {
 }
 
 export const EVENTS_URL: string =
-    globalThis.__VITE_EVENTS_URL__ || "https://autoboat-discord-events.autoboat-at-virginia-tech.workers.dev";
+    globalThis.__VITE_EVENTS_URL__ || "https://autoboat-cloudflare-helper.autoboat-at-virginia-tech.workers.dev";
 
 /**
  * Discord guild (server) ID whose scheduled events we're displaying. Public

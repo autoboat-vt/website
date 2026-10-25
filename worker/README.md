@@ -1,4 +1,4 @@
-# autoboat-discord-events Worker
+# autoboat-cloudflare-helper Worker
 
 Cloudflare Worker that proxies Discord's guild scheduled-events REST API for the
 AutoBoat website calendar. The website is a fully static S3 site, so the bot
@@ -563,7 +563,7 @@ when available, else `npx`):
 ```
 
 The output line ends with the production URL, e.g.
-`https://autoboat-discord-events.<your-account>.workers.dev`. Paste that into
+`https://autoboat-cloudflare-helper.<your-account>.workers.dev`. Paste that into
 [src/lib/discord.ts](../src/lib/discord.ts) as the `EVENTS_URL` fallback.
 
 Redeploying does not disturb `DISCORD_BOT_TOKEN` — Cloudflare secrets survive
@@ -575,7 +575,7 @@ Redeploying does not disturb `DISCORD_BOT_TOKEN` — Cloudflare secrets survive
 can add the team calendar to Google Calendar, Apple Calendar, or Outlook:
 
 ```
-https://autoboat-discord-events.<your-account>.workers.dev/calendar.ics
+https://autoboat-cloudflare-helper.<your-account>.workers.dev/calendar.ics
 ```
 
 - `webcal://` + the same URL (scheme swapped) hands the feed to the OS

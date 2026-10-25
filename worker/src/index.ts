@@ -1,5 +1,5 @@
 /**
- * autoboat-discord-events Worker
+ * autoboat-cloudflare-helper Worker
  *
  * Serves a normalized JSON list of Discord guild scheduled events to the
  * AutoBoat website, without exposing the Discord bot token in the browser.
