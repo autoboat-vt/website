@@ -9,7 +9,8 @@ import { Link } from "react-router-dom";
 interface FeaturePage {
     /**
      * An in-app route (e.g. `/gallery`) for internal entries, or a full URL
-     * (e.g. `https://autoboat-docs.pages.dev`) when `external` is set.
+     * (e.g. `https://autoboat.aoe.vt.edu/documentation/`) when `external` is
+     * set.
      */
     to: string;
     title: string;
@@ -44,15 +45,16 @@ const FEATURE_PAGES: FeaturePage[] = [
         description: "Photos of the team at work in the Ware Lab and out on the water.",
     },
     {
-        // External: the docs site is a separate Cloudflare Pages deployment of the
-        // `documentation` repo, not a route in this app. `external: true` renders it
-        // as a plain <a>.
+        // External: the docs site is a separate deployment of the `documentation`
+        // repo, not a route in this app. `external: true` renders it as a plain <a>.
         //
-        // NOTE: Points at the primary host. GitHub Pages
-        // (https://autoboat-vt.github.io/documentation) is a mirror of the same
-        // build, but the Cloudflare copy is canonical, so linking there keeps the
-        // outbound reference consistent with the canonical tags.
-        to: "https://autoboat-docs.pages.dev",
+        // NOTE: Points at OUR domain, not the Cloudflare host. The content is
+        // served by Cloudflare Pages (https://autoboat-docs.pages.dev), but
+        // /documentation/ on the main site is a loader page that frames it. That
+        // is the URL people share, and it keeps them on the team's domain. The
+        // GitHub Pages copy (autoboat-vt.github.io/documentation) is a mirror of
+        // the same build.
+        to: "https://autoboat.aoe.vt.edu/documentation/",
         title: "Documentation",
         description: "Technical write-ups, build logs, and guides for our boats and software, maintained by the team.",
         external: true,
