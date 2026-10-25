@@ -9,8 +9,7 @@ import { Link } from "react-router-dom";
 interface FeaturePage {
     /**
      * An in-app route (e.g. `/gallery`) for internal entries, or a full URL
-     * (e.g. `https://autoboat-vt.github.io/documentation`) when `external` is
-     * set.
+     * (e.g. `https://autoboat-docs.pages.dev`) when `external` is set.
      */
     to: string;
     title: string;
@@ -45,9 +44,15 @@ const FEATURE_PAGES: FeaturePage[] = [
         description: "Photos of the team at work in the Ware Lab and out on the water.",
     },
     {
-        // External: the docs site is a separate GitHub Pages deployment, not a
-        // route in this app. `external: true` renders it as a plain <a>.
-        to: "https://autoboat-vt.github.io/documentation",
+        // External: the docs site is a separate Cloudflare Pages deployment of the
+        // `documentation` repo, not a route in this app. `external: true` renders it
+        // as a plain <a>.
+        //
+        // NOTE: Points at the primary host. GitHub Pages
+        // (https://autoboat-vt.github.io/documentation) is a mirror of the same
+        // build, but the Cloudflare copy is canonical, so linking there keeps the
+        // outbound reference consistent with the canonical tags.
+        to: "https://autoboat-docs.pages.dev",
         title: "Documentation",
         description: "Technical write-ups, build logs, and guides for our boats and software, maintained by the team.",
         external: true,

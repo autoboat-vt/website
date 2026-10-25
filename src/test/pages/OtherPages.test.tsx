@@ -38,9 +38,11 @@ describe("Other Pages page", () => {
     it("links to the external documentation site", () => {
         renderOtherPages();
 
+        // Primary host (Cloudflare Pages). GitHub Pages mirrors the same build,
+        // but the Cloudflare copy is canonical.
         expect(screen.getByText("Documentation").closest("a")).toHaveAttribute(
             "href",
-            "https://autoboat-vt.github.io/documentation",
+            "https://autoboat-docs.pages.dev",
         );
     });
 

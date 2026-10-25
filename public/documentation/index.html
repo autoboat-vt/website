@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Documentation | AutoBoat at Virginia Tech</title>
+        <meta
+            name="description"
+            content="Technical documentation for the AutoBoat team: build guides, ROS2 packages, firmware, and devcontainer setup."
+        />
+        <!--
+            LOADER PAGE for the Cloudflare-hosted documentation site.
+
+            This file is a shell and nothing else. The actual documentation is
+            built by the documentation repo's GitHub Action and deployed to
+            Cloudflare Pages; this page renders that site full-viewport in an
+            iframe.
+
+            WHY AN IFRAME RATHER THAN A PROXY OR A REDIRECT
+            -----------------------------------------------
+            - A redirect would move the user off autoboat.aoe.vt.edu, so the URL
+              people were given would immediately stop being the URL they are on.
+            - A proxy needs a Worker in front of the S3 origin, which VT controls;
+              we cannot put one there.
+            The iframe keeps the aoe.vt.edu URL while the content is served by
+            Cloudflare. It relies on one thing we DO control: the docs site must
+            allow being framed from this origin. That permission is granted by
+            documentation/docs/_headers (Content-Security-Policy: frame-ancestors).
+
+            WHY THIS FILE LIVES IN website/public/documentation/
+            ---------------------------------------------------
+            WARNING: scripts/deploy.sh step 7 runs `git rm -rf .` inside a worktree
+            based on aoe_sites/main, then copies dist/ in. So ANYTHING hand-committed
+            to the S4 repo is DELETED on the next website deploy. The only way a page
+            survives there is to ship it through this repo's build, and Vite copies
+            public/ verbatim into dist/. Do not move it to the S4 repo.
+
+            WARNING: /documentation must NOT be added to src/lib/seoRoutes.json.
+            scripts/spa-fallback.mjs copies dist/index.html over
+            dist/<route>/index.html for every route in that JSON, which would
+            overwrite this page with the React SPA shell.
+
+            WARNING: The iframe src below is hard-coded and must stay in sync with
+            PAGES_PROJECT in documentation/.github/workflows/deploy-docs.yml. If
+            the Pages project is renamed, update both. src/test/lib/docsPlaceholder
+            .test.ts asserts the two agree.
+        -->
+        <meta name="robots" content="noindex, follow" />
+        <link rel="canonical" href="https://autoboat-docs.pages.dev/" />
+        <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f0eee6" />
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1f1e1d" />
+        <style>
+            /* Self-contained on purpose: this page must not depend on the SPA's
+               hashed assets, which change filename on every build. */
+            :root {
+                --maroon: #861f41;
+                --bg: #f0eee6;
+                --fg: #1f1e1d;
+                --muted: #5c5852;
+            }
+
+            @media (prefers-color-scheme: dark) {
+                :root {
+                    --bg: #1f1e1d;
+                    --fg: #f0eee6;
+                    --muted: #b3ada2;
+                }
+            }
+
+            html,
+            body {
+                margin: 0;
+                height: 100%;
+            }
+
+            body {
+                background: var(--bg);
+                color: var(--fg);
+                font-family: system-ui, -apple-system, "Segoe UI", Ubuntu, Arial, Helvetica, sans-serif;
+            }
+
+            /* Full-viewport iframe. The docs site has its own navigation and theme
+               switcher, so the wrapper adds no chrome of its own. */
+            .docs-frame {
+                display: block;
+                width: 100%;
+                height: 100%;
+                border: 0;
+            }
+
+            /* Shown only if the docs host is unreachable (see the script below).
+               position: fixed keeps it from affecting the iframe's layout, since a
+               blocked frame fires no reliable in-page event. */
+            .fallback {
+                position: fixed;
+                inset: 0;
+                display: none;
+                place-content: center;
+                padding: 2rem;
+                background: var(--bg);
+                text-align: center;
+                z-index: 1;
+            }
+
+            .fallback[data-visible="true"] {
+                display: grid;
+            }
+
+            .fallback h1 {
+                margin: 0 0 0.5rem;
+                font-size: 1.5rem;
+                font-weight: 800;
+            }
+
+            .fallback p {
+                margin: 0 auto 1.25rem;
+                max-width: 34rem;
+                color: var(--muted);
+                line-height: 1.6;
+            }
+
+            .fallback a {
+                display: inline-block;
+                padding: 0.6rem 1.1rem;
+                border-radius: 999px;
+                background: var(--maroon);
+                color: #fff;
+                font-weight: 700;
+                text-decoration: none;
+            }
+
+            .fallback a + a {
+                margin-left: 0.5rem;
+                background: transparent;
+                color: var(--fg);
+                border: 1px solid var(--muted);
+            }
+        </style>
+    </head>
+    <body>
+        <!--
+            The iframe src is set by the script below, from this page's own URL,
+            so ONE file serves every docs path. Do not hard-code it:
+
+                /documentation/                                    -> https://autoboat-docs.pages.dev/
+                /documentation/getting_started/setting_up_dev_environment/
+                                                                   -> https://autoboat-docs.pages.dev/getting_started/setting_up_dev_environment/
+
+            `scripts/docs-stubs.mjs` copies this file to
+            dist/documentation/<path>/index.html for every page listed in
+            src/lib/docsPaths.json, because S3 has no directory-index fallback
+            and would otherwise 404 those deep links.
+        -->
+        <iframe
+            class="docs-frame"
+            id="docs-frame"
+            src="https://autoboat-docs.pages.dev/"
+            title="AutoBoat documentation"
+            allowfullscreen
+        ></iframe>
+
+        <div class="fallback" id="fallback">
+            <div>
+                <h1>Documentation is temporarily unavailable</h1>
+                <p>
+                    The docs are served from Cloudflare and did not load. This is usually a
+                    connection problem or a deploy in progress. You can open the same content
+                    directly.
+                </p>
+                <a href="https://autoboat-docs.pages.dev/" id="fallback-primary">Open the docs site</a>
+                <a href="https://autoboat-vt.github.io/documentation/">GitHub Pages mirror</a>
+            </div>
+        </div>
+
+        <script>
+            (function () {
+                // Base of the Cloudflare-hosted docs. Kept in sync with
+                // PAGES_PROJECT in documentation/.github/workflows/deploy-docs.yml
+                // by src/test/lib/docsPlaceholder.test.ts.
+                var DOCS_ORIGIN = "https://autoboat-docs.pages.dev";
+
+                // This page is served from /documentation/<path>/, where <path>
+                // is the same path the docs site uses. Strip the
+                // "/documentation" prefix to get the docs-relative path, so a
+                // deep link lands on the equivalent page instead of the docs home.
+                var mountPath = "/documentation";
+                var pathname = window.location.pathname;
+                var relative = pathname.indexOf(mountPath) === 0 ? pathname.slice(mountPath.length) : "/";
+                // S3 302s a bare path to its trailing-slash form; normalize so the
+                // framed URL matches what MkDocs generated.
+                if (relative !== "" && relative.charAt(relative.length - 1) !== "/") relative += "/";
+
+                var frameSrc = DOCS_ORIGIN + relative;
+
+                var frame = document.getElementById("docs-frame");
+                var fallback = document.getElementById("fallback");
+                var primary = document.getElementById("fallback-primary");
+
+                frame.setAttribute("src", frameSrc);
+                primary.setAttribute("href", frameSrc);
+                // The canonical always names the docs page being shown, so a
+                // deep link does not all collapse onto the docs home.
+                var canonical = document.querySelector('link[rel="canonical"]');
+                if (canonical) canonical.setAttribute("href", frameSrc);
+
+                // A cross-origin iframe that fails to load fires no error event the
+                // embedding page can observe, so there is nothing to listen for. So
+                // instead of waiting for an event, probe the frame's own URL with a
+                // no-cors fetch:
+                //
+                //   resolves -> the host is reachable, keep showing the iframe
+                //   rejects  -> DNS/TLS/offline, show the fallback
+                //
+                // no-cors is required because pages.dev sends no CORS headers; the
+                // response is opaque and unreadable, which is fine since we only
+                // need to know whether the request completed.
+                //
+                // NOTE: This detects an UNREACHABLE host, not a frame-ancestors
+                // rejection -- that applies only to framing, so a direct request
+                // still succeeds. If the CSP in documentation/docs/_headers is ever
+                // wrong, the frame stays blank with no fallback. Check the browser
+                // console for "Refused to frame" in that case.
+                fetch(frameSrc, { mode: "no-cors", cache: "no-store" }).catch(function () {
+                    fallback.setAttribute("data-visible", "true");
+                    primary.focus();
+                });
+            })();
+        </script>
+    </body>
+</html>

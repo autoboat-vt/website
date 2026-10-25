@@ -90,6 +90,8 @@ scripts/
   spa-fallback.mjs      # copies index.html to route paths for S3 SPA routing (route list derived from src/lib/seoRoutes.json)
   prerender-meta.mjs    # bakes per-route title/description/canonical/OG into each built index.html
   generate-sitemap.mjs  # writes dist/sitemap.xml from src/lib/seoRoutes.json
+  docs-stubs.mjs        # copies the /documentation loader to dist/documentation/<path>/index.html for every page in src/lib/docsPaths.json (S3 has no directory-index fallback)
+  sync-docs-paths.mjs   # regenerates src/lib/docsPaths.json from the sibling documentation repo (run after docs pages change)
   bump-cicd.sh          # pulls upstream cicd files into external/cicd/ (vendored, not a submodule)
 worker/                 # Cloudflare Worker proxying Discord scheduled events for /calendar
   wrangler.jsonc        # worker config (KV binding, env vars)
@@ -133,7 +135,35 @@ public/                 # static assets, _redirects, images
 
 NavLink items are defined in `src/components/Header.tsx` as `NAV_LINKS`. The home link uses `end: true` (react-router's `end` prop) so it's only active on exact `/`.
 
-The nav carries only the five primary pages. `/live`, `/calendar`, and `/gallery` are deliberately **out of the nav but still public routes** — they're reachable directly by URL and linked from `/other-pages`, the hub page (`src/pages/OtherPages.tsx`). `FEATURE_PAGES` in that file controls what the hub advertises; adding a feature means adding a `Route` + a `seoRoutes.json` entry + a `FEATURE_PAGES` entry + the README row. Don't add these back to `NAV_LINKS` without checking the width budget below. WARNING: **A `FEATURE_PAGES` entry with `external: true` renders as an off-site `<a target="_blank" rel="noopener noreferrer">` instead of a react-router `<Link>`**, and needs no route registration at all — the docs site (`https://autoboat-vt.github.io/documentation`, a separate GitHub Pages deployment) is the current example. The flag must match the shape of `to`, or an absolute URL gets handed to `Link` (or an internal route opens a blank tab).
+The nav carries only the five primary pages. `/live`, `/calendar`, and `/gallery` are deliberately **out of the nav but still public routes** — they're reachable directly by URL and linked from `/other-pages`, the hub page (`src/pages/OtherPages.tsx`). `FEATURE_PAGES` in that file controls what the hub advertises; adding a feature means adding a `Route` + a `seoRoutes.json` entry + a `FEATURE_PAGES` entry + the README row. Don't add these back to `NAV_LINKS` without checking the width budget below. WARNING: **A `FEATURE_PAGES` entry with `external: true` renders as an off-site `<a target="_blank" rel="noopener noreferrer">` instead of a react-router `<Link>`**, and needs no route registration at all — the docs site (`https://autoboat-docs.pages.dev`, a separate Cloudflare Pages deployment of the *documentation* repo) is the current example. The flag must match the shape of `to`, or an absolute URL gets handed to `Link` (or an internal route opens a blank tab).
+
+### `/documentation` (loader page, not a route)
+
+`public/documentation/index.html` is a static loader that renders the
+Cloudflare-hosted docs site (`https://autoboat-docs.pages.dev/`) full-viewport in
+an **iframe**, so `https://autoboat.aoe.vt.edu/documentation/` keeps the aoe.vt.edu
+URL while the content comes from Cloudflare. It ships as a plain file through
+`public/` and is **not** an app route.
+
+WARNING: **Deep links need a real file at each path.** VT S4 is plain S3, which has no directory-index fallback: `/documentation/getting_started/setting_up_dev_environment/` was a hard **404** until stubs existed (verified against production before the fix). `scripts/docs-stubs.mjs` (last step of `bun run build`) copies the loader to `dist/documentation/<path>/index.html` for every entry in `src/lib/docsPaths.json`. The loader derives which page to frame from `window.location.pathname`, so **one** HTML file serves all 63 pages and a deep link lands on the matching docs page rather than the docs home.
+
+WARNING: **`src/lib/docsPaths.json` is generated and committed, not computed at build time.** The pages are Markdown in the *separate* `documentation` repo, which this repo's CI never checks out, so the path list must be shipped. Regenerate after adding, renaming, or deleting a docs page:
+
+```sh
+bun run sync-docs-paths   # node scripts/sync-docs-paths.mjs
+```
+
+Missing this is silent in one direction: the new page works on `pages.dev` but 404s at the aoe.vt.edu URL. `src/test/lib/docsPlaceholder.test.ts` re-runs the generator and compares when the docs repo happens to be checked out alongside, which catches the drift locally (it is skipped in CI, where only one repo exists).
+
+WARNING: **It must live in `public/`, not in the S4 repo.** `scripts/deploy.sh` step 7 runs `git rm -rf .` on the `aoe_sites` worktree and copies `dist/` in, so anything hand-committed on the VT side is deleted on the next website deploy. Vite copies `public/` verbatim into `dist/`, which is the only place a page survives.
+
+WARNING: **Never add `/documentation` to `src/lib/seoRoutes.json`.** `scripts/spa-fallback.mjs` copies `dist/index.html` over `dist/<route>/index.html` for every route in that JSON, which would overwrite this page with the React SPA shell. `src/test/lib/docsPlaceholder.test.ts` asserts this, along with a cross-repo check that the loader's docs origin matches `PAGES_PROJECT` in the docs repo's `.github/workflows/deploy-docs.yml`.
+
+WARNING: **Framing is granted by the docs repo, not this one.** `documentation/docs/_headers` sets `Content-Security-Policy: frame-ancestors` for the two site origins. If that file is removed or the origins change, this page goes blank with no error — check the browser console for "Refused to frame". Do not try to fix it with `X-Frame-Options`, which would break the arrangement outright.
+
+The page is `noindex, follow` with a canonical pointing at the corresponding pages.dev URL (rewritten per path at runtime), so it does not compete with the real docs in search.
+
+
 
 `/calendar` reads Discord guild scheduled events via a Cloudflare Worker in `worker/` (see `discord-events.instructions.md` for the backend and `calendar.instructions.md` for the page UI). The Worker also serves the same events as a subscribable iCalendar feed at `GET /calendar.ics`, surfaced by the page's **Subscribe** control (`src/components/CalendarSubscribe.tsx`).
 
@@ -184,7 +214,7 @@ Detailed, topic-specific guidance lives in `.github/instructions/*.instructions.
 | `components.instructions.md` | `src/components/Card.tsx`, `src/components/Gallery.tsx`, `src/components/ImageModal.tsx`, `src/components/Hyperlink.tsx`, `src/pages/**` | `Card`, `Gallery`, `ImageModal`, `Hyperlink` (with `UrlString`), page component pattern, React 19 `fetchPriority` |
 | `vt-colors.instructions.md` | `src/lib/vtColors.ts`, `src/app.css`, `src/hooks/useTheme.ts` | VT brand palette, shading-vs-tinting rules, Impact Orange, WCAG AA, theme tokens, `useTheme`, FOUC prevention |
 | `testing.instructions.md` | `src/test/**`, `jest.config.js` | Jest config, `moduleNameMapper`, react-leaflet mock architecture, `setup.ts` polyfills, `runTests` tool gotcha, `MemoryRouter` wrapping |
-| `deploy.instructions.md` | `scripts/**`, `.github/**` | `deploy.sh`, `spa-fallback.mjs`, `bump-cicd.sh` (vendor-update), `build.yml`, vendored `external/cicd/` model, git workflow |
+| `deploy.instructions.md` | `scripts/**`, `.github/**` | `deploy.sh`, `spa-fallback.mjs`, `docs-stubs.mjs` + `sync-docs-paths.mjs` (the `/documentation` deep-link stubs), `bump-cicd.sh` (vendor-update), `build.yml`, vendored `external/cicd/` model, git workflow |
 | `calendar.instructions.md` | `src/pages/Calendar.tsx`, `src/pages/Officers.tsx`, `src/components/CalendarSubscribe.tsx`, `src/components/CalendarFilter.tsx`, `src/components/EventModal.tsx`, `src/components/EventMap.tsx`, `src/components/calendarDropdown.ts`, `src/lib/discord.ts`, `src/lib/eventChannels.ts`, `src/app.css`, `src/test/pages/Calendar.test.tsx`, `src/test/pages/Officers.test.tsx`, `src/test/components/Calendar{,Subscribe,Filter,Modal,Map}.test.tsx`, `src/test/lib/{discord,eventChannels,feedUrls}.test.ts` | Calendar page UI: `buildMonthGrid` + the zero-duration and DST traps, the 700px markup branch, the month-nav header layout (`flex: 1 1 100%`, `justify-content: center`, no `min-width: 0`, `.btn--sm` not `.btn-sm`), the Subscribe and Filter dropdown anchors, the per-subteam event colors + the shared `subteam--<slug>` class, the event modal (the two notions of cancelled, the `:has()` pin nudge), the Nominatim-geocoded map (and why `EventMap.tsx` must import `leaflet.css` itself), `discord.ts` client exports, client-side `expandRecurrences`/`describeRecurrence`, 4-place route registration, and the calendar test suites |
 | `discord-events.instructions.md` | `worker/**`, `src/test/worker/**`, `src/components/EventCreator.tsx`, `src/lib/eventManage.ts`, `src/test/components/EventCreator.test.tsx` | Discord Worker backend: architecture + the 5 routes, CORS origin echo, KV caching + the unbounded retention archive, the write budget (one write per miss, TTL >= 180), audience gating (officer channel -> officer/public, fail-open), the `/calendar.ics` + `/officers/*` feeds, the `?channels=` query half, Discord's recurrence_rule object -> RRULE conversion, the in-description cancellation convention, `wrangler.jsonc` vars + secrets, officer event creation/deletion over OAuth (`EventCreator` + `eventManage`), and the worker test suites |
 | `gallery.instructions.md` | `worker/src/{googleAuth,drive,gallery,gallerySync,galleryUpload}.ts`, `src/lib/{galleryClient,galleryView,loginRedirect}.ts`, `src/components/{GalleryUpload,ImageModal}.tsx`, `src/pages/Gallery.tsx`, `worker/wrangler.jsonc`, gallery test suites | Gallery: Drive as source of truth + R2 as delivery mirror, why a service account needs a Shared Drive (no storage quota), the Web-Crypto JWT auth, the three-way reconciliation and its batch limits, HEIC rejection, hide/restore (hiding never deletes), the officer-chosen display order, the two registered OAuth redirect URIs and the return-path allowlist, and the gallery test suites |

@@ -6,7 +6,7 @@
     "description": "Website for the AutoBoat at Virginia Tech design team.",
     "scripts": {
         "dev": "vite",
-        "build": "bun ./node_modules/vite/bin/vite.js build && bun scripts/spa-fallback.mjs && bun scripts/prerender-meta.mjs && bun scripts/generate-sitemap.mjs",
+        "build": "bun ./node_modules/vite/bin/vite.js build && bun scripts/spa-fallback.mjs && bun scripts/prerender-meta.mjs && bun scripts/generate-sitemap.mjs && bun scripts/docs-stubs.mjs",
         "preview": "vite preview",
         "test": "jest",
         "test:watch": "jest --watch",
@@ -14,7 +14,8 @@
         "lint": "biome lint --config-path=./biome.json .",
         "format": "biome format --config-path=./biome.json --write .",
         "check": "biome check --config-path=./biome.json .",
-        "check:write": "biome check --config-path=./biome.json --write ."
+        "check:write": "biome check --config-path=./biome.json --write .",
+        "sync-docs-paths": "node scripts/sync-docs-paths.mjs"
     },
     "dependencies": {
         "leaflet": "latest",
