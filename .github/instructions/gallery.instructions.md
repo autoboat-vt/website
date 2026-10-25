@@ -212,6 +212,15 @@ The `?code=` exchange lives in **one** place, `src/lib/loginRedirect.ts`, becaus
 two pages now receive a redirect and the code is single-use. Duplicating it would
 mean one copy eventually replays a spent code.
 
+WARNING: **A successful sign-in leaves the Add photos panel CLOSED.** It used to
+call `setOpen(true)`, which reads as the officer having clicked "Add photos" for
+them -- they clicked "Officer sign-in", and the upload form is a separate
+decision. The confirmation is the toggle's label flipping from "Officer sign-in"
+to "Add photos"; the form waits to be asked for. Do not restore the auto-open on
+the success branch. A REFUSAL or a failed exchange still opens the panel, because
+those messages have nowhere else to render -- `GalleryUpload.test.tsx` pins both
+halves.
+
 ## Tests
 
 - `src/test/worker/gallery.test.ts` -- reconciliation: mirror time surviving a re-list, clearing it when bytes vanish, `renderableEntries` excluding pending AND hidden, the delete sweep ignoring non-gallery keys, ordering, `parseManifest` tolerance.
@@ -223,6 +232,7 @@ mean one copy eventually replays a spent code.
 - `src/test/worker/galleryOrder.test.ts` -- the pure ordering rule: listed ids first, unlisted appended newest-first, stale ids harmless, first-occurrence-wins for duplicates, `moveInOrder` clamping, `parseOrder` tolerance.
 - `src/test/worker/galleryOrderSync.test.ts` -- the WIRING, through `syncGallery` with the Drive client mocked. Removing the `loadOrder` call fails this file while every pure ordering test stays green.
 - `src/test/worker/galleryOrderRoutes.test.ts` -- the order endpoints: auth, body validation (non-array and non-string entries both 400), the immediate manifest re-sort, and that `/manage/gallery/order` is claimed before the `{id}` route.
+- `src/test/components/GalleryUpload.test.tsx` -- the officer panel: sign-in vs upload controls, the oversized-file rejection stopping before the POST, the restore list, and that a successful `?code=` login leaves the panel COLLAPSED while a refusal opens it.
 - `src/test/lib/galleryView.test.ts` -- merge order, dedupe by src, alt text from filenames, status wording, and that `tileKeysOf` covers BOTH sources (the curated-tile reorder bug).
 - `src/test/lib/imageConvert.test.ts` -- WebP conversion: filename rewriting, the dimension clamp, and that every failure path returns the untouched original.
 

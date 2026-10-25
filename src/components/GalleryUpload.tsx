@@ -177,9 +177,16 @@ export default function GalleryUpload({ onUploaded }: GalleryUploadProps) {
     /**
      * Finish a login if Discord just redirected back to this page.
      *
-     * The panel is opened on success so the officer sees the upload control
-     * immediately -- coming back from Discord to a collapsed button would read
-     * as "nothing happened".
+     * WARNING: a SUCCESSFUL login leaves the panel closed. It used to open it,
+     * which the officer never asked for -- they clicked "Officer sign-in", and
+     * expanding the upload form on the way back reads as the "Add photos"
+     * button having been clicked for them. The confirmation they get instead is
+     * the toggle's own label, which flips from "Officer sign-in" to "Add
+     * photos"; the form waits to be asked for.
+     *
+     * A refusal or a failed exchange still opens it, because those messages have
+     * nowhere else to render -- a silent refusal would look like the login did
+     * nothing at all.
      */
     useEffect(() => {
         const controller = new AbortController();
@@ -190,7 +197,6 @@ export default function GalleryUpload({ onUploaded }: GalleryUploadProps) {
                     case "success":
                         setSession(result.session);
                         setDenied(null);
-                        setOpen(true);
                         break;
                     case "denied":
                         setDenied(result.error);
