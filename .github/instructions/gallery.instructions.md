@@ -1,6 +1,6 @@
 ---
 description: "Use when working on the gallery: the Google Drive folder sync, the R2 mirror, the officer upload UI, hiding/restoring a photo, ordering the photos, the service-account credentials, or the gallery manifest. Covers why Drive is the source of truth and R2 the delivery mirror, the reconciliation rules in gallery.ts, the sync batch limits, HEIC rejection, the two registered OAuth redirect URIs, and the gallery test suites."
-applyTo: "worker/src/{googleAuth,drive,gallery,gallerySync,galleryUpload}.ts, src/lib/{galleryClient,galleryView,imageConvert,loginRedirect}.ts, src/components/{GalleryUpload,ImageModal}.tsx, src/pages/Gallery.tsx, worker/wrangler.jsonc, src/test/{lib,worker,pages,components}/*gallery*.test.ts, src/test/lib/imageConvert.test.ts, src/test/worker/galleryRoutes.test.ts, src/test/worker/oauthRedirect.test.ts"
+applyTo: "worker/src/{googleAuth,drive,gallery,gallerySync,galleryUpload}.ts, src/lib/{galleryClient,galleryView,imageConvert,loginRedirect}.ts, src/components/{GalleryUpload,ImageModal}.tsx, src/pages/Gallery.tsx, worker/wrangler.jsonc, src/test/{lib,worker,pages,components}/*gallery*.test.ts, src/test/lib/imageConvert.test.ts, src/test/worker/galleryRoutes.test.ts, src/test/worker/galleryConfig.test.ts, src/test/worker/oauthRedirect.test.ts"
 ---
 
 # Gallery: Google Drive -> R2 -> the website
@@ -27,6 +27,27 @@ API call: Drive's quota is per-user and its download URLs are rate-limited, so
 ordinary traffic would start failing for everyone.
 
 WARNING: **Never hotlink Drive.** `webContentLink` and `lh3.googleusercontent.com` are not meant for embedding and rotate. The bytes are streamed into R2 with `alt=media`.
+
+### The R2 binding must be named `GALLERY_BUCKET`
+
+`wrangler.jsonc` declares the bucket under `r2_buckets` with
+`"binding": "GALLERY_BUCKET"`, and `worker/src/index.ts` reads
+`env.GALLERY_BUCKET` (`handleGetGalleryImage`) plus `gallerySync.ts` reads it for
+list/put/delete.
+
+WARNING: **This is a PRODUCTION outage that happened once.** The binding was
+renamed to `autoboat_gallery` in `wrangler.jsonc` while the code still read
+`GALLERY_BUCKET`. Nothing failed to deploy -- a binding is an untyped string on
+both sides -- so `env.GALLERY_BUCKET` was `undefined`, `GET /gallery/image/{id}`
+answered **503 "gallery not configured"**, and every tile on `/gallery` rendered
+broken while the manifest happily kept listing the photos. Check the Worker logs
+for a 503 on `/gallery/image/` before suspecting Drive.
+
+WARNING: **A binding rename is a two-file change, and the deploy will not
+tell you.** `src/test/worker/galleryConfig.test.ts` parses `wrangler.jsonc` and
+compares every `*_BUCKET` / `*_KV` name the Worker reads off `env` against the
+declared bindings, so a one-sided rename fails there. Do not delete that test
+because "the config is obviously right" -- it was obviously right the last time.
 
 ## Why a service account, and why it must be a Shared Drive
 
@@ -228,6 +249,7 @@ halves.
 - `src/test/worker/gallerySync.test.ts` -- drives `syncGallery` itself with the Drive client mocked. This is the only place the hidden set's WIRING is checked: removing the `loadHiddenIds` call from the sync fails this file while every pure test stays green.
 - `src/test/worker/galleryUpload.test.ts` -- magic-byte sniffing per format, HEIC identification, filename sanitizing, size/type limits, and that the limit stays under Drive's ceiling.
 - `src/test/worker/galleryRoutes.test.ts` -- the auth gate (unauthenticated, forged, member, expired), the HEIC message end to end, public-vs-management CORS, and the return-path allowlist.
+- `src/test/worker/galleryConfig.test.ts` -- the `wrangler.jsonc` <-> code binding agreement (see "The R2 binding must be named `GALLERY_BUCKET`"). This is a production-incident regression test: the R2 binding had been renamed away from `GALLERY_BUCKET` and every gallery image 503'd.
 - `src/test/worker/oauthRedirect.test.ts` -- `resolveReturnPath`, `parseRedirectUris`, `redirectUriFor` selection and fallback.
 - `src/test/worker/galleryOrder.test.ts` -- the pure ordering rule: listed ids first, unlisted appended newest-first, stale ids harmless, first-occurrence-wins for duplicates, `moveInOrder` clamping, `parseOrder` tolerance.
 - `src/test/worker/galleryOrderSync.test.ts` -- the WIRING, through `syncGallery` with the Drive client mocked. Removing the `loadOrder` call fails this file while every pure ordering test stays green.

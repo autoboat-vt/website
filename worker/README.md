@@ -822,6 +822,12 @@ npx wrangler r2 bucket create autoboat-gallery
 The bucket name must match `bucket_name` under `r2_buckets` in
 `wrangler.jsonc`.
 
+WARNING: **The `binding` under `r2_buckets` must be `GALLERY_BUCKET`.** The code
+reads `env.GALLERY_BUCKET`, so any other binding name makes every gallery image
+answer 503 while the manifest still lists the photos. A binding is an untyped
+string on both sides, so the deploy cannot catch the mismatch --
+`src/test/worker/galleryConfig.test.ts` does.
+
 ### Step 5: set the configuration
 
 In `wrangler.jsonc` (`vars`, public values only):

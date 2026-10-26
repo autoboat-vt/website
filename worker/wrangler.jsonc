@@ -188,10 +188,17 @@
     // delivery mirror.
     //
     // Create it with:  npx wrangler r2 bucket create autoboat-gallery
+    //
+    // WARNING: The binding name MUST be `GALLERY_BUCKET`. Code reads
+    // `env.GALLERY_BUCKET` (see handleGetGalleryImage in src/index.ts), so any
+    // other binding name leaves that undefined and every image request answers
+    // 503 "gallery not configured" -- while the manifest still lists the
+    // photos, so the page shows broken tiles. A rename here is a rename there,
+    // and src/test/worker/galleryConfig.test.ts fails if the two drift.
     "r2_buckets": [
         {
             "bucket_name": "autoboat-gallery",
-            "binding": "autoboat_gallery",
+            "binding": "GALLERY_BUCKET",
             "remote": true
         }
     ],
