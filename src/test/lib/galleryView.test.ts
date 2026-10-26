@@ -2,6 +2,7 @@ import {
     altFromFileName,
     applyTileOrder,
     buildGalleryTiles,
+    curatedPhotoId,
     galleryStatusNote,
     moveWithin,
     tileKeysOf,
@@ -33,6 +34,30 @@ describe("buildGalleryTiles", () => {
 
         expect(tiles[0]?.src).toBe(imageUrl("abc"));
         expect(tiles.slice(1).map((t) => t.src)).toEqual(curated.map((c) => c.src));
+    });
+
+    it("gives EVERY tile a photoId, curated ones included", () => {
+        // THE BUG THIS GUARDS. Curated tiles used to have no id, so only Drive
+        // photos could be linked and the lightbox offered no Copy link for them.
+        const tiles = buildGalleryTiles(
+            [{ id: "abc", name: "regatta.jpg", width: null, height: null, modifiedTime: null }],
+            curated,
+            imageUrl,
+        );
+
+        expect(tiles).toHaveLength(3);
+        for (const tile of tiles) {
+            expect(typeof tile.photoId).toBe("string");
+            expect(tile.photoId.length).toBeGreaterThan(0);
+        }
+        // The Drive tile is keyed by its real Drive id, so old links survive.
+        expect(tiles[0]?.photoId).toBe("abc");
+    });
+
+    it("keeps curated photoIds unique across the whole grid", () => {
+        // A duplicate would make two photos share one permalink.
+        const ids = buildGalleryTiles([], curated, imageUrl).map((t) => t.photoId);
+        expect(new Set(ids).size).toBe(ids.length);
     });
 
     it("keeps every curated image when Drive has none", () => {
@@ -240,5 +265,39 @@ describe("moveWithin", () => {
 
     it("handles an empty list", () => {
         expect(moveWithin([], 0, 1)).toEqual([]);
+    });
+});
+
+describe("curatedPhotoId", () => {
+    it("is URL-safe", () => {
+        // It goes straight into /gallery/<id>, so it must need no escaping.
+        expect(curatedPhotoId("/images/our_team_images/software/cv.webp")).toMatch(/^[a-z0-9-]+$/);
+    });
+
+    it("is namespaced away from Drive ids", () => {
+        // A Drive id never starts with "site-", so the two sources cannot collide.
+        expect(curatedPhotoId("/images/a/b.webp").startsWith("site-")).toBe(true);
+    });
+    it("includes the folder so same-named files stay distinct", () => {
+        // electronics/photo.webp and mechanical/photo.webp are different photos.
+        expect(curatedPhotoId("/images/x/electronics/photo.webp")).not.toBe(
+            curatedPhotoId("/images/x/mechanical/photo.webp"),
+        );
+    });
+
+    it("is stable across calls", () => {
+        // These become public URLs; a shifting id would break pasted links.
+        const src = "/images/our_team_images/mechanical/boat1.webp";
+        expect(curatedPhotoId(src)).toBe(curatedPhotoId(src));
+    });
+
+    it("reads recognizably from the filename", () => {
+        expect(curatedPhotoId("/images/our_team_images/mechanical/boat1.webp")).toBe("site-mechanical-boat1");
+    });
+
+    it("copes with a bare filename", () => {
+        // Defensive: a malformed entry must not throw or produce "site--".
+        expect(() => curatedPhotoId("photo.webp")).not.toThrow();
+        expect(curatedPhotoId("photo.webp")).toMatch(/^[a-z0-9-]+$/);
     });
 });

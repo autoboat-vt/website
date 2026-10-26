@@ -1,5 +1,6 @@
-import { AlertCircle, EyeOff, GripVertical, Loader2 } from "lucide-react";
+import { AlertCircle, EyeOff, GripVertical, LinkIcon, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import GalleryUpload from "../components/GalleryUpload";
 import ImageModal from "../components/ImageModal";
 import { loadSession, ManageError, type ManageSession } from "../lib/eventManage";
@@ -8,11 +9,13 @@ import {
     fetchGalleryManifest,
     type GalleryManifest,
     galleryImageUrl,
+    galleryPermalinkUrl,
     saveGalleryOrder,
     setPhotoHidden,
 } from "../lib/galleryClient";
 import { ALL_GALLERY_IMAGES } from "../lib/galleryImages";
 import { applyTileOrder, buildGalleryTiles, galleryStatusNote, moveWithin, tileKeysOf } from "../lib/galleryView";
+import { SITE_URL } from "../lib/seo";
 
 /**
  * The public gallery.
@@ -29,12 +32,20 @@ import { applyTileOrder, buildGalleryTiles, galleryStatusNote, moveWithin, tileK
  * problem -- which matters because the Worker is a different origin.
  */
 export default function Gallery() {
-    const [modalImage, setModalImage] = useState<{
-        src: string;
-        alt: string;
-        caption?: string;
-        driveId?: string;
-    } | null>(null);
+    /**
+     * The photo id from `/gallery/:photoId`, or undefined on the plain grid.
+     *
+     * The URL is the single source of truth for which photo is open, rather than
+     * component state. That is what makes a shared `/gallery/<id>` link land on
+     * the photo instead of the grid, and it keeps back/forward working: opening
+     * a photo pushes a history entry, so Back closes the lightbox.
+     */
+    const { photoId } = useParams<{ photoId?: string }>();
+    const navigate = useNavigate();
+    /**
+     * This entry's router key -- "default" means there is no in-app page behind it.
+     */
+    const location = useLocation();
     const [manifest, setManifest] = useState<GalleryManifest | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -117,32 +128,36 @@ export default function Gallery() {
     const refresh = useCallback(() => setReloadToken((n) => n + 1), []);
 
     /**
-     * Take the open photo off the public gallery.
+     * Open a photo by navigating to its permalink.
      *
-     * WARNING: HIDES, DOES NOT DELETE. The Drive file and its mirror stay put; the
-     * photo can be restored with the "Add photos" panel. That is why there is no
-     * confirmation dialog -- undoing it costs one click, so a modal would be
-     * friction without protection.
+     * ONE MECHANISM FOR BOTH SOURCES. Every tile carries a `photoId` (a Drive id,
+     * or a stable slug for a curated photo -- see `curatedPhotoId`), so every
+     * photo has a real URL. An earlier version kept curated photos in local
+     * state because they had no id, which meant they could not be linked at all
+     * and the lightbox had no Copy link control for them.
      */
-    const hideCurrent = useCallback(async () => {
-        const driveId = modalImage?.driveId;
-        if (!session || !driveId) return;
-        setHiding(true);
+    const openPhoto = useCallback(
+        (tile: { photoId: string }) => {
+            setHideError(null);
+            // `replace: false` so Back closes the lightbox instead of leaving
+            // the gallery entirely.
+            navigate(`/gallery/${encodeURIComponent(tile.photoId)}`);
+        },
+        [navigate],
+    );
+
+    /** Close the lightbox by returning to the plain grid. */
+    const closePhoto = useCallback(() => {
         setHideError(null);
-        try {
-            await setPhotoHidden(session, driveId, true);
-            setModalImage(null);
-            refresh();
-        } catch (err) {
-            if (err instanceof ManageError && err.status === 401) {
-                // Dead token: stop offering the action rather than retrying it.
-                setSession(null);
-            }
-            setHideError(err instanceof Error ? err.message : "Could not remove that photo.");
-        } finally {
-            setHiding(false);
-        }
-    }, [modalImage, session, refresh]);
+        // WARNING: Do NOT test `window.history.length` here. It counts the whole
+        // browser session, so a shared link opened in a fresh tab (the common
+        // case for a permalink!) reports a long history and `navigate(-1)` would
+        // send the visitor back to whatever site they came from -- off our site
+        // entirely. react-router's `key` is "default" only for the app's first
+        // entry, which is exactly "there is no in-app page to go back to".
+        if (location.key !== "default") navigate(-1);
+        else navigate("/gallery", { replace: true });
+    }, [navigate, location.key]);
 
     const tiles = useMemo(() => {
         const drive: DriveImage[] = manifest?.images ?? [];
@@ -171,6 +186,66 @@ export default function Gallery() {
         if (pendingOrder === null) return tiles;
         return applyTileOrder(tiles, pendingOrder);
     }, [tiles, pendingOrder]);
+
+    /**
+     * The photo the lightbox shows, derived entirely from `photoId` + the tiles.
+     *
+     * WHY DERIVED AND NOT `useState`: the URL already identifies the photo, and a
+     * parallel state copy drifts from it -- open a shared link, press Back, and
+     * the lightbox stays open over a URL that no longer names that photo.
+     * Deriving means there is exactly one answer and Back is correct for free.
+     *
+     * Matches on `photoId`, which EVERY tile has, so this works for curated
+     * photos as well as Drive ones.
+     *
+     * Declared AFTER `renderedTiles` because it reads that value, and `const`
+     * bindings are not hoisted.
+     */
+    const urlPhoto = useMemo(() => {
+        if (!photoId) return null;
+        return renderedTiles.find((tile) => tile.photoId === photoId) ?? null;
+    }, [photoId, renderedTiles]);
+
+    const modalImage = urlPhoto;
+
+    /**
+     * Whether to explain that the requested photo is gone.
+     *
+     * Gated on `!loading` so it does not flash while the manifest is in flight --
+     * before the fetch resolves, EVERY id looks missing.
+     */
+    const missingPhoto = Boolean(photoId) && !loading && manifest !== null && urlPhoto === null;
+
+    /**
+     * Take the open photo off the public gallery.
+     *
+     * WARNING: HIDES, DOES NOT DELETE. The Drive file and its mirror stay put; the
+     * photo can be restored with the "Add photos" panel. That is why there is no
+     * confirmation dialog -- undoing it costs one click, so a modal would be
+     * friction without protection.
+     *
+     * Declared after `modalImage` because it reads the open photo, and a `const`
+     * is not hoisted into an earlier closure's dependency array.
+     */
+    const hideCurrent = useCallback(async () => {
+        const driveId = modalImage?.driveId;
+        if (!session || !driveId) return;
+        setHiding(true);
+        setHideError(null);
+        try {
+            await setPhotoHidden(session, driveId, true);
+            closePhoto();
+            refresh();
+        } catch (err) {
+            if (err instanceof ManageError && err.status === 401) {
+                // Dead token: stop offering the action rather than retrying it.
+                setSession(null);
+            }
+            setHideError(err instanceof Error ? err.message : "Could not remove that photo.");
+        } finally {
+            setHiding(false);
+        }
+    }, [modalImage, session, refresh, closePhoto]);
 
     /**
      * Reorder by dragging one photo onto another.
@@ -245,6 +320,15 @@ export default function Gallery() {
                     <p className="gallery-status gallery-status--error" role="status">
                         <AlertCircle size={14} aria-hidden="true" />
                         {loadError} Showing the team&apos;s featured photos.
+                    </p>
+                )}
+                {/* A shared link whose photo is no longer published. The grid is
+                    still shown underneath, so the visitor gets the gallery
+                    rather than a dead end. */}
+                {missingPhoto && (
+                    <p className="gallery-status" role="status">
+                        <AlertCircle size={14} aria-hidden="true" />
+                        That photo is no longer in the gallery. Here are the rest of them.
                     </p>
                 )}
                 {/* Only an officer can reorder, so only an officer is told they
@@ -334,13 +418,7 @@ export default function Gallery() {
                                 // officer just moved. The window is short enough
                                 // that a deliberate click is never swallowed.
                                 if (Date.now() - lastDragEndRef.current < 250) return;
-                                setHideError(null);
-                                setModalImage({
-                                    src: photo.src,
-                                    alt: photo.alt,
-                                    caption: photo.caption,
-                                    driveId: photo.driveId,
-                                });
+                                openPhoto(photo);
                             }}
                         >
                             {/* overflow-hidden clips the hover scale-up to the rounded corners. */}
@@ -373,34 +451,98 @@ export default function Gallery() {
                 src={modalImage?.src}
                 alt={modalImage?.alt}
                 caption={modalImage?.caption}
-                onClose={() => {
-                    setHideError(null);
-                    setModalImage(null);
-                }}
+                onClose={closePhoto}
                 actions={
-                    // Only for a signed-in officer looking at a DRIVE photo. A
-                    // curated tile has no `driveId`, so there is nothing the
-                    // endpoint could hide.
-                    session && modalImage?.driveId ? (
+                    // EVERY photo gets Copy link, because every tile has a
+                    // `photoId` (a Drive id or a curated slug). Only the REMOVE
+                    // action is conditional: a curated photo has no Drive file,
+                    // so the hide endpoint would 404 on it.
+                    modalImage ? (
                         <>
-                            <button
-                                type="button"
-                                className="btn btn--sm image-modal__action"
-                                onClick={hideCurrent}
-                                disabled={hiding}
-                            >
-                                <EyeOff size={15} aria-hidden="true" />
-                                {hiding ? "Removing..." : "Remove from gallery"}
-                            </button>
-                            {hideError && (
-                                <p className="image-modal__error" role="alert">
-                                    {hideError}
-                                </p>
-                            )}
+                            {/* The shareable link is THIS page's URL, on the
+                                site's own domain -- not the Worker URL the <img>
+                                loads from. */}
+                            <CopyLinkButton photoId={modalImage.photoId} />
+                            {session && modalImage.driveId ? (
+                                <>
+                                    <button
+                                        type="button"
+                                        className="btn btn--sm image-modal__action"
+                                        onClick={hideCurrent}
+                                        disabled={hiding}
+                                    >
+                                        <EyeOff size={15} aria-hidden="true" />
+                                        {hiding ? "Removing..." : "Remove from gallery"}
+                                    </button>
+                                    {hideError && (
+                                        <p className="image-modal__error" role="alert">
+                                            {hideError}
+                                        </p>
+                                    )}
+                                </>
+                            ) : null}
                         </>
                     ) : null
                 }
             />
         </>
+    );
+}
+
+/**
+ * Copy the photo's site-domain permalink to the clipboard.
+ *
+ * WHY IT EXISTS AT ALL: the address bar already holds this URL once the photo is
+ * open, so this is mostly discoverability -- the alternative is telling people
+ * "open the photo and copy the URL", which nobody does. It also makes it obvious
+ * that the shareable link is `autoboat.aoe.vt.edu`, not the `workers.dev` host
+ * the image bytes happen to come from.
+ *
+ * WARNING: `navigator.clipboard` requires a secure context and can be absent
+ * (older browsers) or reject (permissions policy). A failed copy must not look
+ * like a failed page, so the label flips to "Copy failed" and reverts.
+ */
+function CopyLinkButton({ photoId }: { photoId: string }) {
+    const [label, setLabel] = useState("Copy link");
+    /**
+     * The revert timer, so it can be cleared on unmount.
+     *
+     * WARNING: Without this the timer fires into an unmounted component -- a
+     * stray setState after the lightbox closes (React logs a warning, and the
+     * update is discarded). It also keeps a test that closes the lightbox from
+     * leaking a pending timer.
+     */
+    const revertRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (revertRef.current) clearTimeout(revertRef.current);
+        };
+    }, []);
+
+    // Reset when the lightbox moves to a different photo, or the label would say
+    // "Link copied" for a photo that was never copied.
+    useEffect(() => {
+        setLabel("Copy link");
+    }, [photoId]);
+
+    const copy = useCallback(async () => {
+        const url = galleryPermalinkUrl(photoId, SITE_URL);
+        try {
+            await navigator.clipboard.writeText(url);
+            setLabel("Link copied");
+        } catch {
+            setLabel("Copy failed");
+        }
+        // Revert on a timer so the control stays truthful for the next photo.
+        if (revertRef.current) clearTimeout(revertRef.current);
+        revertRef.current = setTimeout(() => setLabel("Copy link"), 2000);
+    }, [photoId]);
+
+    return (
+        <button type="button" className="btn btn--sm image-modal__action" onClick={copy}>
+            <LinkIcon size={15} aria-hidden="true" />
+            {label}
+        </button>
     );
 }

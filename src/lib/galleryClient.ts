@@ -28,6 +28,26 @@ import { ManageError, type ManageSession } from "./eventManage";
 const GALLERY_URL = `${EVENTS_URL}/gallery`;
 const MANAGE_GALLERY_URL = `${EVENTS_URL}/manage/gallery`;
 
+/**
+ * Optional override for the ORIGIN+PATH that serves gallery image bytes.
+ *
+ * Read from `globalThis` rather than `import.meta.env` so it parses under Jest's
+ * CJS runtime, exactly like `EVENTS_URL` in `discord.ts`.
+ */
+declare global {
+    // eslint-disable-next-line no-var
+    var __VITE_GALLERY_IMAGE_BASE__: string | undefined;
+}
+
+/**
+ * Base for image byte URLs, with a trailing slash trimmed.
+ *
+ * EMPTY by default, which keeps the Worker origin (`<worker>/gallery/image/<id>`).
+ * Set `VITE_GALLERY_IMAGE_BASE` to move the bytes to another host WITHOUT
+ * touching this module -- see `galleryImageUrl`.
+ */
+const IMAGE_BASE: string = (globalThis.__VITE_GALLERY_IMAGE_BASE__ ?? "").replace(/\/+$/, "");
+
 /** One image as the Worker's manifest describes it. */
 export interface GalleryImage {
     /** Drive file id. Stable across renames, so it is the React key. */
@@ -52,14 +72,77 @@ export interface GalleryManifest {
 }
 
 /**
- * Public URL for a mirrored image.
+ * Public URL for a mirrored image -- the `<img src>`.
  *
  * Keyed by Drive id, which never changes, so the Worker can serve it with an
  * immutable cache header. That is why the URL carries no dimensions or version
  * suffix: a replaced photo gets a new id.
+ *
+ * WARNING: THIS IS THE ONE PLACE THE BYTES' HOST IS DECIDED, and it must stay
+ * separate from `galleryPermalinkPath`. The shareable LINK is
+ * `autoboat.aoe.vt.edu/gallery/<id>`; the BYTES come from the Worker because the
+ * site host is plain Amazon S3 on VT's DNS (`sweb-prod.hosting.vt.edu`) with no
+ * Cloudflare route in front of it. S3 has no `/gallery/image/<id>` object, so
+ * pointing the `<img src>` at the site domain today would break every tile.
+ *
+ * `VITE_GALLERY_IMAGE_BASE` exists so that if the site domain is ever fronted by
+ * Cloudflare (or an S3 redirect rule is added), moving the bytes is an env var,
+ * not a code change: set it to `https://autoboat.aoe.vt.edu/gallery` and every
+ * `src` becomes `<base>/image/<id>`, matching the Worker's own route shape.
  */
 export function galleryImageUrl(id: string): string {
-    return `${GALLERY_URL}/image/${encodeURIComponent(id)}`;
+    const encoded = encodeURIComponent(id);
+    return IMAGE_BASE ? `${IMAGE_BASE}/image/${encoded}` : `${GALLERY_URL}/image/${encoded}`;
+}
+
+/**
+ * Shareable permalink for one photo, on the SITE's own domain.
+ *
+ * WARNING: This is a PAGE link, not an image URL. It resolves to
+ * `/gallery/<id>` on `autoboat.aoe.vt.edu`, which loads the gallery and opens
+ * that photo in the lightbox. The `<img src>` still points at the Worker
+ * (`galleryImageUrl`), because the site host cannot serve the bytes: VT S4 is
+ * plain S3 on VT's DNS, so there is no Worker route in front of it. If you are
+ * looking for "the image loads from autoboat.aoe.vt.edu", that needs an infra
+ * change on the VT side, not a change here.
+ *
+ * WHY THE LIGHTBOX RATHER THAN A DEDICATED PAGE: the gallery is one grid, and a
+ * second page would duplicate the manifest fetch, the officer controls, and the
+ * ordering. Reusing the grid means a shared link behaves exactly like a click
+ * on the photo.
+ *
+ * Uses the Drive file id, matching `galleryImageUrl`, so the two URLs for a
+ * photo always agree about which photo they mean.
+ */
+export function galleryPermalinkPath(id: string): string {
+    return `/gallery/${encodeURIComponent(id)}`;
+}
+
+/** Absolute permalink for one photo, for copy-to-clipboard and share buttons. */
+export function galleryPermalinkUrl(id: string, siteUrl: string): string {
+    return `${siteUrl.replace(/\/+$/, "")}${galleryPermalinkPath(id)}`;
+}
+
+/**
+ * Read the photo id out of a `/gallery/<id>` pathname, or null.
+ *
+ * Decoded here rather than at the call site because the id is a Drive file id
+ * that round-trips through `encodeURIComponent` above, and a double-decode is
+ * how a malformed id turns into a thrown `URIError` inside a render.
+ *
+ * Returns null for anything that is not exactly `/gallery/<one-segment>`, so a
+ * malformed or multi-segment path degrades to the plain gallery instead of
+ * failing.
+ */
+export function photoIdFromPathname(pathname: string): string | null {
+    const match = /^\/gallery\/([^/]+)\/?$/i.exec(pathname);
+    if (!match?.[1]) return null;
+    try {
+        return decodeURIComponent(match[1]);
+    } catch {
+        // A malformed escape sequence is not a photo id; treat it as none.
+        return null;
+    }
 }
 
 /**

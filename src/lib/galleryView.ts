@@ -19,6 +19,16 @@ export interface GalleryTile {
     /** Optional longer caption shown under the enlarged photo. */
     caption?: string;
     /**
+     * The id this photo is shared by, i.e. the `<id>` in `/gallery/<id>`.
+     *
+     * WARNING: This is present on EVERY tile, from BOTH sources, and that is the
+     * point. It used to be that only Drive photos had an id, so only they could
+     * be linked -- curated photos opened in local state and therefore had no
+     * shareable URL and no Copy link control. A curated photo now gets a stable
+     * slug from `curatedPhotoId`, so every photo in the grid behaves the same.
+     */
+    photoId: string;
+    /**
      * The Drive file id, for tiles that came from the Drive manifest.
      *
      * WARNING: Undefined for the curated (build-time) tiles. Those are part of the
@@ -26,10 +36,42 @@ export interface GalleryTile {
      * -- and the hide endpoint would 404 on them. The page uses this to decide
      * whether to offer the photo's REMOVAL action.
      *
-     * NOTE: An absent id does NOT mean the tile cannot be reordered. Ordering uses
-     * `key` (see `tileKeysOf`) precisely so curated photos can be arranged too.
+     * NOTE: An absent id does NOT mean the tile cannot be reordered or linked.
+     * Ordering uses `key` (see `tileKeysOf`), and linking uses `photoId`.
      */
     driveId?: string;
+}
+
+/**
+ * A stable, URL-safe permalink id for a curated (build-time) photo.
+ *
+ * WHY A SYNTHETIC ID. Curated photos are shipped with the build, so they have no
+ * Drive id to key a permalink on. Without one they could not be shared at all,
+ * which is exactly the bug this fixes: the lightbox offered Copy link for Drive
+ * photos only.
+ *
+ * SHAPE: `site-<subteam>-<name>`, built from the last two path segments with the
+ * extension dropped and everything outside `[a-z0-9]` collapsed to a hyphen.
+ * Including the subteam directory keeps two same-named files in different
+ * folders distinct, and the `site-` prefix keeps these namespaced away from
+ * Drive ids.
+ *
+ * WARNING: These become PUBLIC URLs. A permalink someone pasted into Discord has
+ * to keep working, so this derivation is effectively frozen: renaming a file in
+ * `galleryImages.ts` changes its id and breaks old links. That is the same
+ * contract Drive ids have (a re-uploaded photo gets a new one).
+ */
+export function curatedPhotoId(src: string): string {
+    const segments = src.split("/").filter(Boolean);
+    const name = segments.at(-1) ?? "photo";
+    const folder = segments.at(-2) ?? "site";
+    const slug = (value: string) =>
+        value
+            .replace(/\.[A-Za-z0-9]{1,5}$/, "")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "");
+    return `site-${slug(folder)}-${slug(name)}`;
 }
 
 /**
@@ -81,7 +123,7 @@ export function buildGalleryTiles(
         if (seen.has(src)) continue;
         seen.add(src);
         const alt = altFromFileName(image.name);
-        tiles.push({ key: `drive:${image.id}`, src, alt, driveId: image.id });
+        tiles.push({ key: `drive:${image.id}`, src, alt, photoId: image.id, driveId: image.id });
     }
 
     for (const image of curated) {
@@ -91,6 +133,9 @@ export function buildGalleryTiles(
             key: `site:${image.src}`,
             src: image.src,
             alt: image.alt,
+            // A synthetic, stable id -- see `curatedPhotoId`. This is what lets a
+            // curated photo be linked and reordered like a Drive one.
+            photoId: curatedPhotoId(image.src),
             ...(image.caption ? { caption: image.caption } : {}),
         });
     }

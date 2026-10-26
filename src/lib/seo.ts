@@ -40,6 +40,31 @@ export interface RouteMeta {
      * controlled, so it should not be in search results either.
      */
     indexable: boolean;
+    /**
+     * Param routes (`/gallery/:photoId`) are matched by pattern, not by exact
+     * path, and are NEVER written as build files.
+     *
+     * WARNING: The build scripts (`spa-fallback.mjs`, `prerender-meta.mjs`,
+     * `generate-sitemap.mjs`) all iterate this list and write a file per route,
+     * so a literal `:photoId` would otherwise produce `dist/gallery/:photoId/`.
+     * They filter on this flag. Marking one `indexable: true` cannot work --
+     * there is no single URL to prerender -- so it is forced off below.
+     */
+    param?: string;
+}
+
+/**
+ * Whether a route describes a family of URLs rather than one page.
+ *
+ * WARNING: This tests the PATH, not the `param` field. The build scripts each
+ * carry their own copy of this check (they run in node and cannot import this
+ * module), and if one of them relied on the field alone, a route that lost the
+ * field would silently write `dist/gallery/:photoId/` -- a directory named
+ * after a colon token, which never matches a real URL. The path is the thing
+ * that is actually load-bearing, so it is the thing that is checked.
+ */
+export function isParamRoute(route: { path: string }): boolean {
+    return route.path.split("/").some((segment) => segment.startsWith(":"));
 }
 
 const ROUTES: readonly RouteMeta[] = seoRoutes.routes;
@@ -58,6 +83,12 @@ for (const route of ROUTES) {
     }
     if (!route.title || !route.description) {
         throw new Error(`seoRoutes.json: route "${route.path}" needs both a title and a description`);
+    }
+    // A param route describes a whole family of URLs, so there is no one page
+    // to prerender or list. Fail loudly rather than building a URL containing
+    // the literal ":param".
+    if (isParamRoute(route) && route.indexable) {
+        throw new Error(`seoRoutes.json: param route "${route.path}" cannot be indexable`);
     }
 }
 
@@ -124,14 +155,42 @@ const HOME_META: RouteMeta = requireRoute(HOME_PATH);
 
 export { HOME_META };
 
+/** Concrete (non-param) routes -- the ones that map to a real URL. */
+function staticRoutes(): readonly RouteMeta[] {
+    return ROUTES.filter((route) => !isParamRoute(route));
+}
+
+/**
+ * Turn a route pattern into a matching regex, so `/gallery/:photoId` resolves
+ * for any id.
+ *
+ * Matching is exact on the shape: the number of segments must agree, and each
+ * `:name` segment matches exactly one non-empty segment.
+ */
+function patternFor(route: RouteMeta): RegExp {
+    const segments = normalizePath(route.path).split("/").filter(Boolean);
+    const body = segments
+        .map((segment) => (segment.startsWith(":") ? "[^/]+" : segment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+        .join("/");
+    return new RegExp(`^/${body}$`, "i");
+}
+
 /**
  * Metadata for a router path, falling back to the home entry for unknown
  * paths. The fallback is correct because `App.tsx`'s `*` route renders the
  * home page for anything unmatched.
+ *
+ * Exact paths win over patterns, so a param route can never shadow a real page.
  */
 export function metadataForPath(path: string): RouteMeta {
     const normalized = normalizePath(path);
-    return ROUTES.find((route) => route.path === normalized) ?? HOME_META;
+    const exact = ROUTES.find((route) => !isParamRoute(route) && route.path === normalized);
+    if (exact) return exact;
+
+    const patterned = ROUTES.find((route) => isParamRoute(route) && patternFor(route).test(normalized));
+    if (patterned) return patterned;
+
+    return HOME_META;
 }
 
 /**
@@ -144,15 +203,29 @@ export function metadataForPath(path: string): RouteMeta {
  * consolidates the two addresses -- so it has to name the one that actually
  * serves the page. Verified against production: every bare route 302s to its
  * trailing-slash form.
+ *
+ * A CONCRETE param path (`/gallery/abc123`) canonicalizes to itself with the
+ * trailing slash, which is the form S3 redirects to. A BARE param pattern
+ * (`/gallery/:photoId`) is not a real address at all, so it canonicalizes to
+ * the pattern's parent section (`/gallery/`) -- better a real page than a URL
+ * containing a literal colon.
  */
 export function canonicalUrl(path: string): string {
     const normalized = normalizePath(path);
-    return normalized === HOME_PATH ? `${SITE_URL}/` : `${SITE_URL}${normalized}/`;
+    if (normalized === HOME_PATH) return `${SITE_URL}/`;
+
+    const concrete = /:[^/]+/.test(normalized) ? normalized.replace(/\/:[^/]+/g, "") || HOME_PATH : normalized;
+    return concrete === HOME_PATH ? `${SITE_URL}/` : `${SITE_URL}${concrete}/`;
 }
 
-/** Routes that belong in `sitemap.xml`. */
+/**
+ * Routes that belong in `sitemap.xml`.
+ *
+ * Param routes are excluded by construction (see the `indexable` invariant in
+ * the module-load validation), because a sitemap needs real URLs.
+ */
 export function sitemapRoutes(): RouteMeta[] {
-    return ROUTES.filter((route) => route.indexable);
+    return staticRoutes().filter((route) => route.indexable);
 }
 
 /** Every route path, for cross-checking against `App.tsx`. */

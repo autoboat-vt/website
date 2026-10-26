@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render as rtlRender, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { EVENTS_URL } from "../../lib/discord";
 import { ALL_GALLERY_IMAGES } from "../../lib/galleryImages";
 import Gallery from "../../pages/Gallery";
@@ -17,6 +18,27 @@ import Gallery from "../../pages/Gallery";
 
 const MANIFEST_URL = `${EVENTS_URL}/gallery`;
 const curatedCount = ALL_GALLERY_IMAGES.length;
+
+/**
+ * Render the page inside a router with the SAME route shape `App.tsx` uses.
+ *
+ * WHY THIS SHADOWS `render`: the page reads `useParams` (the photo id in
+ * `/gallery/:photoId`) and `useNavigate`, both of which need a router context.
+ * `MemoryRouter` alone is not enough -- `useParams` only resolves inside a
+ * matched `<Route>`, so the real route pattern is registered here. Wrapping in
+ * one place keeps every existing assertion untouched, and `route` is how a test
+ * exercises a shared per-photo link.
+ */
+function render(ui: React.ReactElement, options?: { route?: string }) {
+    return rtlRender(
+        <MemoryRouter initialEntries={[options?.route ?? "/gallery"]}>
+            <Routes>
+                <Route path="/gallery" element={ui} />
+                <Route path="/gallery/:photoId" element={ui} />
+            </Routes>
+        </MemoryRouter>,
+    );
+}
 
 /** Stub fetch to answer the manifest request with `body`. */
 function mockManifest(body: unknown, ok = true) {
@@ -320,5 +342,164 @@ describe("Gallery page drag to reorder", () => {
         await waitFor(() => {
             expect(screen.getByRole("dialog")).toBeInTheDocument();
         });
+    });
+});
+
+/**
+ * Per-photo permalinks on the SITE's own domain (`/gallery/<photoId>`).
+ *
+ * WHAT THIS CAN AND CANNOT VERIFY. These assert the routing and rendering
+ * contract: that a shared link opens the photo, that a stale link degrades to
+ * the grid, and that the advertised share URL is the site domain rather than the
+ * Worker origin. They cannot assert anything about S3, which is what actually
+ * serves `/gallery/<id>` in production with a 404 status and the app shell as
+ * the body -- see the WARNING in galleryClient.ts.
+ */
+describe("Gallery photo permalinks", () => {
+    const MANIFEST = {
+        syncedAt: Date.now(),
+        images: [
+            { id: "alpha", name: "alpha.jpg", width: null, height: null, modifiedTime: null },
+            { id: "bravo", name: "bravo.jpg", width: null, height: null, modifiedTime: null },
+        ],
+        pending: 0,
+        warning: null,
+    };
+
+    function mockManifest() {
+        globalThis.fetch = jest
+            .fn()
+            .mockResolvedValue({ ok: true, status: 200, json: async () => MANIFEST }) as unknown as typeof fetch;
+    }
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+        globalThis.localStorage?.clear();
+    });
+
+    it("opens the photo named in the URL", async () => {
+        // The whole point of the route: a shared link lands on the photo.
+        mockManifest();
+        render(<Gallery />, { route: "/gallery/bravo" });
+
+        await waitFor(() => {
+            expect(screen.getByRole("dialog")).toBeInTheDocument();
+        });
+        // The lightbox shows the bravo photo, not alpha.
+        expect(screen.getByRole("dialog").querySelector("img")?.getAttribute("src")).toContain("/image/bravo");
+    });
+
+    it("shows the plain grid for a photo that is no longer published", async () => {
+        // A hidden or deleted photo must not leave a broken lightbox, and the
+        // visitor should be told rather than silently seeing the grid.
+        mockManifest();
+        render(<Gallery />, { route: "/gallery/does-not-exist" });
+
+        await waitFor(() => {
+            expect(screen.getByText(/no longer in the gallery/i)).toBeInTheDocument();
+        });
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("shows no missing-photo note while the manifest is still loading", async () => {
+        // Before the fetch resolves, EVERY id looks missing. Flashing the note
+        // would be a false alarm on every shared link.
+        let resolve: ((value: unknown) => void) | undefined;
+        globalThis.fetch = jest.fn().mockReturnValue(
+            new Promise((r) => {
+                resolve = r;
+            }),
+        ) as unknown as typeof fetch;
+
+        render(<Gallery />, { route: "/gallery/bravo" });
+
+        expect(screen.queryByText(/no longer in the gallery/i)).not.toBeInTheDocument();
+
+        // Settle the pending promise so the test does not leak an act() warning.
+        resolve?.({ ok: true, status: 200, json: async () => MANIFEST });
+        await waitFor(() => {
+            expect(screen.getByRole("dialog")).toBeInTheDocument();
+        });
+    });
+
+    it("offers a copy-link control that names the site domain, not the Worker", async () => {
+        // The user-visible promise: the shareable link is autoboat.aoe.vt.edu.
+        mockManifest();
+        const writeText = jest.fn().mockResolvedValue(undefined);
+        Object.defineProperty(globalThis.navigator, "clipboard", {
+            value: { writeText },
+            configurable: true,
+        });
+
+        render(<Gallery />, { route: "/gallery/alpha" });
+
+        const button = await screen.findByRole("button", { name: /copy link/i });
+        fireEvent.click(button);
+
+        await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+        const copied = writeText.mock.calls[0]?.[0] as string;
+        expect(copied).toContain("autoboat.aoe.vt.edu/gallery/alpha");
+        expect(copied).not.toContain("workers.dev");
+    });
+
+    it("offers the copy control for a curated photo too", async () => {
+        // THE BUG THIS GUARDS. Curated (build-time) photos used to have no id,
+        // so they opened in local state and the lightbox offered no Copy link --
+        // "not all images have the copy link button". Every tile now carries a
+        // `photoId` (a Drive id or a curated slug), so every photo is linkable.
+        globalThis.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => ({ ...MANIFEST, images: [] }),
+        }) as unknown as typeof fetch;
+
+        const { container } = render(<Gallery />);
+
+        await waitFor(() => expect(container.querySelectorAll(".photo-container img").length).toBeGreaterThan(0));
+        fireEvent.click(container.querySelector(".photo-container > button") as HTMLElement);
+
+        await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+        expect(screen.getByRole("button", { name: /copy link/i })).toBeInTheDocument();
+    });
+
+    it("puts a curated photo in the URL so its link is shareable", async () => {
+        // The link is only worth copying if it reopens the same photo.
+        globalThis.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => ({ ...MANIFEST, images: [] }),
+        }) as unknown as typeof fetch;
+
+        const { container } = render(<Gallery />);
+
+        await waitFor(() => expect(container.querySelectorAll(".photo-container img").length).toBeGreaterThan(0));
+        fireEvent.click(container.querySelector(".photo-container > button") as HTMLElement);
+
+        await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+        // Navigated to /gallery/<slug>, not left on the bare grid.
+        expect(screen.getByRole("dialog").querySelector("img")?.getAttribute("src")).toContain("/images/");
+    });
+
+    it("does not offer the remove action for a curated photo", async () => {
+        // Copy link is universal; REMOVE is not. A curated photo has no Drive
+        // file, so the hide endpoint would 404 on it.
+        globalThis.localStorage.setItem(
+            "autoboat.calendar.session",
+            JSON.stringify({ token: "t", name: "Officer", expiresAt: Date.now() + 600_000 }),
+        );
+        globalThis.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => ({ ...MANIFEST, images: [] }),
+        }) as unknown as typeof fetch;
+
+        const { container } = render(<Gallery />);
+
+        await waitFor(() => expect(container.querySelectorAll(".photo-container img").length).toBeGreaterThan(0));
+        fireEvent.click(container.querySelector(".photo-container > button") as HTMLElement);
+
+        await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+        expect(screen.getByRole("button", { name: /copy link/i })).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: /remove from gallery/i })).not.toBeInTheDocument();
     });
 });

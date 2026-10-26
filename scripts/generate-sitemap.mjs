@@ -52,7 +52,16 @@ function htmlFileFor(path) {
     return path === "/" ? join(distDir, "index.html") : join(distDir, path, "index.html");
 }
 
-const indexable = seo.routes.filter((route) => route.indexable);
+/**
+ * Param routes (`/gallery/:photoId`) are never listed.
+ *
+ * A sitemap entry needs a concrete URL, and one route describes an unbounded
+ * family of them. `seo.ts` also refuses to load with an indexable param route,
+ * so this is belt-and-braces rather than the only guard.
+ */
+const isParamRoute = (path) => path.split("/").some((segment) => segment.startsWith(":"));
+
+const indexable = seo.routes.filter((route) => route.indexable && !isParamRoute(route.path));
 
 // Every listed route must have a real HTML file, or the sitemap would advertise
 // a URL that 404s -- the exact failure being fixed here. Reading the filesystem

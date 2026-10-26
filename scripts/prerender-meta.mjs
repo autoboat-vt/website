@@ -109,7 +109,17 @@ function canonicalFor(path) {
 
 const shell = readFileSync(join(distDir, "index.html"), "utf8");
 
-for (const route of seo.routes) {
+/**
+ * Param routes (`/gallery/:photoId`) are matched by pattern, so there is no
+ * single file to rewrite and no `dist/gallery/:photoId/` on disk.
+ *
+ * WARNING: Skipping them is required, not cosmetic. `writeFileSync` into a
+ * directory named after a colon token would either fail or leave a file no
+ * request can reach.
+ */
+const isParamRoute = (path) => path.split("/").some((segment) => segment.startsWith(":"));
+
+for (const route of seo.routes.filter((route) => !isParamRoute(route.path))) {
     const canonical = canonicalFor(route.path);
 
     let html = shell;

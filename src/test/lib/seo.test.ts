@@ -153,6 +153,26 @@ describe("seo metadata", () => {
             expect(metadataForPath("/nope")).toEqual(metadataForPath("/"));
             expect(metadataForPath("/nope").title).toBe(metadataForPath("/").title);
         });
+
+        describe("param routes", () => {
+            // `/gallery/:photoId` is a real route but describes a family of
+            // URLs, so it has metadata without having a file or sitemap entry.
+            it("matches a concrete photo path", () => {
+                expect(metadataForPath("/gallery/abc123").path).toBe("/gallery/:photoId");
+            });
+
+            it("does not shadow the plain gallery", () => {
+                // Exact paths must win, or /gallery would resolve to the photo
+                // pattern and lose its own title.
+                expect(metadataForPath("/gallery").path).toBe("/gallery");
+            });
+
+            it("does not swallow a deeper path", () => {
+                // /gallery/a/b is not a valid single photo id, so it must fall
+                // through to the home fallback rather than half-match.
+                expect(metadataForPath("/gallery/a/b").path).toBe("/");
+            });
+        });
     });
 
     describe("canonicalUrl", () => {
@@ -179,6 +199,21 @@ describe("seo metadata", () => {
             for (const path of allRoutePaths()) {
                 expect(() => new URL(canonicalUrl(path))).not.toThrow();
             }
+        });
+
+        describe("param routes", () => {
+            it("canonicalizes a concrete photo path to itself", () => {
+                // The form S3 redirects to, so it is the address that returns 200.
+                expect(canonicalUrl("/gallery/abc123")).toBe("https://autoboat.aoe.vt.edu/gallery/abc123/");
+            });
+
+            it("never emits a literal colon in a canonical URL", () => {
+                // The bare pattern is not a real address. A canonical containing
+                // ":photoId" would be worse than pointing at the parent section.
+                expect(canonicalUrl("/gallery/:photoId")).toBe("https://autoboat.aoe.vt.edu/gallery/");
+                // Check the PATH, not the whole URL -- "https:" has a colon too.
+                expect(new URL(canonicalUrl("/gallery/:photoId")).pathname).toBe("/gallery/");
+            });
         });
     });
 
@@ -210,6 +245,14 @@ describe("seo metadata", () => {
             }
         });
 
+        it("never lists a param route", () => {
+            // A sitemap entry needs ONE concrete URL; a pattern describes an
+            // unbounded family, and `:photoId` would be advertised literally.
+            const paths = sitemapRoutes().map((route) => route.path);
+            expect(paths).not.toContain("/gallery/:photoId");
+            expect(paths.some((path) => path.includes(":"))).toBe(false);
+        });
+
         it("gives the home page the highest priority", () => {
             const priorities = Object.fromEntries(
                 sitemapRoutes().map((route) => [route.path, Number.parseFloat(route.priority)]),
@@ -235,6 +278,9 @@ describe("seo metadata", () => {
                 "/sponsors",
                 "/other-pages",
                 "/gallery",
+                // A param route: it describes /gallery/<id> for any id, so it
+                // has metadata but no build file and no sitemap entry.
+                "/gallery/:photoId",
                 "/calendar",
                 "/live",
                 "/calendar/officers",

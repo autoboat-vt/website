@@ -137,6 +137,104 @@ WARNING: **Subfolders are not traversed.** Only direct children of the configure
 | `PUT /manage/gallery/order` | officer session | Sets the display order. |
 | `POST /manage/gallery/sync` | `GALLERY_SYNC_TOKEN` | For CI or an operator. |
 
+## Per-photo links are on the SITE domain, image bytes are not
+
+A photo has TWO URLs and they live on different hosts, deliberately:
+
+```
+https://autoboat.aoe.vt.edu/gallery/<driveId>          <- the PAGE (shareable)
+https://<worker>.workers.dev/gallery/image/<driveId>   <- the BYTES (<img src>)
+```
+
+The page URL is a real route: `/gallery/:photoId` in `App.tsx`, handled by the
+same `Gallery` component. The photo id comes from `useParams`, so a shared link
+opens the lightbox on that photo, and the URL -- not component state -- is the
+source of truth for which photo is open. That is what keeps the back button
+correct: opening a photo pushes a history entry, so Back closes the lightbox.
+`galleryPermalinkPath` / `galleryPermalinkUrl` build the link;
+`photoIdFromPathname` reads it back.
+
+WARNING: **The `<img src>` CANNOT be moved to the site domain from this repo.**
+`autoboat.aoe.vt.edu` is plain Amazon S3 (VT S4) behind VT's DNS
+(`sweb-prod.hosting.vt.edu`), so there is no Cloudflare route in front of that
+hostname -- a Worker route needs the zone on Cloudflare. Serving the bytes from
+the site domain would need either VT to front the domain with Cloudflare, or an
+S3 redirect rule on the S4 bucket, or copying every photo into the build (which
+undoes "drop a photo in Drive, no redeploy"). Until one of those happens, only
+the LINK is on the site domain. Do not try to "fix" this by rewriting
+`galleryImageUrl`.
+
+WARNING: **`VITE_GALLERY_IMAGE_BASE` is the one-line switch for that change.**
+`galleryImageUrl` reads it (via `globalThis.__VITE_GALLERY_IMAGE_BASE__`, set in
+`vite.config.ts`). It is EMPTY today, which keeps `<worker>/gallery/image/<id>`.
+Set it to `https://autoboat.aoe.vt.edu/gallery` and every `<img src>` becomes
+`<base>/image/<id>` -- the Worker's own route shape -- with no source edit. Do
+not move the URL construction out of `galleryImageUrl`; that function is
+deliberately the single place the byte host is decided, and the permalink builder
+is deliberately a different function.
+
+### Copy link is on EVERY photo
+
+Every tile carries a `photoId`: a Drive file id for a Drive photo, or a stable
+synthetic slug for a curated one (`curatedPhotoId` in `galleryView.ts`, shaped
+`site-<subteam>-<name>`). `buildGalleryTiles` guarantees it, so the lightbox can
+offer **Copy link for all 40-odd photos**, not just the Drive half.
+
+WARNING: **This was a bug for a while: "not all images have the copy link
+button".** Curated photos were held in local React state because they had no id
+to put in a URL, so they could not be linked at all. The fix was to give them an
+id rather than to special-case the lightbox. If you add a third photo source,
+give it a `photoId` too -- do not add another branch to `openPhoto`.
+
+WARNING: **`curatedPhotoId` is effectively frozen.** These slugs are public URLs,
+so renaming a file in `galleryImages.ts` changes its id and breaks links already
+pasted into Discord. That is the same contract Drive ids have (a re-uploaded
+photo gets a new id).
+
+WARNING: **Copy link is universal; REMOVE is not.** The remove action still
+requires `session && modalImage.driveId`, because a curated photo has no Drive
+file and the hide endpoint would 404 on it.
+
+WARNING: **`/gallery/<id>` returns HTTP 404 with the app shell as the body.** S3
+has no file at that path, so it serves the configured 404 error document, which
+`spa-fallback.mjs` writes as a copy of `index.html` -- the app therefore boots
+and the router takes over correctly. The consequence is that link previews and
+crawlers see a 404 status, so a shared photo link does not unfurl. Verified
+against production.
+
+WARNING: **Do NOT use `window.history.length` to decide whether Back is safe.**
+It counts the whole browser session, so a permalink opened in a fresh tab reports
+a long history and `navigate(-1)` sends the visitor to whatever site they came
+from. `closePhoto` uses react-router's `location.key !== "default"` instead,
+which is true only when there is a real in-app entry behind the current one.
+
+WARNING: **A curated photo has a synthetic `photoId`, not a Drive id.** Those
+tiles come from `galleryImages.ts`, so `curatedPhotoId` derives
+`site-<subteam>-<name>` for them. That is a real, shareable permalink -- every
+photo is linkable. What they do NOT have is a `driveId`, which is why the REMOVE
+action stays Drive-only.
+
+WARNING: **`openPhoto` takes `photoId` for both sources.** It navigates to
+`/gallery/<photoId>` either way. Do not reintroduce a local-state branch for
+curated photos: that is what made them unlinkable ("not all images have the copy
+link button").
+
+### Param routes: three build scripts must skip them
+
+`/gallery/:photoId` is a `seoRoutes.json` entry with `"param": "photoId"` and
+`indexable: false`. It has metadata (a real title, so a shared link is not
+titled "AutoBoat | VT Autonomous Boat Team") but **no build file, no sitemap
+entry, and no prerendered HTML**.
+
+WARNING: **All three build scripts filter it out, and each needs to keep doing
+so.** `spa-fallback.mjs` would otherwise create `dist/gallery/:photoId/` -- a
+directory literally named after a colon token that no request can reach.
+`prerender-meta.mjs` would try to `writeFileSync` into it. `generate-sitemap.mjs`
+would advertise a URL containing `:photoId`. They each carry their own
+`isParamRoute` check because they run in node and cannot import `seo.ts`;
+`seo.ts` also throws at module load if a param route is marked `indexable`, which
+is belt-and-braces rather than the only guard.
+
 ## Hiding a photo does NOT delete it
 
 Officers can take a photo off the public page from the lightbox ("Remove from
@@ -250,6 +348,8 @@ halves.
 - `src/test/worker/galleryUpload.test.ts` -- magic-byte sniffing per format, HEIC identification, filename sanitizing, size/type limits, and that the limit stays under Drive's ceiling.
 - `src/test/worker/galleryRoutes.test.ts` -- the auth gate (unauthenticated, forged, member, expired), the HEIC message end to end, public-vs-management CORS, and the return-path allowlist.
 - `src/test/worker/galleryConfig.test.ts` -- the `wrangler.jsonc` <-> code binding agreement (see "The R2 binding must be named `GALLERY_BUCKET`"). This is a production-incident regression test: the R2 binding had been renamed away from `GALLERY_BUCKET` and every gallery image 503'd.
+- `src/test/lib/galleryPermalink.test.ts` -- the permalink string rules: site origin (never the Worker), percent-encoding, and `photoIdFromPathname` returning null for a multi-segment path or a malformed `%` escape rather than throwing inside a render.
+- `src/test/pages/Gallery.test.tsx` -- also covers permalinks: a `/gallery/<id>` link opening that photo, a stale id degrading to the grid plus a note (with no flash while the manifest loads), and the copy-link control naming `autoboat.aoe.vt.edu`.
 - `src/test/worker/oauthRedirect.test.ts` -- `resolveReturnPath`, `parseRedirectUris`, `redirectUriFor` selection and fallback.
 - `src/test/worker/galleryOrder.test.ts` -- the pure ordering rule: listed ids first, unlisted appended newest-first, stale ids harmless, first-occurrence-wins for duplicates, `moveInOrder` clamping, `parseOrder` tolerance.
 - `src/test/worker/galleryOrderSync.test.ts` -- the WIRING, through `syncGallery` with the Drive client mocked. Removing the `loadOrder` call fails this file while every pure ordering test stays green.

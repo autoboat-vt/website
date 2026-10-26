@@ -38,7 +38,13 @@ const indexHtml = join(distDir, "index.html");
 export const ROUTES = JSON.parse(readFileSync(join(__dirname, "..", "src", "lib", "seoRoutes.json"), "utf8"))
     .routes.map((route) => route.path)
     // The root is served by dist/index.html itself, so it needs no copy.
-    .filter((path) => path !== "/");
+    .filter((path) => path !== "/")
+    // WARNING: Param routes (`/gallery/:photoId`) describe a FAMILY of URLs, not
+    // one file. Copying index.html to `dist/gallery/:photoId/index.html` would
+    // create a directory literally named `:photoId`, which no real request ever
+    // matches -- and the S3 404 error document already serves the app shell for
+    // any unmatched path, which is what makes a shareable per-photo link work.
+    .filter((path) => !path.split("/").some((segment) => segment.startsWith(":")));
 
 for (const route of ROUTES) {
     const dest = join(distDir, `${route}/index.html`);

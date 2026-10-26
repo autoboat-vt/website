@@ -112,6 +112,7 @@ export default function App() {
                         <Route path="/other-pages" element={<OtherPages />} />
                         <Route path="/calendar" element={<Calendar />} />
                         <Route path="/gallery" element={<Gallery />} />
+                        <Route path="/gallery/:photoId" element={<Gallery />} />
                         <Route path="/live" element={<LiveMap />} />
                         <Route path="/calendar/officers" element={<Officers />} />
                         <Route path="*" element={<Home />} />

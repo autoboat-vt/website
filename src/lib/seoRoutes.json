@@ -52,6 +52,15 @@
             "indexable": true
         },
         {
+            "path": "/gallery/:photoId",
+            "param": "photoId",
+            "title": "Photo | AutoBoat",
+            "description": "A photo from the AutoBoat at Virginia Tech gallery, showing the team designing, building, and testing autonomous sailboats and electric motorboats.",
+            "changefreq": "monthly",
+            "priority": "0.0",
+            "indexable": false
+        },
+        {
             "path": "/calendar",
             "title": "Calendar | AutoBoat",
             "description": "Meeting times, work sessions, and competition dates for AutoBoat at Virginia Tech, pulled from our Discord server. Subscribe from your own calendar app.",
