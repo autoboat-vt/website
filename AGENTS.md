@@ -83,7 +83,7 @@ src/
   components/           # shared UI (Header, Footer, Card, Gallery, etc.)
   pages/                # one component per route (Home, OurTeam, Fleet, ...)
   hooks/                # useBoatHistory, useTheme, usePageMeta (per-route SEO tags)
-  lib/                  # telemetry.ts (REST client), discord.ts, eventChannels.ts (subteam grouping + filter), galleryClient.ts (gallery API + upload), galleryView.ts (tile merge/alt text), loginRedirect.ts (shared ?code= exchange), vtColors.ts, galleryImages.ts (curated gallery data), seo.ts + seoRoutes.json (route metadata)
+  lib/                  # telemetry.ts (REST client), discord.ts, eventChannels.ts (subteam grouping + filter), galleryClient.ts (gallery API + upload), galleryView.ts (tile merge/alt text), loginRedirect.ts (shared ?code= exchange), vtColors.ts, galleryImages.ts (curated gallery data), metricsClient.ts (reduced telemetry metrics), seo.ts + seoRoutes.json (route metadata)
   test/                 # jest tests + __mocks__/
 scripts/
   deploy.sh             # manual deploy: site to VT GitLab (S4 -> S3) AND the Cloudflare Worker
@@ -129,6 +129,7 @@ public/                 # static assets, _redirects, images
 | `/sponsors` | Sponsors      | "Sponsors"     |
 | `/other-pages` | Other Pages | "Other Pages" |
 | `/live`     | Live Boat Map | (not in nav)   |
+| `/metrics`  | Server Metrics | (not in nav)  |
 | `/calendar` | Calendar      | (not in nav)   |
 | `/gallery`  | Gallery       | (not in nav)   |
 | `/gallery/:photoId` | Gallery (photo open) | (not in nav, **param route**) |
@@ -136,7 +137,9 @@ public/                 # static assets, _redirects, images
 
 NavLink items are defined in `src/components/Header.tsx` as `NAV_LINKS`. The home link uses `end: true` (react-router's `end` prop) so it's only active on exact `/`.
 
-The nav carries only the five primary pages. `/live`, `/calendar`, and `/gallery` are deliberately **out of the nav but still public routes** — they're reachable directly by URL and linked from `/other-pages`, the hub page (`src/pages/OtherPages.tsx`). `FEATURE_PAGES` in that file controls what the hub advertises; adding a feature means adding a `Route` + a `seoRoutes.json` entry + a `FEATURE_PAGES` entry + the README row. Don't add these back to `NAV_LINKS` without checking the width budget below. WARNING: **A `FEATURE_PAGES` entry with `external: true` renders as an off-site `<a target="_blank" rel="noopener noreferrer">` instead of a react-router `<Link>`**, and needs no route registration at all — the docs site is the current example, and it links to `https://autoboat.aoe.vt.edu/documentation/` (this site's own loader page) rather than the Cloudflare host, so shared links stay on the team domain. The flag must match the shape of `to`, or an absolute URL gets handed to `Link` (or an internal route opens a blank tab).
+The nav carries only the five primary pages. `/live`, `/metrics`, `/calendar`, and `/gallery` are deliberately **out of the nav but still public routes** — they're reachable directly by URL and linked from `/other-pages`, the hub page (`src/pages/OtherPages.tsx`). `FEATURE_PAGES` in that file controls what the hub advertises; adding a feature means adding a `Route` + a `seoRoutes.json` entry + a `FEATURE_PAGES` entry + the README row. Don't add these back to `NAV_LINKS` without checking the width budget below. WARNING: **A `FEATURE_PAGES` entry with `external: true` renders as an off-site `<a target="_blank" rel="noopener noreferrer">` instead of a react-router `<Link>`**, and needs no route registration at all — the docs site is the current example, and it links to `https://autoboat.aoe.vt.edu/documentation/` (this site's own loader page) rather than the Cloudflare host, so shared links stay on the team domain. The flag must match the shape of `to`, or an absolute URL gets handed to `Link` (or an internal route opens a blank tab).
+
+WARNING: **`/metrics` is a page, not a panel on `/live`.** `MetricsPanel` used to render below the map, which put a second independent poller on a page someone opened to watch a boat and made two screenshots (map and dashboard) that could not be linked separately. `src/pages/Metrics.tsx` is now a thin shell that renders the panel as the whole page; do not re-add it to `LiveMap.tsx`. The panel keeps its own `<h2>` and the page supplies an outline-only `<h1>` (the `Gallery.tsx` pattern), so `src/test/pages/Metrics.test.tsx` asserts one `h1` and a distinct `h2` rather than matching the heading text, which appears twice.
 
 ### `/documentation` (loader page, not a route)
 

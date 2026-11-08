@@ -45,6 +45,12 @@ const FEATURE_PAGES: FeaturePage[] = [
         description: "Photos of the team at work in the Ware Lab and out on the water.",
     },
     {
+        to: "/metrics",
+        title: "Server Metrics",
+        description:
+            "Live metrics from our telemetry server: request counts, error rates, response latency, and database activity.",
+    },
+    {
         // External: the docs site is a separate deployment of the `documentation`
         // repo, not a route in this app. `external: true` renders it as a plain <a>.
         //

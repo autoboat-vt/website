@@ -144,13 +144,14 @@ function MetricTile({ series, stroke }: { series: Series; stroke: string }) {
  *
  * Fetches the Worker's reduced `/telemetry/metrics` payload (see
  * `worker/src/metrics.ts`) on an interval and accumulates a short history in
- * component state for the sparklines.
+ * component state for the sparklines. Rendered by `src/pages/Metrics.tsx`.
  *
- * DEGRADES QUIETLY. This panel sits beside the live map; a metrics outage is
- * not a reason to shout. A failed fetch keeps the last good numbers on screen
- * and shows a subdued "stale" note, while `ok: false` from the Worker (upstream
- * unreachable) renders as "no data" rather than a row of zeroes, which would
- * read as a real measurement.
+ * DEGRADES QUIETLY. This panel is the whole of the `/metrics` page, which is a
+ * dashboard someone may leave open rather than a page they act on; a metrics
+ * outage is not a reason to shout. A failed fetch keeps the last good numbers on
+ * screen and shows a subdued "stale" note, while `ok: false` from the Worker
+ * (upstream unreachable) renders as "no data" rather than a row of zeroes, which
+ * would read as a real measurement.
  */
 export default function MetricsPanel() {
     const [payload, setPayload] = useState<MetricsPayload | null>(null);

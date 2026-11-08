@@ -69,7 +69,7 @@ export class MetricsError extends Error {
  *
  * Throws on network/HTTP failure so the caller can decide how to present it;
  * the panel shows a quiet "unavailable" state rather than an alarm, because
- * this is decorative next to the live map.
+ * this is a dashboard, not a page someone is trying to get work done on.
  *
  * A 200 with `ok: false` is NOT an error -- that is the Worker reporting an
  * upstream outage, which is rendered as "no data".

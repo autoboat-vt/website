@@ -16,6 +16,14 @@ function renderOtherPages() {
     );
 }
 
+/**
+ * Every card title, internal and external.
+ *
+ * Hoisted so the styling tests below cover the whole grid -- a per-test literal
+ * list is exactly how a new card ends up silently exempt from the assertions.
+ */
+const CARD_TITLES = ["Live Map", "Calendar", "Gallery", "Server Metrics", "Documentation"];
+
 describe("Other Pages page", () => {
     it("links to the Live Map", () => {
         renderOtherPages();
@@ -33,6 +41,12 @@ describe("Other Pages page", () => {
         renderOtherPages();
 
         expect(screen.getByText("Gallery").closest("a")).toHaveAttribute("href", "/gallery");
+    });
+
+    it("links to the server metrics page", () => {
+        renderOtherPages();
+
+        expect(screen.getByText("Server Metrics").closest("a")).toHaveAttribute("href", "/metrics");
     });
 
     it("links to the external documentation site", () => {
@@ -64,7 +78,7 @@ describe("Other Pages page", () => {
         // tab.
         renderOtherPages();
 
-        for (const title of ["Live Map", "Calendar", "Gallery"]) {
+        for (const title of ["Live Map", "Calendar", "Gallery", "Server Metrics"]) {
             const card = screen.getByText(title).closest("a") as HTMLElement;
             expect(card).not.toHaveAttribute("target");
             expect(card).not.toHaveAttribute("rel");
@@ -78,7 +92,7 @@ describe("Other Pages page", () => {
         // for the light panel, and reads ~1.1:1 on maroon).
         renderOtherPages();
 
-        for (const title of ["Live Map", "Calendar", "Gallery", "Documentation"]) {
+        for (const title of CARD_TITLES) {
             const card = screen.getByText(title).closest("a") as HTMLElement;
             expect(card.className).toContain("bg-card");
             expect(card.className).toContain("border-cardborder");
@@ -92,7 +106,7 @@ describe("Other Pages page", () => {
         // HTML (react-dom warns about it).
         renderOtherPages();
 
-        for (const title of ["Live Map", "Calendar", "Gallery", "Documentation"]) {
+        for (const title of CARD_TITLES) {
             const card = screen.getByText(title).closest("a") as HTMLElement;
             const cta = within(card).getByText(/^(Open|Visit) /);
             expect(cta.tagName).toBe("SPAN");
@@ -118,7 +132,7 @@ describe("Other Pages page", () => {
         // The CTA is a <span> for exactly this reason.
         renderOtherPages();
 
-        for (const title of ["Live Map", "Calendar", "Gallery", "Documentation"]) {
+        for (const title of CARD_TITLES) {
             const card = screen.getByText(title).closest("a") as HTMLElement;
             expect(card.querySelectorAll("a, button, input")).toHaveLength(0);
         }
@@ -130,7 +144,7 @@ describe("Other Pages page", () => {
         // lifting makes the whole row look like it shifted.
         renderOtherPages();
 
-        for (const title of ["Live Map", "Calendar", "Gallery", "Documentation"]) {
+        for (const title of CARD_TITLES) {
             const card = screen.getByText(title).closest("a") as HTMLElement;
             expect(card.className).not.toMatch(/translate/);
             expect(card.className).not.toContain("transition-transform");

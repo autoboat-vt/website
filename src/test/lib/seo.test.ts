@@ -65,14 +65,34 @@ describe("seo metadata", () => {
 
     describe("metadataForPath", () => {
         it("returns distinct titles for the primary pages", () => {
-            const paths = ["/", "/ourteam", "/fleet", "/sponsors", "/gallery", "/calendar", "/live", "/other-pages"];
+            const paths = [
+                "/",
+                "/ourteam",
+                "/fleet",
+                "/sponsors",
+                "/gallery",
+                "/calendar",
+                "/live",
+                "/metrics",
+                "/other-pages",
+            ];
             const titles = paths.map((path) => metadataForPath(path).title);
 
             expect(new Set(titles).size).toBe(paths.length);
         });
 
         it("returns distinct descriptions for the primary pages", () => {
-            const paths = ["/", "/ourteam", "/fleet", "/sponsors", "/gallery", "/calendar", "/live", "/other-pages"];
+            const paths = [
+                "/",
+                "/ourteam",
+                "/fleet",
+                "/sponsors",
+                "/gallery",
+                "/calendar",
+                "/live",
+                "/metrics",
+                "/other-pages",
+            ];
             const descriptions = paths.map((path) => metadataForPath(path).description);
 
             expect(new Set(descriptions).size).toBe(paths.length);
@@ -235,6 +255,7 @@ describe("seo metadata", () => {
                     "/gallery",
                     "/calendar",
                     "/live",
+                    "/metrics",
                 ]),
             );
         });
@@ -283,6 +304,7 @@ describe("seo metadata", () => {
                 "/gallery/:photoId",
                 "/calendar",
                 "/live",
+                "/metrics",
                 "/calendar/officers",
             ]);
         });

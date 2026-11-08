@@ -34,30 +34,11 @@ function jsonResponse(body: unknown, init?: { status?: number }): MockResponse {
 type FetchMock = jest.Mock;
 
 /**
- * The calls the map made, excluding any other poller on the page.
- *
- * The page also renders `MetricsPanel`, which polls its own endpoint. Counting
- * every call to the shared `fetch` would fold those in and make assertions
- * depend on unrelated component timing.
- */
-function mapFetchCalls(fn: FetchMock): unknown[] {
-    return fn.mock.calls.filter((call) => {
-        const input = call[0] as RequestInfo | URL;
-        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-        return !url.includes("/telemetry/metrics");
-    });
-}
-
-/**
  * Drive fetch() to resolve with the matching canned response per call. Calls
  * past the end of `responses` get a 200 empty-array response so polling
  * doesn't blow up in tests that only care about the first cycle.
  *
- * WARNING: The sequence is consumed POSITIONALLY by the map's requests only. The
- * page also renders a `MetricsPanel` that polls its own endpoint on its own
- * interval, and a raw call counter let the panel's request consume a slot meant
- * for the map -- shifting every later response by one, which surfaced as
- * "no boat marker" in tests that were otherwise correct.
+ * The sequence is consumed POSITIONALLY in the order the map issues requests.
  *
  * Do NOT "fix" this by keying the queue per URL: the map's own sequence
  * deliberately interleaves different endpoints (`instances`, then status and
@@ -67,27 +48,8 @@ function mapFetchCalls(fn: FetchMock): unknown[] {
  */
 function mockFetchSequence(responses: Array<{ body: unknown; status?: number }>): FetchMock {
     const canned = responses.map((r) => jsonResponse(r.body, { status: r.status }));
-    // Counts only the map's requests, so foreign pollers cannot shift the queue.
     let position = 0;
-    const fn = jest.fn((input: RequestInfo | URL): Promise<MockResponse> => {
-        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-
-        // The metrics panel is not under test here; answer it with an empty,
-        // "upstream unavailable" payload so it renders its quiet empty state and
-        // never touches the map's queue.
-        if (url.includes("/telemetry/metrics")) {
-            return Promise.resolve(
-                jsonResponse({
-                    generatedAt: new Date(0).toISOString(),
-                    gauges: {},
-                    httpRequests: [],
-                    dbQueries: [],
-                    latency: { meanSeconds: null, count: 0 },
-                    ok: false,
-                }),
-            );
-        }
-
+    const fn = jest.fn((): Promise<MockResponse> => {
         const r = canned[position] ?? jsonResponse([]);
         position += 1;
         return Promise.resolve(r);
@@ -342,8 +304,6 @@ describe("LiveMap page", () => {
         });
 
         expect(screen.getByText(/Can't reach the telemetry server/i)).toBeInTheDocument();
-        // Scoped to the map's own error card: `MetricsPanel` also renders the
-        // rejection message ("boom"), so an unscoped text query matches twice.
         expect(screen.getByText(/Network error reaching .*boom/)).toBeInTheDocument();
         // No map card should be present in the error state.
         expect(screen.queryByTestId("map-container")).not.toBeInTheDocument();
@@ -408,18 +368,13 @@ describe("LiveMap page", () => {
             await flushMicrotasks();
         });
         // Initial poll: 5 fetches (instances + 2×(status + waypoints)).
-        //
-        // Counted by URL rather than in total: the MetricsPanel on this page
-        // polls its own endpoint on a different interval, so a raw call count
-        // would include requests this test is not about and would break again
-        // the moment another independent poller is added.
-        expect(mapFetchCalls(fn)).toHaveLength(5);
+        expect(fn.mock.calls).toHaveLength(5);
 
         // Advance past one polling interval (3000ms).
         await act(async () => {
             jest.advanceTimersByTime(3000);
             await flushMicrotasks();
         });
-        expect(mapFetchCalls(fn)).toHaveLength(10);
+        expect(fn.mock.calls).toHaveLength(10);
     });
 });

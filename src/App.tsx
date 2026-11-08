@@ -9,7 +9,7 @@ import Home from "./pages/Home";
 /**
  * Every route except Home is code-split.
  *
- * WHY LAZY: with all nine pages imported eagerly the app shipped one ~546 kB
+ * WHY LAZY: with every page imported eagerly the app shipped one ~546 kB
  * chunk, so a visitor landing on the home page downloaded Leaflet, the
  * calendar, the gallery viewer, and the whole event-management UI before
  * anything rendered. Splitting per route keeps the first paint small and loads
@@ -29,6 +29,7 @@ const Calendar = lazy(() => import("./pages/Calendar"));
 const Fleet = lazy(() => import("./pages/Fleet"));
 const Gallery = lazy(() => import("./pages/Gallery"));
 const LiveMap = lazy(() => import("./pages/LiveMap"));
+const Metrics = lazy(() => import("./pages/Metrics"));
 const Officers = lazy(() => import("./pages/Officers"));
 const OtherPages = lazy(() => import("./pages/OtherPages"));
 const OurTeam = lazy(() => import("./pages/OurTeam"));
@@ -114,6 +115,7 @@ export default function App() {
                         <Route path="/gallery" element={<Gallery />} />
                         <Route path="/gallery/:photoId" element={<Gallery />} />
                         <Route path="/live" element={<LiveMap />} />
+                        <Route path="/metrics" element={<Metrics />} />
                         <Route path="/calendar/officers" element={<Officers />} />
                         <Route path="*" element={<Home />} />
                     </Routes>

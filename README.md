@@ -14,6 +14,7 @@ React + TypeScript + Vite site for Virginia Tech's AutoBoat team, styled with Ta
 | `/sponsors`    | Sponsors      |
 | `/other-pages` | Other Pages   |
 | `/live`        | Live Boat Map |
+| `/metrics`     | Server Metrics |
 | `/calendar`    | Calendar      |
 | `/gallery`     | Gallery       |
 
@@ -23,8 +24,9 @@ one file, `src/lib/seoRoutes.json`. Add a route there (and register it in
 "SEO" in [`AGENTS.md`](./AGENTS.md).
 
 The top nav only carries the five primary pages (`/`, `/ourteam`, `/fleet`,
-`/sponsors`, `/other-pages`). `/live`, `/calendar`, and `/gallery` are still public
-routes reachable directly by URL — `/other-pages` is the hub that links to them.
+`/sponsors`, `/other-pages`). `/live`, `/metrics`, `/calendar`, and `/gallery` are
+still public routes reachable directly by URL — `/other-pages` is the hub that
+links to them.
 
 The `/calendar` page reads events from a Cloudflare Worker in `worker/`
 (proxies Discord's guild scheduled-events API without exposing the bot

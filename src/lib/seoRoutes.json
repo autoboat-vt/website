@@ -38,7 +38,7 @@
         {
             "path": "/other-pages",
             "title": "Other Pages | AutoBoat",
-            "description": "Explore AutoBoat's live boat tracker, team calendar, photo gallery, and technical documentation.",
+            "description": "Explore AutoBoat's live boat tracker, server metrics dashboard, team calendar, photo gallery, and technical documentation.",
             "changefreq": "monthly",
             "priority": "0.6",
             "indexable": true
@@ -74,6 +74,14 @@
             "description": "Follow AutoBoat vessels in real time: GPS positions, waypoints, speed, and battery telemetry from our autonomous boats.",
             "changefreq": "weekly",
             "priority": "0.5",
+            "indexable": true
+        },
+        {
+            "path": "/metrics",
+            "title": "Server Metrics | AutoBoat",
+            "description": "Live metrics from the AutoBoat telemetry server: HTTP request counts, error rates, response latency, and database activity.",
+            "changefreq": "weekly",
+            "priority": "0.4",
             "indexable": true
         },
         {

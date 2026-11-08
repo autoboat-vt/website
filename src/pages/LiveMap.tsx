@@ -6,7 +6,6 @@ import "leaflet/dist/leaflet.css";
 import BoatMarker from "../components/BoatMarker";
 import BoatPanel from "../components/BoatPanel";
 import Card from "../components/Card";
-import MetricsPanel from "../components/MetricsPanel";
 import Waypoints from "../components/Waypoints";
 import { useBoatHistory } from "../hooks/useBoatHistory";
 import {
@@ -485,13 +484,6 @@ export default function LiveMap() {
                     </ul>
                 </Card>
             )}
-
-            {/*
-                Server metrics, below the map so it never competes with the
-                live positions for space. It renders independently: a metrics
-                outage must not affect the map, and vice versa.
-            */}
-            <MetricsPanel />
         </section>
     );
 }
