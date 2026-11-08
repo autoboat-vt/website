@@ -56,6 +56,7 @@ keeps everything, exactly as before.
 | `DELETE /manage/events/{id}` | Deletes a guild scheduled event. **Officers only.** |
 | `GET /gallery` | Public gallery manifest: every image in the Drive folder whose bytes are already mirrored to R2. |
 | `GET /gallery/image/{id}` | One mirrored image's bytes, streamed from R2. |
+| `GET /telemetry/metrics` | Reduced Prometheus metrics for the telemetry server (see below). Public, read-only. |
 | `POST /manage/gallery` | Uploads a photo to Drive and mirrors it. **Officers only.** |
 | `PATCH /manage/gallery/{id}` | Hides or restores a photo. **Officers only.** Nothing is deleted. |
 | `GET /manage/gallery/hidden` | The photos an officer has removed. **Officers only.** |
@@ -63,8 +64,35 @@ keeps everything, exactly as before.
 | `PUT /manage/gallery/order` | Sets the display order. **Officers only.** |
 | `POST /manage/gallery/sync` | Forces a Drive sync. Token-gated, for CI or an operator. |
 
-## Creating events from the website
+### `GET /telemetry/metrics`
 
+The telemetry server exposes `/metrics` in the Prometheus text format. That
+payload is ~106 kB across ~38 metric families, while the website's metrics panel
+graphs a handful of numbers. This route fetches it server-side, keeps only the
+families in `WANTED_FAMILIES` (`worker/src/metrics.ts`), and returns ~800 bytes
+of JSON — roughly a 130× reduction.
+
+Keeping the reduction here rather than in the browser means the raw exposition
+text never reaches a visitor, and the parsing cost is paid once per cache window
+instead of once per viewer per poll.
+
+Behavior worth knowing:
+
+- **Cached 15 s**, keyed in `EVENTS_KV`. A failed upstream fetch is **not**
+  cached, so one bad moment does not blank the panel for the whole window.
+- **`ok: false` on upstream failure**, with every numeric field empty rather than
+  zero. The panel renders "no data" instead of a real-looking measurement of 0.
+- **Public and read-only.** It is deliberately in the read-only route group, so
+  it never advertises `POST`/`DELETE` or preflights.
+- Upstream base URL is `TELEMETRY_URL` (a plain `vars` entry; defaults to
+  `https://vt-autoboat-telemetry.uk`).
+
+Prometheus exports histograms under derived names, so `WANTED_FAMILIES` lists the
+human-readable base name (`http_request_duration_seconds`) and the parser expands
+it to `_bucket`/`_sum`/`_count`. `_created` timestamp gauges and the redundant
+`le="+Inf"` bucket are dropped.
+
+## Creating events from the website
 Officers can add events to the calendar without opening Discord. The flow is a
 standard OAuth2 authorization-code grant, with the code exchanged here because
 the exchange requires the client secret.

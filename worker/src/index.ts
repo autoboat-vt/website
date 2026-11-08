@@ -122,6 +122,7 @@ import {
 import { checkImageBytes, validateGalleryUpload } from "./galleryUpload";
 import { missingDriveConfig } from "./googleAuth";
 import { buildCalendar } from "./ics";
+import { buildMetricsPayload, type MetricsPayload, unavailablePayload } from "./metrics";
 import {
     buildAuthorizeUrl,
     createOAuthState,
@@ -170,6 +171,12 @@ interface Env {
     RETENTION_DAYS?: string;
     /** Display name subscribers see in their calendar app. Optional. */
     CALENDAR_NAME?: string;
+    /**
+     * Base URL of the telemetry server, for the metrics panel. Optional; falls
+     * back to `DEFAULT_TELEMETRY_URL`. Not a secret -- it is the same public
+     * host the LiveMap page already polls.
+     */
+    TELEMETRY_URL?: string;
     /**
      * The officer-only voice channel id. Defaults to the committed value in
      * audience.ts. Blank means "no officer channel", which makes the Worker
@@ -1505,6 +1512,147 @@ async function handleGetGalleryManifest(env: Env, ctx: ExecutionContext, now: Da
 }
 
 /**
+ * KV key holding the reduced metrics payload.
+ *
+ * A single key, not one per series: the payload is derived in one pass from one
+ * upstream document, so splitting it would make partial writes possible.
+ */
+const METRICS_CACHE_KEY = "telemetry:metrics:v1";
+
+/**
+ * How long a successful metrics payload stays fresh, in seconds.
+ *
+ * Deliberately short relative to `CACHE_TTL_SECONDS` (the calendar's 180 s).
+ * Metrics are a liveness signal, so a stale number is worse than a slightly more
+ * frequent fetch -- and the upstream scrape interval is 60 s, so anything longer
+ * than that is invisible anyway.
+ *
+ * WARNING: Workers KV allows 1,000 WRITES/day on the free tier. At 15 s a cold
+ * cache writes ~5,760 times/day, which is OVER the budget whenever traffic is
+ * continuous. Two things keep it safe here: the panel is only fetched while
+ * someone has the page open (not a cron), and a KV write is skipped whenever the
+ * previous payload is still fresh. If this page ever becomes high-traffic, raise
+ * this to 60 s (which matches the scrape interval and costs nothing in accuracy)
+ * or move the cache to the Cache API, which has no write budget.
+ */
+const METRICS_CACHE_TTL_SECONDS = 15;
+
+/** `Cache-Control` for a successful payload: browser may reuse briefly. */
+const METRICS_CACHE_CONTROL = `public, max-age=${METRICS_CACHE_TTL_SECONDS}`;
+
+/** Upstream metrics endpoint. Override per-environment via `TELEMETRY_URL`. */
+const DEFAULT_TELEMETRY_URL = "https://vt-autoboat-telemetry.uk";
+
+/** How long to wait for the telemetry server before giving up. */
+const TELEMETRY_UPSTREAM_TIMEOUT_MS = 5_000;
+
+/** The shape stored in KV, so a stale entry can be aged out on read. */
+interface MetricsCacheEntry {
+    storedAt: number;
+    payload: MetricsPayload;
+}
+
+/**
+ * Read a fresh metrics payload from KV, or `null` when absent/stale/unreadable.
+ *
+ * Every failure path returns `null` rather than throwing: the cache is an
+ * optimization, and a KV blip must not break the panel.
+ */
+async function readMetricsCache(env: Env, now: Date): Promise<MetricsPayload | null> {
+    try {
+        const raw = await env.EVENTS_KV.get(METRICS_CACHE_KEY);
+        if (!raw) return null;
+
+        const entry = JSON.parse(raw) as MetricsCacheEntry;
+        if (typeof entry?.storedAt !== "number" || !entry.payload?.ok) return null;
+        if (now.getTime() - entry.storedAt > METRICS_CACHE_TTL_SECONDS * 1_000) return null;
+
+        return entry.payload;
+    } catch {
+        return null;
+    }
+}
+
+/** Persist a successful payload. Failures are the caller's to ignore. */
+async function writeMetricsCache(env: Env, payload: MetricsPayload): Promise<void> {
+    const entry: MetricsCacheEntry = { storedAt: Date.now(), payload };
+    await env.EVENTS_KV.put(METRICS_CACHE_KEY, JSON.stringify(entry));
+}
+
+/**
+ * Fetch and reduce the upstream exposition text.
+ *
+ * Never throws: any network, status, or parse failure becomes
+ * `unavailablePayload` (see `handleGetTelemetryMetrics` for why this route
+ * degrades instead of erroring).
+ */
+async function fetchTelemetryMetrics(env: Env, now: Date): Promise<MetricsPayload> {
+    const base = (env.TELEMETRY_URL || DEFAULT_TELEMETRY_URL).replace(/\/+$/, "");
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TELEMETRY_UPSTREAM_TIMEOUT_MS);
+    try {
+        const res = await fetch(`${base}/metrics`, {
+            method: "GET",
+            headers: { Accept: "text/plain", "User-Agent": WORKER_USER_AGENT },
+            signal: controller.signal,
+        });
+        // A non-200 is most likely the telemetry container being down, which is
+        // exactly the case the empty-payload path exists for.
+        if (!res.ok) return unavailablePayload(now);
+
+        return buildMetricsPayload(await res.text(), now);
+    } catch {
+        return unavailablePayload(now);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/**
+ * `GET /telemetry/metrics` -- a reduced view of the telemetry server's metrics.
+ *
+ * WHY THIS EXISTS AT ALL. The telemetry server's `/metrics` endpoint is public
+ * and CORS-open, so the browser *could* fetch it directly. It should not: the
+ * payload is ~72 kB of Prometheus exposition text covering ~38 families, and the
+ * dashboard graphs a handful of numbers. Fetching it client-side would ship all
+ * of that on every poll and put the parsing cost on the visitor's device. This
+ * route fetches it once per cache window, reduces it (see metrics.ts), and the
+ * browser gets a ~1 kB JSON document.
+ *
+ * Also: the reduced payload is stable JSON, so the edge cache and any client
+ * diffing behave predictably, and the upstream URL stays server-side.
+ *
+ * FAILURE BEHAVIOR. Unlike the gallery, a metrics outage returns 200 with
+ * `ok: false` and empty series rather than an error status. The panel is
+ * decorative: it sits beside live boat positions, and a red error box would be
+ * louder than the outage warrants. An empty panel reads as "no data", and `ok`
+ * tells the client which it is. A 502 here would also poison the edge cache in a
+ * way that is harder to recover from than a stale-but-usable payload.
+ */
+async function handleGetTelemetryMetrics(env: Env, ctx: ExecutionContext, now: Date): Promise<Response> {
+    const cached = await readMetricsCache(env, now);
+    if (cached) {
+        return jsonResponse(cached, { status: 200, headers: { "Cache-Control": METRICS_CACHE_CONTROL } }, env);
+    }
+
+    const payload = await fetchTelemetryMetrics(env, now);
+
+    // A FAILED fetch is not cached: a single bad moment at the telemetry server
+    // would otherwise blank the panel for the whole TTL. Success and failure are
+    // cached differently on purpose.
+    if (payload.ok) {
+        ctx.waitUntil(writeMetricsCache(env, payload).catch(() => undefined));
+    }
+
+    return jsonResponse(
+        payload,
+        { status: 200, headers: { "Cache-Control": payload.ok ? METRICS_CACHE_CONTROL : "no-store" } },
+        env,
+    );
+}
+
+/**
  * `GET /gallery/image/:fileId` -- one mirrored image's bytes.
  *
  * Streams from R2 rather than buffering, so a large photo does not occupy the
@@ -1859,7 +2007,8 @@ type RouteEntry =
     | { kind: "gallery-sync"; methods: string[] }
     | { kind: "gallery-hidden-list"; methods: string[] }
     | { kind: "gallery-hide"; methods: string[] }
-    | { kind: "gallery-order"; methods: string[] };
+    | { kind: "gallery-order"; methods: string[] }
+    | { kind: "telemetry-metrics" };
 
 const ROUTES: Record<string, RouteEntry> = {
     "/events": { kind: "json", audience: "public" },
@@ -1878,6 +2027,10 @@ const ROUTES: Record<string, RouteEntry> = {
     // is token-gated rather than session-gated so CI can seed the mirror with no
     // browser present.
     "/gallery": { kind: "gallery-manifest" },
+    // Telemetry. Public and read-only: the upstream `/metrics` endpoint is
+    // already public, and this Worker route exists to reduce its ~72 kB
+    // exposition text to the handful of series the dashboard graphs.
+    "/telemetry/metrics": { kind: "telemetry-metrics" },
     "/manage/gallery": { kind: "gallery-upload", methods: ["POST"] },
     "/manage/gallery/sync": { kind: "gallery-sync", methods: ["POST"] },
     // Hiding and restoring. `/manage/gallery/hidden` is listed BEFORE the
@@ -1999,12 +2152,16 @@ export default {
         // stay out of this group. Putting them in would advertise POST/DELETE and
         // an Authorization header on public image endpoints, and would make the
         // browser preflight every image request.
+        //
+        // `telemetry-metrics` is read-only too, for the same reason: it proxied a
+        // public GET and has no write surface to advertise.
         const isManagement =
             route.kind !== "json" &&
             route.kind !== "ics" &&
             route.kind !== "audiences" &&
             route.kind !== "gallery-manifest" &&
-            route.kind !== "gallery-image";
+            route.kind !== "gallery-image" &&
+            route.kind !== "telemetry-metrics";
 
         if (isManagement) {
             if (method === "OPTIONS") {
@@ -2056,6 +2213,8 @@ export default {
                 return handleGetGalleryManifest(env, ctx, now);
             case "gallery-image":
                 return handleGetGalleryImage(env, fileId ?? "");
+            case "telemetry-metrics":
+                return handleGetTelemetryMetrics(env, ctx, now);
             default:
                 return handleGetEvents(env, ctx, route.audience, parseChannelFilter(url.searchParams));
         }

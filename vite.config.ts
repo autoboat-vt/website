@@ -24,5 +24,10 @@ export default defineConfig({
         "globalThis.__VITE_TELEMETRY_URL__": JSON.stringify(process.env.VITE_TELEMETRY_URL ?? ""),
         "globalThis.__VITE_EVENTS_URL__": JSON.stringify(process.env.VITE_EVENTS_URL ?? ""),
         "globalThis.__VITE_GALLERY_IMAGE_BASE__": JSON.stringify(process.env.VITE_GALLERY_IMAGE_BASE ?? ""),
+        // Base URL of the Worker that serves the reduced telemetry metrics
+        // (see src/lib/metricsClient.ts). Same Worker as VITE_EVENTS_URL, but
+        // kept separate so the metrics panel can be pointed at `wrangler dev`
+        // without also redirecting the calendar.
+        "globalThis.__VITE_METRICS_URL__": JSON.stringify(process.env.VITE_METRICS_URL ?? ""),
     },
 });
