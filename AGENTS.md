@@ -141,6 +141,8 @@ The nav carries only the five primary pages. `/live`, `/metrics`, `/calendar`, a
 
 WARNING: **`/metrics` is a page, not a panel on `/live`.** `MetricsPanel` used to render below the map, which put a second independent poller on a page someone opened to watch a boat and made two screenshots (map and dashboard) that could not be linked separately. `src/pages/Metrics.tsx` is now a thin shell that renders the panel as the whole page; do not re-add it to `LiveMap.tsx`. The panel keeps its own `<h2>` and the page supplies an outline-only `<h1>` (the `Gallery.tsx` pattern), so `src/test/pages/Metrics.test.tsx` asserts one `h1` and a distinct `h2` rather than matching the heading text, which appears twice.
 
+WARNING: **Each metric gets exactly ONE tile in `MetricsPanel`.** `Requests` and `DB queries` once rendered twice -- a headline number AND a sparkline tile -- because the stat row and the trend grid had each been given the same four metrics. The fix made the trend grid the only home for anything with a series, leaving the stat row to hold just the two metrics that have none (`Error rate`, derived from two counters; `Mean latency`, a single running mean). `src/test/components/MetricsPanel.test.tsx` asserts every label appears exactly once, so re-introducing a duplicate fails CI. NOTE: the error rate is deliberately printed to 12 decimal places on the maintainer's request -- it is a joke, not a formatting bug, and "tidying" it to one decimal place is a regression.
+
 ### `/documentation` (loader page, not a route)
 
 `public/documentation/index.html` is a static loader that renders the

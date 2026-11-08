@@ -1,10 +1,13 @@
-import { Activity, AlertCircle, Database, Gauge, Loader2, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Activity, AlertCircle, Database, Gauge, Loader2, type LucideIcon, RefreshCw } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { errorRate, fetchMetrics, type MetricsPayload, totalDbQueries, totalRequests } from "../lib/metricsClient";
 import Card from "./Card";
 
 /** Polling interval. The Worker caches the payload for 15s, so faster is wasted. */
 const POLL_INTERVAL_MS = 15_000;
+
+/** Shared sparkline stroke, so every trend in the grid matches. */
+const SPARKLINE_STROKE = "var(--color-hovercolor, #6b7280)";
 
 /**
  * How many samples of history the sparklines keep.
@@ -20,8 +23,10 @@ const HISTORY_LENGTH = 40;
 interface Series {
     label: string;
     values: number[];
-    /** Rendered in the tooltip and beside the current value. */
+    /** Rendered beside the current value and in the trend's label. */
     format: (value: number) => string;
+    /** Optional glyph for the tile's label, matching the old headline tiles. */
+    icon?: LucideIcon;
 }
 
 /**
@@ -51,10 +56,22 @@ function formatSeconds(value: number | null): string {
     return `${value.toFixed(2)} s`;
 }
 
-/** Format a 0..1 ratio as a percentage. */
+/**
+ * Format a 0..1 ratio as a percentage.
+ *
+ * NOTE: The precision here is a deliberate joke, on the maintainer's request.
+ * An error rate is a ratio of two small integers, so every digit past the second
+ * is floating-point noise presented with total confidence. Do not "tidy" this to
+ * `toFixed(1)` -- the extra digits are the point.
+ *
+ * `toFixed` rather than `toPrecision` on purpose: `toPrecision` flips to
+ * `1e-9`-style exponential notation for tiny rates, which would render as a
+ * broken metric rather than a precise-looking one. The tradeoff is that this can
+ * be long enough to wrap, so the tile carries `break-all`.
+ */
 function formatPercent(value: number | null): string {
     if (value === null) return "—";
-    return `${(value * 100).toFixed(1)}%`;
+    return `${(value * 100).toFixed(12)}%`;
 }
 
 /**
@@ -120,21 +137,56 @@ function Sparkline({ values, stroke }: { values: number[]; stroke: string }) {
     );
 }
 
-/** One metric tile: label, current value, and a sparkline of recent values. */
+/**
+ * One trend tile: label, current value, and a sparkline of recent values.
+ *
+ * WARNING: Every metric appears in exactly ONE tile on this page. `Requests` and
+ * `DB queries` used to render twice -- once in a headline row and again here --
+ * because the two rows were written for different metrics and then both given
+ * the same four. If you add a tile, check it is not already in `statTiles` or
+ * the grid below.
+ */
 function MetricTile({ series, stroke }: { series: Series; stroke: string }) {
     // `values` is typed as number[] but a sparse history means the last element
     // is still `number | undefined` under noUncheckedIndexedAccess. Falling back
     // to null keeps the "—" rendering rather than passing undefined to format().
     const last = series.values[series.values.length - 1];
     const current = last ?? null;
+    const Icon = series.icon;
 
     return (
         <div className="rounded-xl border border-cardborder bg-background/40 p-4">
-            <div className="text-xs font-medium uppercase tracking-wide opacity-60">{series.label}</div>
+            <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide opacity-60">
+                {Icon && <Icon size={12} aria-hidden="true" />}
+                {series.label}
+            </div>
             <div className="mt-1 text-xl font-semibold tabular-nums">
                 {current === null ? "—" : series.format(current)}
             </div>
             <Sparkline values={series.values} stroke={stroke} />
+        </div>
+    );
+}
+
+/**
+ * A value-only tile for a metric with no time series.
+ *
+ * `Error rate` is derived from two counters rather than published as its own
+ * gauge, and the payload carries the latency histogram as a single running mean,
+ * so neither can be plotted from one sample per poll. They get the current value
+ * without a trend rather than a flat line invented from a single point.
+ */
+function StatTile({ label, value, icon }: { label: string; value: ReactNode; icon?: LucideIcon }) {
+    const Icon = icon;
+    return (
+        <div className="rounded-xl border border-cardborder bg-background/40 p-4">
+            <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide opacity-60">
+                {Icon && <Icon size={12} aria-hidden="true" />}
+                {label}
+            </div>
+            {/* `break-all`: the error rate is rendered with a comical number of
+                decimal places and must wrap rather than widen the grid column. */}
+            <div className="mt-1 text-xl font-semibold tabular-nums break-all">{value}</div>
         </div>
     );
 }
@@ -206,15 +258,21 @@ export default function MetricsPanel() {
         };
     }, [poll]);
 
-    const uptimeSeries: Series[] = [
+    /**
+     * The plotted metrics -- each one appears here and NOWHERE else on the page.
+     *
+     * `Requests` / `DB queries` are totals carried in the payload, so they are
+     * plotted from the accumulated history rather than repeated as headline
+     * numbers. That is why the stat row below holds only the two metrics with no
+     * series.
+     */
+    const trendSeries: Series[] = [
         { label: "Instances", values: history.instances ?? [], format: formatCount },
         { label: "Image storage", values: history.imageBytes ?? [], format: formatBytes },
-        { label: "HTTP requests", values: history.requests ?? [], format: formatCount },
-        { label: "DB queries", values: history.dbQueries ?? [], format: formatCount },
+        { label: "HTTP requests", values: history.requests ?? [], format: formatCount, icon: Gauge },
+        { label: "DB queries", values: history.dbQueries ?? [], format: formatCount, icon: Database },
     ];
 
-    const requestTotal = payload?.ok ? totalRequests(payload) : null;
-    const queryTotal = payload?.ok ? totalDbQueries(payload) : null;
     const rate = payload?.ok ? errorRate(payload) : null;
     const latency = payload?.ok ? payload.latency.meanSeconds : null;
 
@@ -258,38 +316,14 @@ export default function MetricsPanel() {
 
             {payload?.ok && (
                 <>
-                    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                        <div className="rounded-xl border border-cardborder bg-background/40 p-4">
-                            <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide opacity-60">
-                                <Gauge size={12} aria-hidden="true" />
-                                Requests
-                            </div>
-                            <div className="mt-1 text-xl font-semibold tabular-nums">
-                                {requestTotal === null ? "—" : formatCount(requestTotal)}
-                            </div>
-                        </div>
-                        <div className="rounded-xl border border-cardborder bg-background/40 p-4">
-                            <div className="text-xs font-medium uppercase tracking-wide opacity-60">Error rate</div>
-                            <div className="mt-1 text-xl font-semibold tabular-nums">{formatPercent(rate)}</div>
-                        </div>
-                        <div className="rounded-xl border border-cardborder bg-background/40 p-4">
-                            <div className="text-xs font-medium uppercase tracking-wide opacity-60">Mean latency</div>
-                            <div className="mt-1 text-xl font-semibold tabular-nums">{formatSeconds(latency)}</div>
-                        </div>
-                        <div className="rounded-xl border border-cardborder bg-background/40 p-4">
-                            <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide opacity-60">
-                                <Database size={12} aria-hidden="true" />
-                                DB queries
-                            </div>
-                            <div className="mt-1 text-xl font-semibold tabular-nums">
-                                {queryTotal === null ? "—" : formatCount(queryTotal)}
-                            </div>
-                        </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                        <StatTile label="Error rate" value={formatPercent(rate)} />
+                        <StatTile label="Mean latency" value={formatSeconds(latency)} />
                     </div>
 
                     <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        {uptimeSeries.map((series) => (
-                            <MetricTile key={series.label} series={series} stroke="var(--color-hovercolor, #6b7280)" />
+                        {trendSeries.map((series) => (
+                            <MetricTile key={series.label} series={series} stroke={SPARKLINE_STROKE} />
                         ))}
                     </div>
 
